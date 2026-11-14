@@ -1,0 +1,14 @@
+{
+  "batch_id": "deepep-v1-intranode-002",
+  "env_mismatch": [],
+  "finished": "2026-11-14T17:43:42Z",
+  "limits_exceeded": [],
+  "mode": "dist",
+  "protocol": 1,
+  "request_commit": "6b309a14efe2146f558dbbde3d1238dd652fdf22",
+  "started": "2026-11-14T17:41:54Z",
+  "tests": {
+    "intranode/identity": "ok",
+    "intranode/rank_weighted": "ok"
+  }
+}
