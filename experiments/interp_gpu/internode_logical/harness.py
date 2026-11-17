@@ -1,4 +1,5 @@
-"""Per-rank harnesses of the batches `internode-logical-ag03-001` and `internode-logical-rs06-001`.
+"""Per-rank harnesses of the batches `internode-logical-ag03-001` and `internode-logical-rs06-001` (2 ranks) and
+`internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-001` (4 ranks).
 
 They call the functions of tutorials 03 and 06 of Triton-distributed at
 `7908e4ea` on small fixed inputs and return what every rank holds afterwards.
@@ -30,8 +31,9 @@ What it does differently from that program:
 - each signal tensor has `ranks` words. The tutorial creates them with shape
   `(1, )` (`T03:276-278`) while the kernels address word `segment`, `peer` or
   `thread_idx`, up to `WORLD_SIZE - 1` (`T03:73`, `T03:91`, `T03:143`,
-  `T03:151`): with two ranks, rank 1 signals word 1 on rank 0 and rank 0 waits
-  on it, one word past the tensor. The harness does not reproduce that;
+  `T03:151`, `T03:163`, `T03:173`): with two ranks, rank 1 signals word 1 on
+  rank 0 and rank 0 waits on it, one word past the tensor; with four ranks the
+  kernels use three words past it. The harness does not reproduce that;
 - the signals are cleared and a barrier is passed before the kernel, so that no
   signal is set before its receiver has cleared it.
 
@@ -52,6 +54,15 @@ has `local_world_size` entries, `nvshmem_create_tensors` in
 that is not on node 0. With context `harness` the same context is built here
 with that one index taken within the node; everything after it is the
 tutorial's.
+
+With four ranks on this host the tutorial's intra-node barrier is used outside
+what its docstring allows, under one node as under two logical nodes: NVSHMEM's
+node team holds all four ranks, the barrier takes its compare-and-swap kernel
+whenever visible devices 0 and 1 report native atomic operations (`UT:536-547`,
+`CO:257-258`), and that kernel then operates on the memory of the two ranks of
+the other NVLink pair, reached over PCIe (`CO:155-157` forbids it). The harness
+changes nothing of this; every rank prints what each pair of its visible
+devices reports, so that the result shows on which links the kernel ran.
 """
 import ast
 import importlib.util
@@ -140,8 +151,8 @@ def all_gather(rank, ranks, inputs, outputs, launch):
 def reduce_scatter(rank, ranks, inputs, outputs, launch):
     import torch
     from triton_dist.kernels.nvidia.common_ops import BarrierAllContext
-    from triton_dist.utils import (NVSHMEM_SIGNAL_DTYPE, finalize_distributed, initialize_distributed,
-                                   nvshmem_barrier_all_on_stream, nvshmem_create_tensors,
+    from triton_dist.utils import (CUDA_CHECK, NVSHMEM_SIGNAL_DTYPE, cudart, finalize_distributed,
+                                   initialize_distributed, nvshmem_barrier_all_on_stream, nvshmem_create_tensors,
                                    supports_p2p_native_atomic)
     group = initialize_distributed()
     world, local = report_topology(torch, group, outputs)
@@ -167,6 +178,16 @@ def reduce_scatter(rank, ranks, inputs, outputs, launch):
     outputs['barrier'].copy_(torch.tensor(team, dtype=torch.int32))
     print(f'rank {rank}: context {launch["context"]}, barrier local rank {team[0]} of {team[1]}, '
           f'native atomics {team[2]}', flush=True)
+    # `supports_p2p_native_atomic` asks about visible devices 0 and 1 only (`UT:544-545`); the barrier's kernel uses
+    # atomic operations on every rank of the node team. The same question for every pair of visible devices:
+    links = []
+    for a in range(torch.cuda.device_count()):
+        for b in range(a + 1, torch.cuda.device_count()):
+            error, native = cudart.cudaDeviceGetP2PAttribute(
+                cudart.cudaDeviceP2PAttr.cudaDevP2PAttrNativeAtomicSupported, a, b)
+            CUDA_CHECK(error)
+            links.append(f'{a}-{b}:{native}')
+    print(f'rank {rank}: native atomics between visible devices: {" ".join(links) or "one device"}', flush=True)
 
     nvshmem_barrier_all_on_stream(torch.cuda.current_stream())  # T06:474
     reduced = tutorial.reduce_scatter_2d_op(x, context)
