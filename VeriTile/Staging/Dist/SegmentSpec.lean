@@ -111,8 +111,8 @@ N8. An event is performed by the agent whose program emits it. A program of a
 N9. `AgentProgram.ofBody` is a definition, not a stub: it is five lines and the
     reader sees which program a flat body is. `slice` stays a stub, as drafted.
 
-The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, decided
-as drafted on 2026-11-13; it is no longer a parameter.
+The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, signed
+on 2026-11-13; it is no longer a parameter.
 -/
 import VeriTile.Triton.Semantics.Step
 import VeriTile.Dist.Agent
