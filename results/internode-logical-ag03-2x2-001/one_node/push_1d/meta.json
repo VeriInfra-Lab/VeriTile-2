@@ -1,0 +1,84 @@
+{
+  "distinct": {
+    "rank0/gathered": {
+      "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f": 2
+    },
+    "rank0/topology": {
+      "4f6af14358145da003747a6869779928b20e9abf9a882d2e36762900090c6397": 2
+    },
+    "rank1/gathered": {
+      "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f": 2
+    },
+    "rank1/topology": {
+      "f0dc486911c410a7b8617bee853a734ebbf5ad135acf6209b57e97fc40968269": 2
+    },
+    "rank2/gathered": {
+      "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f": 2
+    },
+    "rank2/topology": {
+      "2f607e9bc8440a44002949b47e51f325d43cee5830d459221a40a880a629aa7c": 2
+    },
+    "rank3/gathered": {
+      "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f": 2
+    },
+    "rank3/topology": {
+      "b842ed64e15a304a648000db434d2665e7b0ed4a3770104c1e7bf91532a4fb07": 2
+    }
+  },
+  "inputs": {
+    "x": {
+      "expected_sha256": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+      "match": true,
+      "sha256": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f"
+    }
+  },
+  "launcher": "triton-dist",
+  "ranks": 4,
+  "repeats": 2,
+  "runs": [
+    {
+      "exit_code": 0,
+      "outputs": {
+        "rank0/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank0/topology": "4f6af14358145da003747a6869779928b20e9abf9a882d2e36762900090c6397",
+        "rank1/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank1/topology": "f0dc486911c410a7b8617bee853a734ebbf5ad135acf6209b57e97fc40968269",
+        "rank2/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank2/topology": "2f607e9bc8440a44002949b47e51f325d43cee5830d459221a40a880a629aa7c",
+        "rank3/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank3/topology": "b842ed64e15a304a648000db434d2665e7b0ed4a3770104c1e7bf91532a4fb07"
+      },
+      "rank_status": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ],
+      "status": "ok",
+      "wall_time_s": 23.605
+    },
+    {
+      "exit_code": 0,
+      "outputs": {
+        "rank0/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank0/topology": "4f6af14358145da003747a6869779928b20e9abf9a882d2e36762900090c6397",
+        "rank1/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank1/topology": "f0dc486911c410a7b8617bee853a734ebbf5ad135acf6209b57e97fc40968269",
+        "rank2/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank2/topology": "2f607e9bc8440a44002949b47e51f325d43cee5830d459221a40a880a629aa7c",
+        "rank3/gathered": "e7dbc37ca408aa79d667169e9a2bbf875e980a01428c6216fbd7ab4a17b5019f",
+        "rank3/topology": "b842ed64e15a304a648000db434d2665e7b0ed4a3770104c1e7bf91532a4fb07"
+      },
+      "rank_status": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ],
+      "status": "ok",
+      "wall_time_s": 19.552
+    }
+  ],
+  "status": "ok",
+  "wall_time_s": 43.157
+}
