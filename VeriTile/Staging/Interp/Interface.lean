@@ -3,10 +3,12 @@ VeriTile.Staging.Interp.Interface
 
 Interface of the interpreter line, frozen by ticket I0.1. Signed on 2026-11-11.
 
-Every declaration here is a stub: an `opaque` constant or a definition with a
-`sorry` body. The ticket named in each docstring replaces the stub by a
+A declaration here is a stub: an `opaque` constant or a definition with a
+`sorry` body. The ticket named in its docstring replaces the stub by a
 definition with the same name and type in `VeriTile/Interp/`, and the stub is
-deleted here. Already replaced: the mirror AST with `QKernel.toReal`
+deleted here. No stub is left: `interp` is `VeriTile.Interp.Exec` (I2.4), and
+the bridge statement with `BridgePre` is proved in
+`VeriTile.Interp.Bridge.Exec` (I4.3). Replaced earlier: the mirror AST with `QKernel.toReal`
 (`VeriTile.Interp.Mirror`, I1.1) and `State` with `State.lift`
 (`VeriTile.Interp.State`, I2.1), `CAlgebra` with `CAlgebra.lift`
 (`VeriTile.Interp.Algebra`, I2.2), and `erase` with `realAlgebra`

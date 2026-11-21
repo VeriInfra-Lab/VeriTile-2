@@ -8,9 +8,11 @@ and its bridge to the proof semantics. Its modules live under
 This target contains no `sorry` and imports nothing from `VeriTile/Staging/`.
 -/
 
+import VeriTile.Interp.Adequacy.EvalOp
 import VeriTile.Interp.Adequacy.State
 import VeriTile.Interp.Algebra
 import VeriTile.Interp.Bridge.EvalOp
+import VeriTile.Interp.Bridge.Exec
 import VeriTile.Interp.Bridge.RealAlgebra
 import VeriTile.Interp.Enum
 import VeriTile.Interp.EvalOp

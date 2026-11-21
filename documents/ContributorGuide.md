@@ -1,6 +1,6 @@
 # Contributor guide
 
-For everyone who works on a ticket of `dnyBLUESKY007/VeriTile` outside the coordinating session: the people a ticket is assigned to, and agents that take a ticket from the open pool. A ticket, this guide and the files the ticket names are meant to be all you need. If something you need is missing from them, say so in a comment on the ticket; that is a defect of the ticket.
+For everyone who works on a ticket of `VeriInfra-Lab/VeriTile-2` outside the coordinating session: the people a ticket is assigned to, and agents that take a ticket from the open pool. A ticket, this guide and the files the ticket names are meant to be all you need. If something you need is missing from them, say so in a comment on the ticket; that is a defect of the ticket.
 
 ## Roles
 
@@ -19,20 +19,30 @@ For everyone who works on a ticket of `dnyBLUESKY007/VeriTile` outside the coord
 
 Accept an assigned ticket by commenting `Accept: <login>` on it within two working days. (GitHub can record you as assignee only after you have commented.) To give it back, comment `Release: <login>` with the reason and the state of the work. A ticket with no pull request (a draft counts) and no progress comment five working days after it was accepted is asked about once and may then go to someone else.
 
+**Who works on a ticket** is a label of its own, independent of whether the ticket is ready (`parallel-ready`) or taken (`claimed`):
+
+| Label | Worked on by |
+| --- | --- |
+| `owner:coordinator` | the coordinating session and its lanes |
+| `owner:codex` | the user's Codex sessions |
+| `owner:contributor` | a human contributor, named in the assignee field |
+
+A ticket without an `owner:` label has not been given out. The coordinator sets and changes these labels; when a ticket moves from one party to another, only the label and the assignee change. To list one party's open tickets: `gh api 'repos/VeriInfra-Lab/VeriTile-2/issues?labels=owner:codex&state=open&per_page=100' -q '.[]|"#\(.number) \(.title)"'`.
+
 **Open pool.** An open ticket with both labels `parallel-ready` and `parallel-easy` and no assignee may be taken by anyone:
 
 ```sh
-gh api 'repos/dnyBLUESKY007/VeriTile/issues?labels=parallel-ready,parallel-easy&state=open&per_page=50' \
+gh api 'repos/VeriInfra-Lab/VeriTile-2/issues?labels=parallel-ready,parallel-easy&state=open&per_page=50' \
   -q '.[]|select(.assignees|length==0)|"#\(.number) \(.title)"'
 ```
 
 Claim it with a comment whose first line is `Claim: <claimant-id>`, where the ID names you alone (`<agent or login>-<session start in UTC as YYYYMMDDTHHMMZ>`), then read the comments again: the ticket belongs to the earliest `Claim:` whose author has posted no later `Release:`. If that is not yours, comment `Release: <claimant-id> lost the claim` and take another. If your account may set labels, also add `claimed` and remove `parallel-ready`.
 
-Read a ticket with `gh api repos/dnyBLUESKY007/VeriTile/issues/<n> -q .body`; `gh issue view` fails on this repository. The map, issue #1, states the goal, the pins of every external repository and the index of ticket IDs.
+Read a ticket with `gh api repos/VeriInfra-Lab/VeriTile-2/issues/<n> -q .body`; `gh issue view` fails on this repository. The map, issue #1, states the goal, the pins of every external repository and the index of ticket IDs.
 
 ## Where to work
 
-Fork `dnyBLUESKY007/VeriTile` (this repository, not `VeriInfra-Lab/VeriTile`, which is its upstream). Work on a branch named after the ticket, for example `i2.4-step-exec`, and open the pull request against `main` of `dnyBLUESKY007/VeriTile`. Never push to `VeriInfra-Lab/VeriTile` and leave its issues alone.
+The working repository is `VeriInfra-Lab/VeriTile-2` (named `dnyBLUESKY007/VeriTile` until November 2026; not `VeriInfra-Lab/VeriTile`, which is its upstream). Work on a branch named after the ticket, for example `i2.4-step-exec`, in the repository if you have write access or in your fork of it, and open the pull request against `main` of `VeriInfra-Lab/VeriTile-2`. `main` changes only through merged pull requests, and the coordinator merges. Never push to `VeriInfra-Lab/VeriTile` and leave its issues alone.
 
 ## Rules for the work
 
@@ -72,7 +82,7 @@ You need no GPU and you never contact the GPU side. Kernels run only on one host
 ## Hand back
 
 1. Commit on your branch in focused commits with messages that state the purpose. If an AI agent wrote part of the change, say so in the pull-request body.
-2. Open the pull request against `main` of `dnyBLUESKY007/VeriTile`. Its body has three sections: `## Summary` (the change as a small tree, table or diff sketch), `## Evidence` (the gate commands with their exit codes; before and after where that applies), `## Merge Danger` (`**Door:**` one-way or two-way; `**Blast Radius:**` one word). Name the ticket as `Refs #<n>`, not `Closes`.
+2. Open the pull request against `main` of `VeriInfra-Lab/VeriTile-2`. Its body has three sections: `## Summary` (the change as a small tree, table or diff sketch), `## Evidence` (the gate commands with their exit codes; before and after where that applies), `## Merge Danger` (`**Door:**` one-way or two-way; `**Blast Radius:**` one word). Name the ticket as `Refs #<n>`, not `Closes`.
 3. Comment on the ticket: the pull request; what is complete; what is not; every decision you took that the ticket did not dictate; what you could not verify.
 4. Do not merge and do not close the ticket.
 
