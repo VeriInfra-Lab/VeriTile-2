@@ -55,7 +55,7 @@ theorem interp_eq_structural_exec {α : Type} [Inhabited α]
 For every carrier and every algebra, the interpreter and the structural
 execution fail together or succeed with the same final state.
 
-Bridge (`VeriTile/Staging/Interp/Bridge.lean`, proved by I4.3):
+Bridge (`VeriTile/Interp/Bridge/Exec.lean`, proved by I4.3; `exec` on the right is the proof-side `VeriTile.Triton.exec`, not the interpreter twin `VeriTile.Interp.exec`):
 
 ```lean
 theorem bridge_exec {ck : ComputeKernel} {ak : AlgKernel}
