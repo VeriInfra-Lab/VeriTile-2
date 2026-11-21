@@ -1365,9 +1365,10 @@ Each item names where this document applies the decision.
     nothing, and it is not quoted. Outside the files named, the call occurs in
     `TD:python/triton_dist/kernels/nvidia/memory_ops.py`, lines 310 and 317
     (`copy_1d_tilewise_kernel`), and in two test files. That function is
-    called from the files named, from host code of `memory_ops.py` itself
-    (line 483) and from `kernels/nvidia/gemm_allreduce.py`, line 604, which
-    the map defers. No tutorial 01 to 08 and none of `CO`, `RS` and
+    called from the files named, from the host function `copy_tensor` of
+    `memory_ops.py` (line 483), whose only callers are in
+    `layers/nvidia/ep_a2a_fused_layer.py`, and from
+    `kernels/nvidia/gemm_allreduce.py`, line 604, which the map defers. No tutorial 01 to 08 and none of `CO`, `RS` and
     `kernels/nvidia/allgather_gemm.py` contains the call (text search).
 
 ## 10. Still open
