@@ -1,7 +1,7 @@
 # TileScale overlap and Triton-distributed point-to-point sources
 
-Inventory for [K-S.1, issue #290](https://github.com/dnyBLUESKY007/VeriTile/issues/290),
-using the pins in [map #1](https://github.com/dnyBLUESKY007/VeriTile/issues/1).
+Inventory for [K-S.1, issue #290](https://github.com/VeriInfra-Lab/VeriTile-2/issues/290),
+using the pins in [map #1](https://github.com/VeriInfra-Lab/VeriTile-2/issues/1).
 All sources were read on **2026-11-12**, in scratch checkouts outside VeriTile;
 none was imported, executed or copied into this repository. This file inventories
 source syntax, not documented memory semantics or verified kernel correctness.

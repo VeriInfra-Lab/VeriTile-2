@@ -2,7 +2,7 @@
 
 # 跨节点程序在单机上的覆盖范围
 
-Issue：[#353](https://github.com/dnyBLUESKY007/VeriTile/issues/353)。检查日期：2026-11-10；逻辑节点 launcher 于 2026-11-12 加入；首个逻辑节点结果以及 tutorial 03 和 06 的请求于 2026-11-12 记录；它们的结果和两个使用四张 GPU 的请求于 2026-11-13 记录。状态：源码检查完成。在这一台主机上启动两个逻辑节点的 launcher 已在 GPU 端运行：`internode-logical-env-002` 于 2026-11-12 返回，判定为通过（两个逻辑节点能够启动，二者之间的一次 put 到达）。针对 tutorial 03 和 06 的请求 `internode-logical-ag03-001` 与 `internode-logical-rs06-001` 已于 2026-11-12 以两个逻辑节点、每节点一个 rank 的方式运行，并于 2026-11-13 判定为通过。Issue 允许的两种结果中，第一种不会成立（见下面的决定）。第二种，即“跨节点代码路径在这一台主机上运行”的检查记录，对启动、对一次 put、以及对 tutorial 03 和 06 中每个逻辑节点一个 rank 就能到达的 `nnodes > 1` 分支成立。对需要每个逻辑节点两个 rank 的分支还不成立：为它们写的两个请求 `internode-logical-ag03-2x2-001` 和 `internode-logical-rs06-2x2-001` 已写好，尚未运行；并且对 tutorial 06，源码表明教程的 barrier 会在它自身文本不允许的条件下使用（小节“两个逻辑节点、每节点两个 rank 的请求”）。本文说明这种运行覆盖什么、不覆盖什么，并列出相关批次。
+Issue：[#353](https://github.com/VeriInfra-Lab/VeriTile-2/issues/353)。检查日期：2026-11-10；逻辑节点 launcher 于 2026-11-12 加入；首个逻辑节点结果以及 tutorial 03 和 06 的请求于 2026-11-12 记录；它们的结果和两个使用四张 GPU 的请求于 2026-11-13 记录。状态：源码检查完成。在这一台主机上启动两个逻辑节点的 launcher 已在 GPU 端运行：`internode-logical-env-002` 于 2026-11-12 返回，判定为通过（两个逻辑节点能够启动，二者之间的一次 put 到达）。针对 tutorial 03 和 06 的请求 `internode-logical-ag03-001` 与 `internode-logical-rs06-001` 已于 2026-11-12 以两个逻辑节点、每节点一个 rank 的方式运行，并于 2026-11-13 判定为通过。Issue 允许的两种结果中，第一种不会成立（见下面的决定）。第二种，即“跨节点代码路径在这一台主机上运行”的检查记录，对启动、对一次 put、以及对 tutorial 03 和 06 中每个逻辑节点一个 rank 就能到达的 `nnodes > 1` 分支成立。对需要每个逻辑节点两个 rank 的分支还不成立：为它们写的两个请求 `internode-logical-ag03-2x2-001` 和 `internode-logical-rs06-2x2-001` 已写好，尚未运行；并且对 tutorial 06，源码表明教程的 barrier 会在它自身文本不允许的条件下使用（小节“两个逻辑节点、每节点两个 rank 的请求”）。本文说明这种运行覆盖什么、不覆盖什么，并列出相关批次。
 
 **决定（用户，2026-11-12）。** 不再安排第二个物理节点：合作者的集群已不可用。跨节点程序只以这一台主机上的逻辑节点方式测试。主机之间的传输（网卡、RDMA）不在项目范围内：模型里只有 rank 和 scope，没有节点或链路，证明不依赖它。如果逻辑节点无法运行，跨节点代码路径只做证明，并如实报告为未运行。
 
@@ -136,7 +136,7 @@ GPU 端安装的版本，据 `internode-logical-env-002` 的 `env.json`：PyTorc
 
 该批次有两个使用同一 harness 的测试：`one_node/put_barrier` 使用 `triton-dist`，作为对照；`logical_nodes/put_barrier` 使用新的 launcher。这样可以把 harness 自身的失败与逻辑节点的失败区分开。开发端的预期：对照测试中 `LOCAL_WORLD_SIZE` 为 2，一个节点，设备索引等于 rank；逻辑节点测试中 `LOCAL_WORLD_SIZE` 为 1，两个节点，两个 rank 的设备索引均为 0；两个测试中，每个 rank 都收到 100 加上另一 rank 的编号。
 
-结果。`internode-logical-env-001` 已在 GPU 端运行，每个测试均为 `ok`，但其结果包没有发布：launcher 的日志中有回环地址，而当时公开结果的规则不允许日志中出现地址。`gpurun` 现在把该地址写成 `<loopback>`，同一请求于 2026-11-12 以 `internode-logical-env-002` 再次运行（[issue #430](https://github.com/dnyBLUESKY007/VeriTile/issues/430)；请求 commit `ad26d295f4f8737ab82df8312a7eed21bbc4366c`；结果包为分支 `gpu-results` 的 commit `3ff8914868fa562c7dff6caac9344627732c4ce4` 中的 `results/internode-logical-env-002/`）。两个测试在两次重复中均为 `ok`，两个 rank 均为 `ok`，使用 NVLink 卡对 4–5。开发端解码的结果，两次重复相同：
+结果。`internode-logical-env-001` 已在 GPU 端运行，每个测试均为 `ok`，但其结果包没有发布：launcher 的日志中有回环地址，而当时公开结果的规则不允许日志中出现地址。`gpurun` 现在把该地址写成 `<loopback>`，同一请求于 2026-11-12 以 `internode-logical-env-002` 再次运行（[issue #430](https://github.com/VeriInfra-Lab/VeriTile-2/issues/430)；请求 commit `ad26d295f4f8737ab82df8312a7eed21bbc4366c`；结果包为分支 `gpu-results` 的 commit `3ff8914868fa562c7dff6caac9344627732c4ce4` 中的 `results/internode-logical-env-002/`）。两个测试在两次重复中均为 `ok`，两个 rank 均为 `ok`，使用 NVLink 卡对 4–5。开发端解码的结果，两次重复相同：
 
 | 测试 | Rank | `topology`（rank、world size、`LOCAL_WORLD_SIZE`、节点数、`LOCAL_RANK`、设备索引） | `received` |
 | --- | --- | --- | --- |
@@ -193,8 +193,8 @@ GPU 端安装的版本，据 `internode-logical-env-002` 的 `env.json`：PyTorc
 
 | 请求 | Issue | `gpu-results` 上的结果包 | 各测试的状态 | 判定 |
 | --- | --- | --- | --- | --- |
-| `internode-logical-ag03-001` | [#434](https://github.com/dnyBLUESKY007/VeriTile/issues/434) | `results/internode-logical-ag03-001/`，commit `c8bc3631b45c9b2071ddf52e0b9de0394d4c6425` | 四个测试均为 `ok`，各两次重复，两个 rank 均为 `ok` | 通过：每个测试中两个 rank 在两次重复里都返回预期的 `topology` 和 64 个输入字节。 |
-| `internode-logical-rs06-001` | [#435](https://github.com/dnyBLUESKY007/VeriTile/issues/435) | `results/internode-logical-rs06-001/`，commit `326fa57e4a063af67062a4b3cf48865824b3609c` | 三个测试为 `ok`，各两次重复；`logical_nodes/tutorial_context` 在 239.9 秒后 `timeout`，rank 0 没有状态，rank 1 为 `runtime_error` | 通过，并观察到预测的失败：三个测试在两个 rank、两次重复中都返回预期的 `topology`、`barrier` 和 `reduced`（精确，无容差）；第四个为 `failed as predicted`。 |
+| `internode-logical-ag03-001` | [#434](https://github.com/VeriInfra-Lab/VeriTile-2/issues/434) | `results/internode-logical-ag03-001/`，commit `c8bc3631b45c9b2071ddf52e0b9de0394d4c6425` | 四个测试均为 `ok`，各两次重复，两个 rank 均为 `ok` | 通过：每个测试中两个 rank 在两次重复里都返回预期的 `topology` 和 64 个输入字节。 |
+| `internode-logical-rs06-001` | [#435](https://github.com/VeriInfra-Lab/VeriTile-2/issues/435) | `results/internode-logical-rs06-001/`，commit `326fa57e4a063af67062a4b3cf48865824b3609c` | 三个测试为 `ok`，各两次重复；`logical_nodes/tutorial_context` 在 239.9 秒后 `timeout`，rank 0 没有状态，rank 1 为 `runtime_error` | 通过，并观察到预测的失败：三个测试在两个 rank、两次重复中都返回预期的 `topology`、`barrier` 和 `reduced`（精确，无容差）；第四个为 `failed as predicted`。 |
 
 这些结果确立的内容，每一条都只针对一次运行、两次重复、一个卡对：
 
