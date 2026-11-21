@@ -1,9 +1,14 @@
 # Documentation sources of the distributed primitives
 
 Status: revision of ticket S2.2 that applies the user's decisions of
-2026-11-12 (section 9). The user has not reviewed this revision. Sources were
+2026-11-12 (section 9). Ticket S2.7 adds the six readings that the user decided
+on 2026-11-13 to register as named assumptions (A3 to A8 of section 7; section
+9, "Decisions of 2026-11-13") and applies the user's decisions of 2026-11-21
+(section 9, "Decisions of 2026-11-21": D8, A9, A10 and the present form of
+A5). The user has not reviewed this revision. Sources were
 read on 2026-11-11; NVSHMEM archive passages and the S6.8 additions were
-rechecked on 2026-11-13. Nothing here is a proved result; the table fixes what the
+rechecked on 2026-11-13; the passages that A3 to A8 cite were read on
+2026-11-17, those of D8, A9 and A10 on 2026-11-21. Nothing here is a proved result; the table fixes what the
 semantics of `VeriTile/Dist/` may assume about each primitive.
 
 The table has one row per primitive of Triton-distributed (`dl.*`,
@@ -20,6 +25,10 @@ name.
 - Front-end documentation: Triton, TileLang, Triton-distributed, TileScale.
 - The CUDA C++ memory model: `cuda::thread_scope_*` and the libcu++ atomics.
 - The NVSHMEM API documentation.
+- The CUDA Programming Guide, for the CUDA C++ constructs that the front ends
+  expose (user's decision of 2026-11-21). It is above PTX. Its limit: only
+  sentences about the CUDA C++ language level are used, and nothing that it
+  says about instructions.
 
 Nothing at or below PTX is cited. A guarantee that the documentation does not
 state does not hold. A source file of a front end is used for three things
@@ -38,7 +47,13 @@ below PTX gives the row nothing.
 `71e71457d40ed6e6a2dad297936bfdbff21d104b`); Triton `v3.5.1` (commit
 `0add68262ab0a2e33b84524346cb27cbb2787356`). Triton-distributed at its pin
 bundles Triton at another commit, `f797708`; the one Triton passage that is
-cited here has the same text at both (E-TR1).
+cited here has the same text at both (E-TR1). The DeepEP version 1 port is
+read at TileScale `9ba8a605` (full hash
+`9ba8a605d347f600a95d0275e2639cb00122c084`, branch `wt/deepep-internode`),
+directory `examples/distributed/deepseek_deepep/intranode/`. Only A3 to A8 and A10 of
+section 7 and their evidence (E-TS15 to E-TS19) cite that commit; every row of
+section 5.5 is at `71e7145`, and A10 says how such a row reads a call of the
+port.
 
 **NVSHMEM version of record** (decision of 2026-11-12). The version of record
 is the one on the GPU node: 3.6.5, in the `triton-dist` environment. The
@@ -85,7 +100,8 @@ strings. Its note names the clause of A1.
 says, quoted. In the tables the columns `Evidence` and `Source` are evidence,
 `Note` is inference and `Treatment` is the decision. Sections 6 and 7 hold the
 decisions that apply to many rows. Section 9 lists the user's decisions of
-2026-11-12, and section 10 lists what no decision covers yet.
+2026-11-12, of 2026-11-13 and of 2026-11-21, and section 10 lists what no
+decision covers yet.
 
 ## 2. Enumeration
 
@@ -121,7 +137,9 @@ Not covered, because they lie outside the modules the ticket names:
 `triton_dist.utils`, the other helpers under `triton_dist/kernels/`, base
 Triton other than `tl.atomic_add`, and base TileLang (`T.tma_store_wait`,
 `T.sync_threads`). The user decided on 2026-11-12 that they stay out until a
-kernel in scope uses them. The host code of tutorials 01 to 08 does call
+kernel in scope uses them. The DeepEP version 1 port calls `T.sync_threads` in
+both of its forms, and `T.sync_warp`. Neither name has a row: D8 of section
+6 and A4 and A5 of section 7 state how they are read. The host code of tutorials 01 to 08 does call
 host-side utilities, for example `nvshmem_barrier_all_on_stream` and
 `cudaMemcpyAsync`. These calls are host code, not kernel code, and have no
 row.
@@ -132,7 +150,10 @@ Paths with prefix `TD:` are in Triton-distributed at `7908e4e`; paths with
 prefix `TS:` are in TileScale at `71e7145`; paths with prefix `TR:` are in
 Triton at `v3.5.1`. Original URLs were accessed on 2026-11-11; the NVSHMEM
 archive/latest comparison, CU-MM atomicity condition and pinned S6.8 additions
-were read on 2026-11-13.
+were read on 2026-11-13. Paths with prefix `TS9:` are in TileScale at
+`9ba8a605`; they, TS-INSTR, E-NV28 and E-CU6 were read on 2026-11-17. CU-PG,
+E-TS18 and E-TS19 were read on 2026-11-21, from the page as served that day
+and from new clones at the two TileScale commits.
 
 | ID | Source |
 | --- | --- |
@@ -156,8 +177,12 @@ were read on 2026-11-13.
 | TS-SYNC | `TS:tilelang/language/distributed/sync.py` (docstrings) |
 | TS-MM | `TS:tilelang/language/distributed/multimem.py` (docstrings) |
 | TS-COPY | `TS:tilelang/language/copy_op.py` (docstrings) |
-| TS-BUILTIN | `TS:tilelang/language/builtin.py`, docstrings at lines 1194–1201 |
+| TS-BUILTIN | `TS:tilelang/language/builtin.py`, docstrings at lines 976–977, 1015–1016 and 1194–1201 |
 | TS-ATOM | `TS:tilelang/language/atomic.py` (docstrings) |
+| TS-INSTR | `TS:docs/programming_guides/instructions.md`, lines 191–192 |
+| TS9-BUILTIN | `TS9:tilelang/language/builtin.py` (docstring of `sync_threads` at lines 702–703; parameters of `ld` at lines 1015–1023; `barrier_blocks` and `sync_blocks` at lines 981–997; `sync_warp` at lines 1082–1083) |
+| TS9-COMMON | `TS9:tilelang/language/distributed/common.py` (parameters and docstrings of the waits at lines 130–157) |
+| TS9-DEEPEP | `TS9:examples/distributed/deepseek_deepep/deepep.md`, line 190 |
 | NV-MM | NVSHMEM 3.6.5, Memory Model: <https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/mem-model.html> |
 | NV-ORD | NVSHMEM 3.6.5, Memory Ordering: <https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/ordering.html> |
 | NV-RMA | NVSHMEM 3.6.5, Remote Memory Access: <https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/rma.html> |
@@ -174,6 +199,7 @@ were read on 2026-11-13.
 | CU-MM | libcu++, Memory model: <https://nvidia.github.io/cccl/unstable/libcudacxx/extended_api/memory_model.html> |
 | CU-AT | libcu++, `cuda::atomic`: <https://nvidia.github.io/cccl/unstable/libcudacxx/extended_api/synchronization_primitives/atomic.html> |
 | CU-FE | libcu++, `cuda::atomic_thread_fence`: <https://nvidia.github.io/cccl/unstable/libcudacxx/extended_api/synchronization_primitives/atomic/atomic_thread_fence.html> |
+| CU-PG | CUDA Programming Guide v13.5, section 5.4.4 "Synchronization Primitives": <https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/cpp-language-extensions.html> (accessed 2026-11-21). Admitted as a source on 2026-11-21, within the limit of section 1 |
 
 The frozen 3.6.5 manual is linked by the [official version index](https://docs.nvidia.com/nvshmem/api/versions1.json).
 All eleven archive pages in the table returned HTTP 200 and report
@@ -413,6 +439,15 @@ wording beside the version-of-record evidence.
   only ensure ordering and visibility between the source and destination PEs.
   They *do not* ensure global ordering and visibility."
 - **E-NV27** (NV-USE, Data Consistency). The access list includes "Direct multimem load reduce and store broadcast operations (for example, using a pointer that was returned by nvshmemx_mc_ptr)". "Two operations that were issued by the same PE or different PEs, and that access the same memory location in parallel, are in conflict when one or more of the operations performs a write. These conflicts result in undefined behavior in the OpenSHMEM memory model. An exception is made when the operations are a combination of AMOs or AMOs and wait/test operations. A second exception is made when the operations are a combination of signal updates and wait/test operations." "Updates to globally accessible objects are unordered. A PE can enforce the ordering of its updates with respect to accesses performed by the target PE using the nvshmem_fence operation. When updates performed by a PE must be ordered or made visible to PEs other than the target PE, use the nvshmem_quiet operation." No direct reduce-store, reduction order or atomic multicast operation is specified by this access list. See [MultimemSources](MultimemSources.md).
+- **E-NV28** (NV-ORD, notes of `nvshmem_fence`; read on 2026-11-17). "The
+  nvshmem_fence routine can enforce memory store ordering only for the calling
+  thread. Thus, to ensure ordering for memory stores performed by a thread
+  that is not the thread calling nvshmem_fence, the update must be made
+  visible to the calling thread according to the rules of the memory model
+  associated with the threading environment." E-NV1 has the first sentence.
+  The notes of `nvshmem_quiet` have the same two sentences with
+  `nvshmem_quiet` in place of `nvshmem_fence`. The 3.6.5 page has no note on
+  GPU threads (E-NV22 is absent from it).
 
 No binding of TD-SHC names a flush routine or a counted-signal routine.
 
@@ -436,7 +471,7 @@ are explicitly release-note evidence, not version-tagged API pages.
 | E-NV10 | [gen/api/signal.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/signal.html#nvshmemx-signal-op) | Same in 3.6.5. |
 | E-NV11 | [gen/api/sync.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/sync.html#nvshmem-signal-wait-until) | Same in 3.6.5. |
 | E-NV12 | [memory model](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/mem-model.html#atomicity-guarantees), [signals](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/signal.html) | Same guarantee; `e.g.` rather than `for example` in NV-MM (signal atomicity passage unchanged). 3.6.5 wording: "When NVSHMEM atomic operations and non-NVSHMEM operations (e.g., load and store operations) are used to access the same location concurrently." Latest wording: "When NVSHMEM atomic operations and non-NVSHMEM operations (for example, load and store operations) are used to access the same location concurrently." (NV-LATEST). |
-| E-NV13 | [gen/api/collectives.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/collectives.html) | Same in 3.6.5. |
+| E-NV13 | [gen/api/collectives.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/collectives.html) | Same guarantee; `active set` rather than `team` in the team-barrier sentence (both pages read again on 2026-11-17). 3.6.5 wording: "done by any of the PEs in the active set are complete before returning". Latest wording: "done by any of the PEs in the team are complete before returning" (NV-LATEST). |
 | E-NV14 | [gen/api/collectives.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/collectives.html#nvshmem-sync) | Same guarantee; `via` rather than `through`. 3.6.5 wording: "only ensures completion and visibility of previously issued memory stores and does not ensure completion of remote memory updates issued via NVSHMEM routines". Latest wording: "only ensures completion and visibility of previously issued memory stores and does not ensure completion of remote memory updates issued through NVSHMEM routines" (NV-LATEST). |
 | E-NV15 | [gen/mem-model.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/mem-model.html#visibility-guarantees) | Same in 3.6.5. |
 | E-NV16 | [api/overview.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/api/overview.html) | Same guarantee; `These extension APIs` rather than repeating the two suffixes. 3.6.5 wording: "These extension APIs are collective calls that must be called by every thread in the scope of the API and with exactly the same arguments." Latest wording: "The `_block` and `_warp` extension APIs are collective calls that must be called by every thread in the scope of the API and with exactly the same arguments." (NV-LATEST). |
@@ -451,6 +486,7 @@ are explicitly release-note evidence, not version-tagged API pages.
 | E-NV25 | [3.6.5](https://github.com/NVIDIA/nvshmem/releases/tag/v3.6.5-0), [3.7.0](https://github.com/NVIDIA/nvshmem/releases/tag/v3.7.0-0), [3.8.0](https://github.com/NVIDIA/nvshmem/releases/tag/v3.8.0-0) release notes | Release history: later additions/fix belong to 3.7.0/3.8.0, not this manual. |
 | E-NV26 | [3.6.5 release notes](https://github.com/NVIDIA/nvshmem/releases/tag/v3.6.5-0) | Same limitation in 3.6.5; manual conflict remains open. |
 | E-NV27 | [using.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/using.html#data-consistency) | Same in 3.6.5; newly recorded access/conflict passage. |
+| E-NV28 | [gen/api/ordering.html](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/ordering.html#nvshmem-fence) | Same in 3.6.5 and `latest` (both read on 2026-11-17); in `latest` the GPU-thread note E-NV22 follows it. |
 
 ### 4.3 CUDA C++ memory model
 
@@ -482,8 +518,40 @@ are explicitly release-note evidence, not version-tagged API pages.
   consequence of spelling the scope `sys`. The pinned TD-KCO docstring of
   [`barrier_all_intra_node_atomic_cas_block`, lines 155–157](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L155-L157)
   independently requires atomic support and excludes unsupported PCIe memory.
-  No hardware query was run. Whether D5/A1/A2 need a launch precondition or
-  registered assumption is open (section 10 item 6); neither is added here.
+  No hardware query was run. The user decided on 2026-11-13 to register the
+  condition as a named assumption (A8, section 7). The clause in full, read
+  again on 2026-11-17: "it affects an object in GPU memory, only GPU threads
+  access it, and \*val returned from cudaDeviceGetP2PAttribute(&val,
+  cudaDevP2PAttrNativeAtomicSupported, srcDev, dstDev) between each accessing
+  srcDev and the GPU where the object resides, dstDev, is 1, or only GPU
+  threads from a single GPU concurrently access it." On the page the last two
+  alternatives are a nested list under "and".
+- **E-CU6** (CU-MM, "Example: Message Passing", accessed 2026-11-17). "The
+  following example passes a message stored to the x variable by a thread in
+  block 0 to a thread in block 1 via the flag f". Thread 0 of block 0 executes
+  `x = 42;` and `flag.store(1, memory_order_release);`. Thread 0 of block 1
+  executes `while(flag.load(memory_order_acquire) != 1);` and
+  `assert(x == 42);`. Both declare `cuda::atomic_ref<int,
+  cuda::thread_scope_device> flag(f);`. The waiting side is a loop with an
+  empty body whose condition is an atomic load. The page does not say that
+  such a loop is one operation.
+- **E-CU7** (CU-PG, 5.4.4.1 "Thread Block Synchronization Functions"; fetched
+  on 2026-11-21 and compared with the page text). Of `void __syncthreads();`
+  and its three variants: "`__syncthreads*()` wait until all non-exited
+  threads in the thread block simultaneously reach the same
+  `__syncthreads*()` intrinsic call in the program or exit." And:
+  "`__syncthreads*()` provide memory ordering among participating threads:
+  the call to `__syncthreads*()` intrinsics strongly happens before (see C++
+  specification [intro.races]) any participating thread is unblocked from the
+  wait or exits." Both sentences are about the CUDA C++ intrinsic. They do
+  not say which front-end call is that intrinsic.
+- **E-CU8** (CU-PG, 5.4.4.2 "Warp Synchronization Function"; fetched on
+  2026-11-21). Of `void __syncwarp(unsigned mask = 0xFFFFFFFF);`: "Calling
+  `__syncwarp(mask)` provides memory ordering among the participating threads
+  within a warp named in mask: the call to `__syncwarp(mask)` strongly happens
+  before (see C++ specification [intro.races]) any warp thread named in mask
+  is unblocked from the wait or exits." No row and no entry uses this item:
+  the decision of 2026-11-21 puts `T.sync_warp` under A5.
 
 ### 4.4 TileScale
 
@@ -560,6 +628,46 @@ are explicitly release-note evidence, not version-tagged API pages.
   `fence_sys` in kernels 5 (specialized allgather reset, `71e7145`) and 21
   (the version-2 DeepEP dispatch candidate, `c0f80cc5`); the latter is not the
   project's version-1 DeepEP target. This is census evidence, not a run.
+
+- **E-TS15** (TS-BUILTIN, line 977; TS9-BUILTIN, line 703; TS-INSTR, line 191;
+  docstrings at the pinned commits). `sync_threads(barrier_id=None,
+  arrive_count=None)` has the same docstring at both commits, for every form
+  of the call: "Synchronize all threads in a block." TS-INSTR lists it as
+  "`T.sync_threads([barrier_id, arrive_count])`: Block-wide barrier
+  (`__syncthreads()`)." No document says what the two arguments do, that the
+  call with arguments waits for `arrive_count` threads only, or that the call
+  orders memory accesses. TS-API shows `T.sync_threads()` once, inside the
+  sequence of E-TS9. A text search of `TS9:docs/` finds no mention of
+  `sync_threads`.
+- **E-TS16** (TS9-COMMON, TS9-BUILTIN; names, parameters and docstrings at
+  `9ba8a605`). `wait_ne(value, expected, peer=-1)` and `wait_ge(value,
+  expected, peer=-1)` have the docstrings "Wait until value != expected" and
+  "Wait until value >= expected". They take no scope and no semantics, and neither
+  docstring says what `peer` does; a text search of `TS9:docs/` and of
+  TS9-DEEPEP finds no mention of the waits. The file
+  `docs/distributed_api_reference.md` (TS-API) does not exist at that commit.
+  `ld` has the defaults `scope="gpu"` and `sem="weak"`, as TS-API states them
+  at `71e7145` (E-TS5).
+- **E-TS17** (TS9-DEEPEP, "Implementation Notes", line 190). "Queue semantics:
+  senders update `channel_tail_idx` with release semantics; receivers poll
+  heads/tails with acquire/volatile loads to ensure visibility across PEs."
+  The note gives a purpose. It defines neither `volatile` nor the scope of a
+  load.
+- **E-TS18** (TS-BUILTIN, line 1016; TS9-BUILTIN, line 1083; TS-INSTR, line
+  192; docstrings at the pinned commits). `sync_warp` has the same docstring
+  at both commits: "Synchronize all threads in a warp." At `9ba8a605` it
+  takes no argument; at `71e7145` it takes an optional `mask`. TS-INSTR lists
+  it as "`T.sync_warp([mask])`: Warp-wide barrier (`__syncwarp([mask])`)." No
+  document says that the call orders memory accesses, and no text at
+  `9ba8a605` names an intrinsic for it.
+- **E-TS19** (TS9-BUILTIN, lines 981–997; docstrings at `9ba8a605`).
+  `barrier_blocks(barrier)`: "Barrier all blocks at a system-level barrier.
+  Compare to sync_blocks, barrier_blocks have an extra system-level fence
+  effect". `sync_blocks(barrier)`: "Synchronize all blocks at a system-level
+  barrier." The parameter is the same as at `71e7145`; the wording is not
+  that of E-TS8, which states a release fence on entry and no acquire fence
+  on exit. `st`, `ld` and `put_warp` have the same parameters and defaults at
+  both commits (E-TS16 for `ld`; read for the other two on 2026-11-21).
 
 ### 4.5 Base Triton
 
@@ -739,7 +847,7 @@ constraint on undocumented helpers.
 | `tid` | none | E-TD8 | TD-API | documented | |
 | `atomic_cas` | a | E-TD1, E-TD8 | TD-SEM, TD-API | named assumption (A1) | Clause (b): no document states the return value. The update with `gpu`, `sys`, `acquire` or `release` is read by D5; with `cta`, `relaxed` or `acq_rel` by clause (a) |
 | `atomic_add` | a | E-TD1, E-TD8, E-TD14 (docstring at the pinned commit), E-TD16 | TD-SEM, TD-API, TD-LEC | named assumption (A1) | Clause (b): the docstring says only "the result of atomic_add". Strings as for `atomic_cas`. The CUDA default semantic is `relaxed`: clause (a) |
-| `__syncthreads` | b | E-TD8 | TD-API | documented | A barrier phase of one thread block |
+| `__syncthreads` | b | E-TD8, E-CU7 | TD-API, CU-PG | documented | A barrier phase of one thread block. The order between the memory accesses before and after it: D8 |
 | `ld` | a | E-TD1, E-TD8, E-TD16 | TD-SEM, TD-API, TD-LEC | documented | With `gpu`, `sys`, `acquire` or `release`: D5. With `cta`, `relaxed` or `acq_rel`: A1, clause (a). The CUDA default semantic is `relaxed`, so a call without a semantic needs clause (a) |
 | `st` | a | E-TD1, E-TD8, E-TD16 | TD-SEM, TD-API, TD-LEC | documented | As `ld` |
 | `ld_vector` | a | E-TD1, E-TD8, E-TD16 | TD-SEM, TD-API, TD-LEC | documented | The same primitive as `dl.ld_vector` |
@@ -793,7 +901,8 @@ constraint on undocumented helpers.
 ### 5.5 TileScale, kernel side
 
 The names are used as `T.<name>` in kernel code. NVSHMEM documentation does
-not apply to any row (E-TS1).
+not apply to any row (E-TS1). Every row is at `71e7145`; a call of the DeepEP
+version 1 port at `9ba8a605` is read by the row of the same name through A10.
 
 | Primitive | Pattern | Evidence | Source | Treatment | Note |
 | --- | --- | --- | --- | --- | --- |
@@ -805,12 +914,12 @@ not apply to any row (E-TS1).
 | `get_warp` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
 | `put_block` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
 | `get_block` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
-| `ld` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`, `relaxed`. With `weak` (the default), `volatile`, `cta` or `nc=True`: W1 |
+| `ld` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`, `relaxed`. With `weak` (the default), `volatile`, `cta` or `nc=True`: W1. With `volatile` in the DeepEP version 1 port only: A7 |
 | `st` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `release`, `relaxed`. With `weak` (the default), `volatile` or `cta`: W1 |
 | `atom_add` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `relaxed`, `acquire`, `release`, `acq_rel`. The return value is documented (docstring at the pinned commit) |
 | `wait_eq` | b | E-TS6, E-TS13 | TS-API, TS-SYNC | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`. With `volatile`: a poll by plain loads (W1) |
-| `wait_ne` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above |
-| `wait_ge` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above |
+| `wait_ne` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above. The call of the DeepEP version 1 port at `9ba8a605`, which has no scope and no semantics: A6; its `peer` argument: A10 |
+| `wait_ge` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above. The call of the DeepEP version 1 port at `9ba8a605`, which has no scope and no semantics: A6; its `peer` argument: A10 |
 | `wait_le` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above |
 | `wait_gt` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above |
 | `wait_lt` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above |
@@ -856,12 +965,12 @@ third is base Triton (tutorial 08).
 
 These names are used by the [MoE inventory](MoEInventory.md#per-function-census-observed-calls). Their source is TD-KCO at the existing pin; implementation text is not documentation of an additional guarantee.
 
-The callee docstrings are lower-ranked front-end evidence: [unsafe_barrier_on_this_grid L62–64](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L62-L64) says "triton implementation of cooperative_group::thid_grid().sync()" (the source spells `thid_grid`); [cooperative_barrier_on_this_grid L108–110](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L108-L110) says "triton implementation of cooperative_group::this_grid().sync()". Both add: "WARNING: use with care. better launch triton with launch_cooperative_grid=True to throw an explicit error instead of hang without notice." Neither states an ordering contract. Whether naming a grid sync documents a rendezvous is left open in section 10 item 7.
+The callee docstrings are lower-ranked front-end evidence: [unsafe_barrier_on_this_grid L62–64](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L62-L64) says "triton implementation of cooperative_group::thid_grid().sync()" (the source spells `thid_grid`); [cooperative_barrier_on_this_grid L110–112](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L110-L112) says "triton implementation of cooperative_group::this_grid().sync()". Both add: "WARNING: use with care. better launch triton with launch_cooperative_grid=True to throw an explicit error instead of hang without notice." Neither states an ordering contract. The user decided on 2026-11-21 to register the rendezvous and the order as a named assumption (A9).
 
 | Primitive | Pattern | Stated guarantee / evidence | Source | Treatment | Note |
 | --- | --- | --- | --- | --- | --- |
-| `common_ops.barrier_all_intra_node_atomic_cas_block` | b | [Docstring L155–157](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L155-L157) requires atomic support and warns against PCIe memory lacking atomic reads/writes; no ordering/rendezvous contract is stated | TD-KCO | weakest (W4) | [Front-end helper L154–168](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168); each callee retains its existing row, including A1(b) for atomic_cas. The helper adds no guarantee; its hardware requirement is not a new assumption |
-| `common_ops.barrier_on_this_grid` | b | undocumented; [no docstring at L138–142](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L138-L142) | TD-KCO | weakest (W4) | Front-end wrapper; the cooperative/unsafe callees have the quoted docstrings above but no rows in this inventory. Until the open rendezvous question is decided, the wrapper is an event with no guarantee: no ordering or rendezvous is inferred. No callee row or assumption is added |
+| `common_ops.barrier_all_intra_node_atomic_cas_block` | b | [Docstring L155–157](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L155-L157) requires atomic support and warns against PCIe memory lacking atomic reads/writes; no ordering/rendezvous contract is stated | TD-KCO | weakest (W4) | [Front-end helper L154–168](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168); each callee retains its existing row, including A1(b) for atomic_cas. The helper adds no guarantee. Its two spin loops are read by A3 and its `__syncthreads` by D8; the hardware requirement of its docstring is the platform property of A8 (decision of 2026-11-13) |
+| `common_ops.barrier_on_this_grid` | b | undocumented; [no docstring at L138–142](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L138-L142) | TD-KCO | named assumption (A9) | Front-end wrapper; the cooperative/unsafe callees have the quoted docstrings above but no rows in this inventory. In a kernel launched as a cooperative grid the call is a rendezvous of all blocks of the launch that orders their accesses (A9, decision of 2026-11-21). Outside such a launch nothing is assumed, and W4 applies as before: the semantics of the body, with no guarantee added. No callee row is added |
 | `common_ops.next_power_of_2` | none | undocumented; [no docstring at L270–272](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L270-L272) | TD-KCO | weakest (W3) | Compile-time value helper; no memory event and an unspecified result under W3. Its call to base Triton does not supply a documented contract in this inventory |
 
 ## 6. Inferences and decisions that apply to many rows
@@ -945,22 +1054,135 @@ The callee docstrings are lower-ranked front-end evidence: [unsafe_barrier_on_th
   | Counted signals | E-NV24 | Release notes: added in 3.8.0 (E-NV25); absent from the 3.6.5 signal page | After 3.6.5: not relied on | `signal_op`, `signal_wait_until`. No row binds a counted-signal routine |
   | GPU-thread notes on `fence` and `quiet` | E-NV22 | Direct archive comparison: absent from the 3.6.5 ordering page | Not part of the version of record: not relied on | `fence`, `quiet` |
 
-  E-NV22 formerly supplied the cross-thread claim that one elected GPU thread’s
+  E-NV22 states the cross-thread claim that one elected GPU thread’s
   fence/quiet can order/complete earlier operations issued by other block threads
-  after synchronization; that claim is not used for 3.6.5.
+  after synchronization. No row rested on it, and the claim is not used for 3.6.5.
 
   Consequence of the third line: a `fence` or a `quiet` is taken to cover the
   operations that the calling thread issued. That a `fence` after
   `__syncthreads` also covers the stores of the other threads of the block,
   the pattern of tutorial 01 (E-TD11), is not assumed.
 
+- D8. Documented reading of the block barrier (user's decision of
+  2026-11-21, which admits the CUDA Programming Guide as a source). In kernel
+  code of Triton-distributed, `language_extra.__syncthreads` denotes the CUDA
+  C++ intrinsic `__syncthreads()`. Its memory order is what E-CU7 states: the
+  call of each participating thread strongly happens before any participating
+  thread is unblocked from the wait. It follows that every access that a
+  participating thread performs before its call happens before every access
+  that a participating thread performs after it is unblocked. Like D5 the
+  reading is part of the semantics, not a registered assumption, and the row
+  `__syncthreads` of section 5.4 is `documented` for it. The decision lets
+  the same reading cover `T.sync_threads()` without arguments where its
+  documentation ties it to `__syncthreads`. At `71e7145` it does: TS-INSTR
+  lists the call as "Block-wide barrier (`__syncthreads()`)" (E-TS15). At
+  `9ba8a605` no text names the intrinsic, so the call of the port stays under
+  A5. D8 does not cover `T.sync_threads(id, count)`, for which TS-INSTR names
+  the same intrinsic and A4 decides otherwise, nor `T.sync_warp` (A5). Calls
+  in the target sets: K1 `T01:106` (before the `fence` and the `dl.notify` of
+  `T01:107–116`) and `T01:137` (before `T01:138–146`); K3 `T03:78`; K4
+  `T03:155` and `T03:167` (before the `putmem_signal_block` of
+  `T03:169–177`); K11 `CO:168`; K16 `CO:180`, twice in K15. Reached by no
+  tutorial of the set: `CO:65`, `CO:85`, `CO:114`, `CO:134`, `RS:315`,
+  `RS:324`, `RS:336`, `RS:423`, `RS:430`.
+
+**How the readings registered on 2026-11-13 meet the rules above.** A3 to A8
+are in section 7. The items below are inferences from the entries and from
+lines read at the pins (file IDs as in section 7). The points they raised
+were open in the first form of this block; the user decided each on
+2026-11-21 (section 9), and each item now ends with that decision.
+
+- I7. The block barrier and D7. D8 orders the stores of every thread of a
+  block ahead of what any thread of the block does after `__syncthreads`, so
+  ahead of the `fence` and the `dl.notify` of tutorial 01 (`T01:106–116`).
+  The 3.6.5 manual makes the cover of another thread's stores by a fence
+  depend on their being "made visible to the calling thread according to the
+  rules of the memory model associated with the threading environment"
+  (E-NV28). Decision of 2026-11-21: D7 stays as written. An NVSHMEM `fence`
+  or `quiet` covers the operations of the calling thread, also after a block
+  barrier. Tutorial 01 does not turn on it: its consumer waits with
+  `dl.wait`, which is no NVSHMEM routine, so the fence gives the consumer
+  nothing either way (I2). What the barrier gives tutorial 01 is the order
+  from each thread's store to the notify of the one thread (LIT-b03). Whether
+  a chain through that edge, which has block scope, reaches a consumer on
+  another rank is the scope check of ticket S5.2 (header of
+  `EventSpec.lean`). The two waits of tutorial 01 are at scope `gpu` on words
+  that a thread of another rank writes (`T01:88–96`, `T01:126–133`); I3 still
+  gives them no edge (LIT-b02).
+- I8. A4 and A5. A4 gives `T.sync_threads(id, count)` a rendezvous and no
+  order. As first decided, A5 ordered memory through the barrier of the whole
+  block only, and `T.sync_warp` had no entry; the dispatch and combine
+  kernels of the DeepEP port use only the group form and `T.sync_warp` where
+  an order is needed, so the form of LIT-a08 stayed undefined in K25, K26 and
+  K28. Decision of 2026-11-21: A5 also orders the accesses of the threads
+  that take part in a group barrier and in a `T.sync_warp` (clauses (b) and
+  (c)). With it the copies of a group are ordered ahead of the release store
+  of its tail (`DD:410`, `DD:652`, `DC:216`), the load of the tail by one
+  thread ahead of the copies by the other threads of the group (`DD:461`,
+  `DD:703`), and the wait of an elected lane ahead of the copies of its warp
+  (`DD:334–339`, `DD:603–608`, `DC:175–180`). The order holds among the
+  participants of one barrier only: A5 gives none between threads of two
+  groups or two warps of a block.
+- I9. A6, A7 and the scope of the `volatile` loads. The four `volatile` loads
+  of the port pass no scope (`DD:432`, `DD:434`, `DD:674`, `DD:676`), and the
+  default at `9ba8a605` is `gpu` (E-TS16). Under A7 each is a relaxed atomic
+  load at device scope. The word it reads is stored by the sender of rank
+  `responsible_rank` with `scope="sys"` and `sem="relaxed"` (`DD:314`,
+  `DD:316`, `DD:584`, `DD:586`). Between two different ranks the device scope
+  of the load does not include the storing thread (E-CU1), and the relaxed
+  store has no release side, so neither access happens before the other: a
+  data race (E-CU2), as in I3. The `T.wait_ne` before each load is defined
+  under A6, at system scope with `acquire`, but it returns no value and finds
+  no release to pair with. Where a rank sends to itself both accesses are in
+  one device. LIT-b12 writes its load without a scope too, so its outcome
+  stays undefined, because of the scope and no longer because of the word
+  `volatile`. Decision of 2026-11-21: A7 stays as decided. The port as
+  written has this defect, a data race between ranks in the offset handshake
+  of K25 and K26. The proof target is the variant of the port with
+  `scope="sys"` on those four loads and no other change. The defect is a
+  finding to report upstream at the end of the project; nobody has been
+  contacted (section 10, item 1).
+- I10. A8 and D5, A1, A2. D5, A1 and A2 say which operation of the CUDA C++
+  model a call is. When such an operation is atomic at the system scope is a
+  condition of the same model (E-CU5), and A8 assumes it. No statement of D5,
+  A1 or A2 changes. A kernel theorem that uses a system-scope operation of
+  D5, A1, A2 or A6 on a word that threads of two GPUs access names A8 as well.
+  One kernel does not fit: `barrier_all_on_stream` launches the
+  compare-and-swap barrier K11 when the host query `supports_p2p_native_atomic`
+  (bound to `cudaDeviceGetP2PAttribute` with
+  `cudaDevP2PAttrNativeAtomicSupported` for devices 0 and 1, `UT:534–547`)
+  returns true, and the store-and-load barrier K15 otherwise (`CO:257–261`).
+  D5 reads the `st` and `ld` of K15 with `sys` as atomic operations at system
+  scope (`CO:177–178`), so a theorem about K15 names A8, while tutorial 06
+  reaches K15 on exactly the platforms where that query reports the attribute
+  as not 1. On such a platform a theorem about K15 says nothing. The clause
+  quoted in E-CU5 is the only one of its list that names GPU memory; what the
+  list calls mapped memory was not examined. Decision of 2026-11-21: K15 is
+  kept as proved under A8 and is not claimed on a platform that selects it;
+  the point is revisited when a run records the attribute (section 10, item
+  7). Neither D5 nor A8 is weakened.
+- I11. A3, the remaining spin forms, and NVSHMEM. A3 covers a loop with an
+  empty body. The three spin forms of the DeepEP port have a body
+  (`DD:452–458`, `DD:694–700`, `DC:285–287`), and so have the two grid-barrier
+  callees (`CO:82–83`, `CO:131–132`); the number of events of those threads
+  depends on the schedule. Decision of 2026-11-21: the spin forms of the port
+  are not covered by A3 and are left to the per-agent continuation of the
+  segment interface. A3 leaves I2 and E-NV21 as they are: the wait has the
+  mode of its load, a CUDA atomic or a plain access, so a spin wait on a word
+  that an NVSHMEM routine writes still conflicts with that write (E-NV12).
+  For the compare-and-swap form the signed event interface has no event that
+  blocks and writes in one step. Decision of 2026-11-21: the form is mapped
+  to a `wait` and a `set` write that S2.6 and S4.1 fire as one step; no
+  constructor is added.
+
 ## 7. Named assumptions
 
 Each entry has the fields of the registry of ticket S5.3 as the map states
 them: name, statement, source or rationale, affected kernels. The class of
 ticket S5.1 and the status are added. The freeze ticket S5.1 fixes the names.
-Affected kernels were found by text search at the pins; reachability from each
-kernel entry point was not traced.
+For A1 and A2, affected kernels were found by text search at the pins;
+reachability from each kernel entry point was not traced. A3 to A8 say before
+A3 how theirs were found.
 
 ### A1 `undocumented_scope_order_vocabulary`
 
@@ -973,10 +1195,10 @@ remainder was chosen in this revision.
 | --- | --- |
 | Name | `undocumented_scope_order_vocabulary` |
 | Class | semantic source |
-| Status | Kept as a registered named assumption, in this narrower form, by the user's decision of 2026-11-12. Clause (d) was added by this revision for the row of section 5.7 and is not covered by that decision (section 10, item 1) |
+| Status | Kept as a registered named assumption, in this narrower form, by the user's decision of 2026-11-12. Clause (d) was added for the row of section 5.7 and confirmed by the user's decision of 2026-11-21: the `sem` and `scope` strings of base Triton's `tl.atomic_add` have the meaning of the strings of the same name in `language_extra` (section 9, "Decisions of 2026-11-21", item 1) |
 | Statement | Where no document defines a string or a return value, the reading of D5 is assumed: the string denotes the CUDA C++ thread scope or memory order of the same name, and the primitive performs, for each element, an atomic operation of the CUDA C++ memory model at that scope and order. (a) In kernel code of Triton-distributed the scope string `cta` denotes `cuda::thread_scope_block`, and the semantic strings `relaxed` and `acq_rel` denote the memory order of the same name. (b) `language_extra.atomic_add` is a fetch-add that returns the previous value, and `language_extra.atomic_cas` is a strong compare-exchange that returns the value read. (c) In kernel code of TileScale the scope strings `gpu` and `sys` denote `cuda::thread_scope_device` and `cuda::thread_scope_system`, and the semantic strings `relaxed`, `acquire`, `release` and `acq_rel` denote the memory order of the same name; `T.ld` is a load, `T.st` a store, `T.atom_add` a fetch-add, and a wait a sequence of loads that ends with a load satisfying its condition. (d) For base Triton `tl.atomic_add` in kernel code of Triton-distributed the scope strings `cta`, `gpu` and `sys` denote `cuda::thread_scope_block`, `cuda::thread_scope_device` and `cuda::thread_scope_system`, and the semantic strings `relaxed`, `acquire`, `release` and `acq_rel` denote the memory order of the same name. Nothing is assumed for any other string (`weak`, `volatile`, `sc`, the empty string), nor for `cta` in TileScale |
 | Source or rationale | (a) TD-SEM defines only `gpu`, `sys`, `acquire` and `release` (E-TD1, D5); TD-API takes a scope and a semantic without listing their values (E-TD8), and the CUDA definitions default to `relaxed` (E-TD16). (b) TD-API says "Atomic add operation" and "Atomic compare-and-swap" and describes no return value (E-TD8); the docstring says "the result of atomic_add" (E-TD14). (c) TS-API lists its strings and defines none; it does not list `cta` (E-TS13). The return value of `T.atom_add` is not assumed: its docstring states it (E-TS5). (d) The Triton documentation lists the strings with glosses and defines none; it does state atomicity and the return value, which are not assumed (E-TR1). For all clauses: the map names the CUDA C++ memory model as the source of semantics for scoped accesses (E-CU1, E-CU3, E-CU4) |
-| Affected kernels | Listed for tutorials 01 to 08, K-M, and the helper modules they import; the K-M extension below inventories use without changing any clause or primitive treatment. Triton-distributed, clause (a): `kernels/nvidia/reduce_scatter.py` and `kernels/nvidia/allgather_gemm.py` (`st` without a semantic, hence `relaxed`). Clause (b): `kernels/nvidia/common_ops.py` (`atomic_cas`, `atomic_add`; tutorial 05 calls its `barrier_all_intra_node_atomic_cas_block`), `kernels/nvidia/reduce_scatter.py` and `kernels/nvidia/gemm_reduce_scatter.py` (`atomic_add`). Clause (d): tutorial 08 and `kernels/nvidia/gemm_reduce_scatter.py` (`tl.atomic_add` with `release` and `gpu`). Tutorials 05 to 08 import `common_ops.py`, `reduce_scatter.py` and `allgather_gemm.py`; `gemm_reduce_scatter.py` holds the same call as tutorial 08. No longer affected: `dl.wait(..., "gpu", "acquire")` of tutorials 01 and 07, and every `ld` or `st` with `gpu` or `sys` and `acquire` or `release` (D5). TileScale, clause (c): `examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py`, `example_allgather_gemm_specialized.py` and `gemm_allreduce/example_gemm_ar_specialized.py` (`T.wait_eq`, `T.wait_ge`); `gemm_reducescatter/example_gemm_rs_overlapped.py` (`T.st`, `T.atom_add`). The targets are the `_overlapped` variants (section 9, item 9). K-M extension (all links at the TD pin): clause (a), [D2 default-semantic ld/st](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L69-L93) and [L192–197](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L192-L197), [D3 default-semantic ld/st](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L212-L251) and [L295–297](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L295-L297); clause (b), [D4 atomic_add release/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L243-L245), [L324](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L324-L326) and [release/sys L723](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L723), [D5 release/gpu and release/sys](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L398-L400) and [L479–481](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L479-L481), plus [common atomic_cas sys/release and sys/acquire](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168) reached by the K-M barrier callers. Clause (d), [D6 tl.atomic_add relaxed/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L124-L125) and [L160–161](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L160-L161), imported [threadblock_swizzle_ag_moe_kernel relaxed/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/threadblock_swizzle_ag_moe_triton.py#L183-L184) and [moe_utils relaxed/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_utils.py#L209) / [L297](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_utils.py#L297). The other scoped calls do not enlarge A1: [D3 gpu/acquire loads and gpu/release stores](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L264-L271) and [D4 release stores](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L243-L245) / [L324–326](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L324-L326), [D4 acquire waits](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L583) / [L667](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L667), [D5 release store and acquire load](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L617-L621) and [D5 acquire wait](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L591) keep D5; [D2 membar(sys)](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L410) and [D3 membar(gl/sys)](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L179-L274) keep W2, including the undocumented gl spelling. The [D3 ld_acquire(..., "sys") calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L236) and [L291](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L291) retain W1: their scope argument grants no acquire guarantee. [D6 dl.wait(..., "gpu", "acquire")](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L600) retains D5. The [common_ops atomic_add(scope="gpu", semantic="release")](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L76) and [L125](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L125) are reached via [barrier_on_this_grid](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L138-L142) and belong to clause (b); the wrapper adds no guarantee. No assumption is added for these calls. |
+| Affected kernels | Listed for tutorials 01 to 08, K-M, and the helper modules they import; the K-M extension below inventories use without changing any clause or primitive treatment. Triton-distributed, clause (a): `kernels/nvidia/reduce_scatter.py` and `kernels/nvidia/allgather_gemm.py` (`st` without a semantic, hence `relaxed`). Clause (b): `kernels/nvidia/common_ops.py` (`atomic_cas`, `atomic_add`; tutorial 05 calls its `barrier_all_intra_node_atomic_cas_block`), `kernels/nvidia/reduce_scatter.py` and `kernels/nvidia/gemm_reduce_scatter.py` (`atomic_add`). Clause (d): tutorial 08 and `kernels/nvidia/gemm_reduce_scatter.py` (`tl.atomic_add` with `release` and `gpu`). Tutorials 05 to 08 import `common_ops.py`, `reduce_scatter.py` and `allgather_gemm.py`; `gemm_reduce_scatter.py` holds the same call as tutorial 08. No longer affected: `dl.wait(..., "gpu", "acquire")` of tutorials 01 and 07, and every `ld` or `st` with `gpu` or `sys` and `acquire` or `release` (D5). TileScale, clause (c): `examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py`, `example_allgather_gemm_specialized.py` and `gemm_allreduce/example_gemm_ar_specialized.py` (`T.wait_eq`, `T.wait_ge`); `gemm_reducescatter/example_gemm_rs_overlapped.py` (`T.st`, `T.atom_add`). The targets are the `_overlapped` variants (section 9, item 9). K-M extension (all links at the TD pin): clause (a), [D2 default-semantic ld/st](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L69-L93) and [L192–197](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L192-L197), [D3 default-semantic ld/st](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L212-L251) and [L295–297](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L295-L297); clause (b), [D4 atomic_add release/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L243-L245), [L324](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L324-L326) and [release/sys L723](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L723), [D5 release/gpu and release/sys](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L398-L400) and [L479–481](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L479-L481), plus [common atomic_cas sys/release and sys/acquire](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168) reached by the K-M barrier callers. Clause (d), [D6 tl.atomic_add relaxed/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L124-L125) and [L160–161](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L160-L161), imported [threadblock_swizzle_ag_moe_kernel relaxed/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/threadblock_swizzle_ag_moe_triton.py#L183-L184) and [moe_utils relaxed/gpu](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_utils.py#L209) / [L297](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_utils.py#L297). The other scoped calls do not enlarge A1: [D3 gpu/acquire loads and gpu/release stores](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L264-L271) and [D4 release stores](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L243-L245) / [L324–326](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L324-L326), [D4 acquire waits](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L583) / [L667](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L667), [D5 release store and acquire load](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L617-L621) and [D5 acquire wait](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L591) keep D5; [D2 membar(sys)](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L410) and [D3 membar(gl/sys)](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L179-L274) keep W2, including the undocumented gl spelling. The [D3 ld_acquire(..., "sys") calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L236) and [L291](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L291) retain W1: their scope argument grants no acquire guarantee. [D6 dl.wait(..., "gpu", "acquire")](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L600) retains D5. The [common_ops atomic_add(scope="gpu", semantic="release")](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L76) and [L125](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L125) are reached via [barrier_on_this_grid](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L138-L142) and belong to clause (b); the wrapper adds no guarantee. The [common_ops ld_acquire(ptr, scope="gpu") calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L83) and [L132](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L132) of the same two callees retain W1: their scope argument grants no acquire guarantee. No assumption is added for these calls. |
 
 ### A2 `notify_atomic_release`
 
@@ -989,6 +1211,144 @@ remainder was chosen in this revision.
 | Source or rationale | The documentation says only "Send a signal to a remote rank" with `sig_op` `"set"` or `"add"` (E-TD2, E-TD3). It states no atomicity, scope or ordering, and it does not list the value `gpu`, which tutorial 08 passes. The examples of TD-SEM and TD-T01 pair `notify` with `wait(..., "acquire")` as the only synchronization between producer and consumer (E-TD10, E-TD11). Without the assumption `notify` falls under W2, and each `notify` races with the matching `wait` |
 | Affected kernels | Tutorial 01 (two calls, `intra_node`); tutorial 08 and `kernels/nvidia/gemm_reduce_scatter.py` (`comm_scope="gpu"`, own rank) |
 
+**A3 to A8** are the six readings that the user decided on 2026-11-13 to
+register (comment on ticket #37; section 9). They are decisions, not findings.
+Each entry states what was decided and nothing more; what the decision leaves
+out is said in the statement, and what follows when two entries meet is in
+section 6 (I7 to I11). The names were chosen in this revision (ticket S2.7);
+the freeze ticket S5.1 fixes them. A9, A10 and the present form of A5 come
+from the user's decisions of 2026-11-21 and have the same form; A5 was renamed
+then. Two fields are added: what goes beyond
+documentation, in one sentence, and the constructor of the signed event
+interface (`VeriTile/Staging/Dist/EventSpec.lean`) that carries the reading;
+ticket S2.6 fixes the map from primitives to events.
+
+Affected kernels were found by reading the cited lines at the pins on
+2026-11-17 (for A5, A9 and A10 on 2026-11-21, in new clones at the same
+commits), for the two proof-target sets of
+[EventControlFlow.md](EventControlFlow.md): tutorials 01 to 08 with the
+helpers they reach, and the DeepEP version 1 port. K1 to K28 are the rows of
+its section 4. Which tutorial reaches which helper is taken from its section 2
+and was not traced again. Lines are cited as `ID:line`:
+
+| ID | File |
+| --- | --- |
+| T01, T03, T05, T06, T08 | `TD:tutorials/01-distributed-notify-wait.py`, `03-inter-node-allgather.py`, `05-intra-node-reduce-scatter.py`, `06-inter-node-reduce-scatter.py`, `08-overlapping-gemm-reduce-scatter.py` |
+| CO | `TD:python/triton_dist/kernels/nvidia/common_ops.py` |
+| RS | `TD:python/triton_dist/kernels/nvidia/reduce_scatter.py` |
+| UT | `TD:python/triton_dist/utils.py` |
+| DD | `TS9:examples/distributed/deepseek_deepep/intranode/dispatch.py` |
+| DC | `TS9:examples/distributed/deepseek_deepep/intranode/combine.py` |
+
+### A3 `spin_wait_one_blocking_event`
+
+| Field | Value |
+| --- | --- |
+| Name | `spin_wait_one_blocking_event` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-13 |
+| Statement | In kernel code, a loop with an empty body whose condition is one comparison of the value that one call returns, the call being a load of one word or an `atomic_cas` on one word, is one blocking event of the thread that runs it. (a) Load: `while ld(p, …) != v: pass` blocks until a load of the word at `p` returns a value for which the condition is false, and is that one load. (b) Compare-and-swap: `while atomic_cas(p, c, d, …) != c: pass` blocks until the word at `p` holds `c` and replaces it by `d` in the same step. The rounds that fail have no effect. The event has the mode that the row of the called primitive gives the call (D5, A1, or W1 for an undocumented helper): this entry adds no atomicity, scope or order. Not covered: a loop whose body does anything, also when the body only repeats the load; a condition that reads more than one word, combines the values of several threads or calls another primitive; a compare-and-swap whose result is compared with anything but its own compare value. Nothing is assumed about termination: that the event ever fires is the forward-progress assumption of ticket #20 |
+| Source or rationale | Documentation: TD-API describes one call, `ld` as "Load with memory ordering" and `atomic_cas` as "Atomic compare-and-swap" (E-TD8). The message-passing example of the CUDA C++ memory model waits with `while(flag.load(memory_order_acquire) != 1);` (E-CU6). Not stated: that such a loop is one operation, how many loads it performs, or that a round of a compare-and-swap that fails does nothing but read (A1, clause (b), assumes the strong compare-exchange). Why the kernels need it: each failing round is one more atomic access, so the number of events of a thread depends on the schedule and no list of events is fixed before execution (`EventControlFlow.md`, section 1.2: K11, K15, K16). The litmus rows LIT-a03 and LIT-a06 state these loads and swaps as "repeated". With the entry each such thread has three events. Without it nothing is undefined behaviour; the kernels are outside what a fixed list of events expresses |
+| Affected kernels | Triton-distributed, in the target sets: K11 `barrier_all_intra_node_atomic_cas_block`, `CO:162–163` (0 to 1 with `sys`, `release`, on a word of rank `thread_idx`) and `CO:166–167` (1 to 0 with `sys`, `acquire`, on a local word); K16 `_barrier_all_intra_node_non_atomic_once_block`, `CO:178–179` (`ld` with `sys`, `acquire`), which K15 runs twice (`CO:194`, `CO:196`). Tutorial 05 launches K11 (`T05:216`); tutorial 06 launches K11 or K15 through `barrier_all_on_stream` (`T06:344`, `CO:257–261`). Covered by the form but reached by no tutorial of the set: `RS:313–314`, `RS:322–323`, `RS:421–422`, `RS:428–429` (`ld` with `acquire`, empty body). Not covered, because the body repeats the load: the two grid-barrier callees, `CO:82–83` and `CO:131–132`. The eight tutorial files contain no `while` (text search). DeepEP version 1 port: none. Its three spin forms have a body: in `DD:452–458` and `DD:694–700` the `T.ld` is a statement of the body and the leaving branch stores to CTA-shared memory before `break`; in `DC:285–287` the body repeats the `T.ld` and the condition is the warp vote `T.warp_any`. Decision of 2026-11-21: these forms are not covered by A3 and are left to the per-agent continuation of the segment interface |
+| Beyond documentation | That replacing the schedule-dependent rounds of such a loop by one blocking event loses no behaviour: the documentation describes each call and never the loop |
+| Event interface | (a) `Event.wait (.word p) cmp n mode`, with `cmp` the comparison under which the loop leaves. (b) No single constructor: the signed interface has no event that blocks and writes. Decision of 2026-11-21: the form is mapped to `Event.wait (.word p) .eq c mode` and a `set` write of `d` to the same word (`Event.bump` with `set`), and the map of S2.6 and the step relation of S4.1 fire the two as one step. No constructor is added |
+
+### A4 `sync_threads_group_barrier`
+
+| Field | Value |
+| --- | --- |
+| Name | `sync_threads_group_barrier` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-13 |
+| Statement | In kernel code of TileScale, `T.sync_threads(id, count)` with both arguments is a barrier of one thread block among the `count` threads of the block that call it with that `id`: the k-th such call of a thread returns only after each of these `count` threads has made its k-th call with that `id`. It is a rendezvous and nothing else. This entry assumes no order between memory accesses of different threads; A5, clause (b), adds one by the decision of 2026-11-21 (I8). Nothing is assumed when the number of threads of the block that call it with that `id` is not `count`, for two calls with one `id` and different counts, or for a call with one argument |
+| Source or rationale | Documentation: the docstring at both commits is "Synchronize all threads in a block." for every form of the call, and the programming guide of `71e7145` lists "`T.sync_threads([barrier_id, arrive_count])`: Block-wide barrier (`__syncthreads()`)." (E-TS15). Not stated: what the two arguments do, and that the call with arguments waits for `count` threads and not for the block. Why the kernels need it: in K25, K26 and K28 the groups of one block run loops with different numbers of rounds, and the only barrier inside those loops is this call with the index and the thread count of the group (`EventControlFlow.md`, sections 1.3 and 8, item 1). Read as the documentation words it, as a barrier of all threads of the block, a group would wait for threads that are in another round or have left their loop (an inference; nothing was run). No litmus row has this form: LIT-a08 is written with the call without arguments |
+| Affected kernels | DeepEP version 1 port only. K25 `dispatch_main`: `DD:410` (sender), `DD:461` and `DD:509` (receiver), arguments `responsible_rank, num_threads_per_rank`. K26 `cached_dispatch_main`: `DD:652`, `DD:703`, `DD:738`, the same arguments. K28 `combine_main`: `DC:216` (sender), arguments `send_rank_id, threads_per_rank`. That exactly `count` threads of the block pass each `id` was not checked. Triton-distributed has no such call. Outside the targets a text search finds the form in `TS:examples/gemm_sm100/gemm_tcgen5mma_ws_clc.py` and `TS:examples/deepseek_v32/topk_selector.py`; those files were not read |
+| Beyond documentation | That the two arguments restrict the barrier to `count` threads, against the wording "all threads in a block" of the only documentation |
+| Event interface | `Event.bump` and `Event.wait` on `Counter.phase c id`, with `id` the first argument. The entry gives no order; the mode that forms a `SyncEdge` between two threads of the group comes from A5, clause (b) |
+
+### A5 `tilescale_barrier_orders_memory`
+
+The name changed in this revision. It was `block_barrier_orders_memory`
+while the entry was about `__syncthreads` and `T.sync_threads()`. The
+decisions of 2026-11-21 moved `__syncthreads` to D8 and added the group and
+warp barriers, so the entry now holds three TileScale barriers.
+
+| Field | Value |
+| --- | --- |
+| Name | `tilescale_barrier_orders_memory` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-13 for the barrier of the whole block; extended to the group and warp barriers, and reduced by what D8 documents, by the user's decisions of 2026-11-21 |
+| Statement | In kernel code of TileScale, a barrier orders the memory accesses of the threads that take part in it: every access that a participating thread performs before it arrives at a phase of the barrier happens before every access that a participating thread performs after it returns from that phase. The order is the happens-before of the CUDA C++ memory model (E-CU2). Three barriers are covered. (a) `T.sync_threads()` without arguments where no documentation names `__syncthreads` for it, which is the case at `9ba8a605`; the participants are the threads of the block. Where the documentation does name it, at `71e7145`, the order is documented and not assumed (D8). (b) `T.sync_threads(id, count)`; the participants are the `count` threads of the group to which A4 gives the rendezvous. (c) `T.sync_warp()` without a mask; the participants are the threads of the warp. The rendezvous itself is not assumed here: for (a) and (c) it is what the docstrings state, for (b) it is A4. Nothing is assumed between threads of two groups or two warps, for `T.sync_warp` with a mask, for `barrier_on_this_grid` (A9), for a barrier between blocks or ranks (`T.sync_blocks`, `T.barrier_blocks` and the NVSHMEM barriers keep their rows), or for what an NVSHMEM `fence` or `quiet` after a barrier covers (D7; I7) |
+| Source or rationale | Documentation: `sync_threads` has the docstring "Synchronize all threads in a block." at both commits (E-TS15), and `sync_warp` has "Synchronize all threads in a warp." (E-TS18). These state a synchronization. Not stated: any order between memory accesses of different threads across the barrier; for the form with arguments, not even who takes part (A4). The CUDA Programming Guide states such an order for the CUDA C++ intrinsics (E-CU7, E-CU8), and TS-INSTR names those intrinsics at `71e7145`; no text at `9ba8a605` does, and no intrinsic is named that waits for `count` threads. Why the kernels need it: without it nothing orders the copies of the other threads ahead of what one thread publishes after the barrier, and the peer's accesses race with those copies. That is LIT-a08 (a warp copies, the block synchronizes, another lane publishes), marked N, and its form with the group barrier in K25, K26 and K28 (I8) |
+| Affected kernels | DeepEP version 1 port only. (a) K23 `notify_dispatch_main`, `DD:87` and `DD:114`; K28 `combine_main`, `DC:237` (receiver). (b) K25 `dispatch_main`, `DD:410`, `DD:461`, `DD:509`; K26 `cached_dispatch_main`, `DD:652`, `DD:703`, `DD:738`; K28, `DC:216`. (c) K25, `DD:317` and `DD:339`; K26, `DD:587` and `DD:608`; K28, `DC:180`, `DC:289`, `DC:348`. These are all calls of `T.sync_threads` and `T.sync_warp` in the directory (text search). No kernel of Triton-distributed: its `__syncthreads` is read by D8 |
+| Beyond documentation | That these three TileScale barriers are points of memory ordering among their participants: the text at `9ba8a605` states a synchronization and no order, and for the group form not even the participants |
+| Event interface | `Event.bump` and `Event.wait` on `Counter.phase c id`, in a mode that pairs between any two participants: an `atomic` mode at scope `cta` with a release side on the arrival and an acquire side on the return, so that `SyncEdge` holds from every arrival to every return of a phase. The header of `EventSpec.lean` describes the barrier as "a counter written and waited on at scope `cta`". No kind of `Counter` names a warp; which `phase` a warp barrier is, S2.6 fixes |
+
+### A6 `deepep_v1_wait_scope_order`
+
+| Field | Value |
+| --- | --- |
+| Name | `deepep_v1_wait_scope_order` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-13 |
+| Statement | In kernel code of the DeepEP version 1 port (TileScale at `9ba8a605`, directory `examples/distributed/deepseek_deepep/intranode/`) and nowhere else, a call `T.wait_ge(value, expected, peer)` or `T.wait_ne(value, expected, peer)` has the scope `sys` and the semantics `acquire`, which are the defaults that TS-API gives the waits of the same names at `71e7145` (E-TS6). What a wait with these two strings is, is A1, clause (c); it is not assumed a second time here. Nothing is assumed for the other four waits at `9ba8a605`, for any other name whose parameters differ between the two commits, for what `peer` denotes at `9ba8a605` (A10 states that), or for TileScale at `9ba8a605` outside that directory |
+| Source or rationale | Documentation, at `71e7145`: "`T.wait_ne(value, expected, peer=-1, scope="sys", semantics="acquire")`", "`T.wait_ge(value, expected, peer=-1, scope="sys", semantics="acquire")`" and "Valid wait scopes are `sys` and `gpu`; valid semantics are `acquire` and `volatile`. A non-negative `peer` remaps the polled address to that peer." (TS-API, E-TS6). At `9ba8a605` the two functions take `(value, expected, peer=-1)`, their docstrings are "Wait until value != expected" and "Wait until value >= expected", and the reference page does not exist (E-TS16). Not stated: any scope or order for the waits of `9ba8a605`, and that the page of `71e7145` describes them; `71e7145` is on another branch and is neither an ancestor nor a descendant of `9ba8a605` (`DeepEPInventory.md`, section 4.2). Why the kernels need it: without a scope and an order the waits are polls by plain loads (W6, W1) of words that a peer stores, a data race by I1, in every sender round and at every receiver start of K25, K26 and K28. The litmus rows LIT-a07, LIT-a08 and LIT-b12 are stated for the interface of `71e7145` for this reason (LIT-b12, field "Mark") |
+| Affected kernels | K25 `dispatch_main`: `T.wait_ge` on the head word of the peer, `DD:334–338` (sender); `T.wait_ne` on the two local offset words, `DD:431` and `DD:433` (receiver). K26 `cached_dispatch_main`: `DD:603–607`; `DD:673` and `DD:675`. K28 `combine_main`: `T.wait_ge`, `DC:175–179` (sender, `peer=send_rank_id`). These are all calls of `T.wait_` in the directory (text search). No kernel outside the port |
+| Beyond documentation | That the reference page of another commit, on another branch, describes the two waits of `9ba8a605`, whose own text states neither scope nor order |
+| Event interface | `Event.wait (.word p) .ge n (.atomic .sys .acquire)`, and the same with `.ne`. The mode rests on A1, clause (c), and, for a word that threads of two GPUs access, on A8 |
+
+### A7 `deepep_v1_volatile_load_relaxed`
+
+| Field | Value |
+| --- | --- |
+| Name | `deepep_v1_volatile_load_relaxed` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-13 |
+| Statement | In kernel code of the DeepEP version 1 port (the directory of A6) and nowhere else, `T.ld(src, value, sem="volatile")` is one atomic load of the CUDA C++ memory model with the memory order `relaxed`, at the thread scope that its `scope` argument denotes under A1, clause (c). A call that passes no `scope` has the default of the signature at `9ba8a605`, which is `gpu`, the device scope (E-TS16). Everywhere else `volatile` keeps the weakest treatment (W1; decision of 2026-11-12, section 9, item 9): in every other TileScale kernel, for `T.st`, and for a wait with `semantics="volatile"`. Base Triton's `tl.load(volatile=True)` is not touched (it has no row: decision of 2026-11-21, section 9). The host code of the port, which reads counters through `volatile` pointers of C++, is not kernel code. Nothing is assumed for the scope `cta` (A1) |
+| Source or rationale | Documentation: the note of the port, "Queue semantics: senders update `channel_tail_idx` with release semantics; receivers poll heads/tails with acquire/volatile loads to ensure visibility across PEs." (E-TS17). TS-API lists `volatile` among the semantic strings and defines none (E-TS13). Not stated: what a `volatile` load is. The note gives a purpose and no definition, and it names no scope. Why the kernels need it: under W1 the load is plain and races with the peer's store of the offset word, LIT-b12 (marked N). What the entry does not give is in I9: none of the calls passes a scope |
+| Affected kernels | K25 `dispatch_main`, `DD:432` and `DD:434`; K26 `cached_dispatch_main`, `DD:674` and `DD:676`. Each loads a local word of `channel_start_offset` or `channel_end_offset` after a `T.wait_ne` on the same word, and none passes a scope. These are all occurrences of `sem="volatile"` in the directory (text search). The words are stored at `DD:314`, `DD:316`, `DD:584` and `DD:586` with `scope="sys"` and `sem="relaxed"` |
+| Beyond documentation | That the undefined word `volatile` denotes an atomic load with relaxed order, in these two kernels and nowhere else |
+| Event interface | `Event.access .load p (.atomic s .relaxed)`, with `s` the scope of the call: `.gpu` for the four calls of the port |
+
+### A8 `p2p_native_atomic_supported`
+
+| Field | Value |
+| --- | --- |
+| Name | `p2p_native_atomic_supported` |
+| Class | semantic source. It is a property of the platform; the two classes of ticket S5.3 have none for that, and S5.1 decides |
+| Status | Registered by the user's decision of 2026-11-13. Whether a run has recorded the attribute was not checked |
+| Statement | On the platform of a run, for every object in GPU memory that GPU threads of more than one GPU access and on which a kernel performs an atomic operation at system scope, the attribute `cudaDevP2PAttrNativeAtomicSupported` is 1 between each accessing GPU and the GPU where the object resides. By E-CU5 such an operation, in particular a system-scope atomic on memory of another GPU, is then atomic at system scope. The property belongs to the platform and does not follow from the string `sys`; it is assumed, and every GPU run of a kernel whose theorem names this entry records the value of the attribute for the devices of the run. Nothing is assumed for an object that a CPU thread accesses, or for a scope other than the system scope |
+| Source or rationale | Documentation: "An atomic operation is atomic at the scope it specifies if" it specifies the system scope and "it affects an object in GPU memory, only GPU threads access it, and" the value of `cudaDevP2PAttrNativeAtomicSupported` "between each accessing srcDev and the GPU where the object resides, dstDev, is 1, or only GPU threads from a single GPU concurrently access it." (CU-MM, E-CU5). The front end names the same condition for one kernel: "NOTE: this function should only be called with atomic support. memory over PCI-e does not support atomic r/w. DON'T use this function on such platforms." (TD-KCO, docstring of `barrier_all_intra_node_atomic_cas_block`, lines 155–157). Not stated: that any platform has the attribute. D5, A1 and A2 say which operation a call is and not when it is atomic (I10). Why the kernels need it: where the attribute is not 1, a system-scope operation on a word that two GPUs access is not atomic at that scope, and it is in a data race with every concurrent access from the other GPU (E-CU2). The litmus rows LIT-a03, LIT-a06, LIT-a07, LIT-b01 and LIT-b12 state their outcome "if P-ATOM" for this reason |
+| Affected kernels | Every system-scope atomic of the target sets on a word that two GPUs access. Triton-distributed: K1 `dl.notify` with `comm_scope="intra_node"` (A2), `T01:109–116` (word of the peer rank) and `T01:139–146` (own word, on which the producer of another rank waits); K11 `CO:162` (word of rank `thread_idx`) and `CO:166` (own word, which the other ranks swap), tutorials 05 and 06; K16 `CO:177` (store to rank `thread_idx`) and `CO:178` (load of the own word that the other ranks store), in K15, tutorial 06 (I10: by the decision of 2026-11-21 K15 is kept as proved under this entry and is not claimed on a platform that selects it). DeepEP version 1 port: `T.st` with `scope="sys"` to a peer, `DD:314`, `DD:316`, `DD:412–418` (K25), `DD:584`, `DD:586`, `DD:654–660` (K26), `DC:218–224` (K28); `T.st` with `scope="sys"` of a local head word that the peer's wait reads, `DD:511`, `DD:740`, `DC:265`; `T.ld` with `scope="sys"` of a local tail word that the peer stores, `DD:453`, `DD:695`, `DC:253`; the waits of A6. Not affected: the kernels of tutorials 02 to 04, 07 and 08 use NVSHMEM routines or the device scope (text search of the tutorial files for `sys` and `intra_node`, and section 5 of `EventControlFlow.md`); the `volatile` loads of A7 are at device scope. Outside the sets, calls with `sys` on symmetric flag words, not traced further: `RS:313`, `RS:322`, `RS:334`, `RS:428` |
+| Beyond documentation | A fact about the hardware and the driver of the run, which no front-end document and no proof establishes; a run on a platform where the attribute is not 1 is outside every theorem that names this entry |
+| Event interface | No constructor carries it. `Scope.sys` covers every pair of agents (`Scope.covers`), so `Mode.AtomicFor` and `Mode.Pairs` take two `atomic` accesses at scope `sys` from two ranks as atomic with respect to each other. A8 is the condition under which the CUDA C++ model says the same |
+
+### A9 `grid_barrier_cooperative_sync`
+
+| Field | Value |
+| --- | --- |
+| Name | `grid_barrier_cooperative_sync` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-21. Before it the question was open and the row of section 5.8 was `weakest (W4)` |
+| Statement | In a kernel launched as a cooperative grid, a call of `common_ops.barrier_on_this_grid`, through either of its two callees (`cooperative_barrier_on_this_grid`, `unsafe_barrier_on_this_grid`), is a rendezvous of all thread blocks of the one kernel launch: the k-th call returns in a block only after every block of the launch has made its k-th call. Every access that a thread of any block performs before the call is ordered before every access that a thread of any block performs after it. Nothing is assumed for a kernel that is not launched as a cooperative grid, for a direct call of one of the two callees, for blocks of another launch or of another rank, or for what an NVSHMEM routine after the barrier covers |
+| Source or rationale | Documentation: the docstrings of the two callees, quoted in section 5.8: "triton implementation of cooperative_group::thid_grid().sync()" and "triton implementation of cooperative_group::this_grid().sync()", each with "WARNING: use with care. better launch triton with launch_cooperative_grid=True to throw an explicit error instead of hang without notice." (TD-KCO, lines 62–64 and 110–112). The wrapper has no docstring. Not stated: any ordering, and that the Triton implementation has the meaning of the function it names. Why the kernels need it: under W4 the call has the semantics of its body, in which one thread of each block polls the arrival word with `ld_acquire`, a plain load (W1), while the other blocks update that word with `atomic_add`; by I1 this is a data race, so every kernel that calls the wrapper is undefined (an inference from `CO:61–142`; nothing was run). No litmus row has this form |
+| Affected kernels | The K-M rows of [MoEInventory.md](MoEInventory.md#per-function-census-observed-calls) that call it: six kernels, eleven calls. The lines are from a text search at the TD pin on 2026-11-21 and agree with the counts of the inventory. D2 `all_to_all_v_2d_kernel`, [L273](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L273); D2 `all_to_all_v_2d_kernel_v2`, [L359](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L359), [L381](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L381), [L409](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset.py#L409); D3 `all_to_all_v_2d_inter_node_kernel`, [L178](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L178), [L273](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L273), [L308](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py#L308); D4 `reduce_topk_reduce_scatter_a2a_intra_node_kernel`, [L617](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py#L617); D5 `reduce_topk_allreduce_kernel`, [L624](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py#L624); D6 `_copy_and_reset_and_barrier_all_kernel`, [L62](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L62) and [L82](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py#L82). The inventory records that the launches of all six pass the cooperative options and does not assume what those return on a device, so that the launch is a cooperative grid is a hypothesis of each theorem. Not covered: two direct calls of `cooperative_barrier_on_this_grid` in `kernels/nvidia/moe_utils.py` (lines 258 and 291); whether a K-M target reaches them was not traced. No tutorial 01 to 08 reaches the wrapper (`EventControlFlow.md`, section 7). The other callers found by the search are in `CO` (lines 217 and 224), `RS` (line 434) and in files that are not proof targets |
+| Beyond documentation | The ordering itself, and that the Triton implementation has the meaning of the function that its docstring names |
+| Event interface | `Event.bump` and `Event.wait` on one counter of the launch, in an `atomic` mode at scope `gpu` with a release side on the arrival and an acquire side on the return, so that `SyncEdge` holds between any two blocks of the rank. `Counter.rendezvous id` is the nearest kind; its docstring speaks of several ranks, and S2.6 fixes the kind |
+
+### A10 `deepep_v1_calls_read_by_main_rows`
+
+| Field | Value |
+| --- | --- |
+| Name | `deepep_v1_calls_read_by_main_rows` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-21 |
+| Statement | A call in kernel code of the DeepEP version 1 port (TileScale at `9ba8a605`, the directory of A6) is read by the row of the same name of section 5.5, whose documentation is at `71e7145`, where the signatures fit: every argument that the call passes is a parameter of the function of that name at `71e7145`, and every parameter that it omits has the same default at both commits. Where the signatures or their documentation differ, this is assumed. (a) The waits `T.wait_ge` and `T.wait_ne`, which have no scope and no semantics parameter at `9ba8a605`, take those of A6. (b) Their `peer` argument, which no text at `9ba8a605` describes, is read as TS-API describes it at `71e7145`: "A non-negative `peer` remaps the polled address to that peer." The entry gives a call the treatment of its row and nothing more: a row that is weakest stays weakest for the port. A name of the port that has no row in section 5.5 gets nothing from this entry |
+| Source or rationale | Documentation: the rows of section 5.5 and their evidence, all at `71e7145` (TS-API, TS-COMM, TS-SYNC; E-TS3, E-TS5, E-TS6, E-TS8). At `9ba8a605` the reference page does not exist (E-TS16), and where a docstring exists its wording can differ, as for `barrier_blocks` (E-TS19). Not stated: that the documentation of `71e7145` describes the code of `9ba8a605`; `71e7145` is on another branch and is neither an ancestor nor a descendant of it (`DeepEPInventory.md`, section 4.2, which also records that the calls of the port fit the signatures of `71e7145`). Why the kernels need it: every row of section 5.5 cites `71e7145`, so without the entry no row, and with it neither A1, clause (c), nor the rule on `nc=True`, applies to any call of K23 to K28 |
+| Affected kernels | Every kernel of the port that calls a name with a row: K23 to K28. The names are `T.st`, `T.ld`, `T.put_warp`, `T.wait_ge`, `T.wait_ne`, `T.sync_blocks` and `T.barrier_blocks`; the lines are in section 5 of `EventControlFlow.md`, for example `DD:61`, `DD:66`, `DD:68`, `DD:70` and `DD:99` in K23, `DD:201` and `DD:208` in K24, `DC:36` and `DC:39` in K27. For `st`, `ld`, `put_warp`, `sync_blocks` and `barrier_blocks` the fit of parameters and defaults was read on 2026-11-21. Names of the port without a row: `T.sync_threads` and `T.sync_warp` (A4, A5), `T.shuffle_elect`, `T.warp_any`, `T.tvm_warp_shuffle`, `T.warp_reduce_sum`, `T.thread_return` and the other base TileLang names; `T.copy` and `T.clear` are called without a PE argument, for which the row `copy` is not written |
+| Beyond documentation | That documentation written for another commit, on another branch, describes the calls of the port |
+| Event interface | None of its own: each call has the event of its row |
+
 ## 8. Counts
 
 | Section | Rows | documented | named assumption | weakest | out of scope |
@@ -1000,13 +1360,13 @@ remainder was chosen in this revision.
 | 5.5 TileScale, kernel side | 33 | 4 | 9 | 20 | 0 |
 | 5.6 TileScale, host side | 2 | 0 | 0 | 2 | 0 |
 | 5.7 Further names of the tutorials | 3 | 0 | 1 | 2 | 0 |
-| 5.8 Common helpers used by K-M | 3 | 0 | 0 | 3 | 0 |
-| Total | 210 | 86 | 13 | 86 | 25 |
+| 5.8 Common helpers used by K-M | 3 | 0 | 1 | 2 | 0 |
+| Total | 210 | 86 | 14 | 85 | 25 |
 
 By pattern: a 52, b 47, c 60, none 51.
 
-Of the 13 rows under a named assumption, 12 are under A1 and one (`dl.notify`)
-is under A2.
+Of the 14 rows under a named assumption, 12 are under A1, one (`dl.notify`)
+is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9.
 
 Before the decisions of 2026-11-12 the table had 202 rows: 79 documented, 19
 under a named assumption, 79 weakest and 25 out of scope. Seven rows moved
@@ -1014,6 +1374,23 @@ from A1 to `documented` (D5): `wait`, `ld_vector` and `st_vector` of 5.1, and
 `ld`, `st`, `ld_vector` and `st_vector` of 5.4. Three rows are new (5.7). No
 other existing row changed its treatment. S6.8 adds two weakest fence rows
 to 5.5, with no assumption added or removed. K-M adds three weakest rows in 5.8 and extends only A1’s affected-kernel list; existing treatments and assumption statements are unchanged.
+
+The six entries registered on 2026-11-13 (A3 to A8) added no row and moved no
+row from one treatment to another. Five rows kept their treatment and name an
+entry or a reading in their note: `__syncthreads` of 5.4 (`documented`; A5 at
+first, D8 since 2026-11-21), `ld` (A1; A7), `wait_ne` and `wait_ge` (A1; A6
+and A10) of 5.5, and `common_ops.barrier_all_intra_node_atomic_cas_block` of
+5.8 (W4; A3, D8, A8). A3, A4 and A8 are the treatment of no row: A3 is about a
+loop and not a primitive, A4 about a base TileLang name that has no row
+(section 2), and A8 about the platform.
+
+The decisions of 2026-11-21 move one row: `common_ops.barrier_on_this_grid`
+of 5.8 goes from `weakest (W4)` to `named assumption (A9)`. Before them the
+table had 86 documented rows, 13 under a named assumption, 86 weakest and 25
+out of scope; now it has 86, 14, 85 and 25. No other row changes its
+treatment, no row is added, and the enumeration of section 2 still has 210
+names. A5 and A10 are the treatment of no row: A5 is about base TileLang
+names without a row, and A10 says how the rows of 5.5 read the port.
 
 ## 9. Decisions of 2026-11-12
 
@@ -1052,18 +1429,120 @@ item names where this document applies the decision.
     11, `membar` 11, `multimem_st_b64` 9, `load_v4_u32` 6,
     `atomic_add_per_warp` 5 and `multimem_ld_reduce_v4` 4.
 
+### Decisions of 2026-11-13
+
+The user decided these on 2026-11-13 (comment of that day on ticket #37).
+Each item names where this document applies the decision. Several were
+refined on 2026-11-21 (next subsection).
+
+1. **The event interface is signed as drafted** (`EventSpec.lean`, ten
+   choices, each as drafted). Two of them bear on this table. There are two
+   atomic families, CUDA atomics and NVSHMEM routines, and accesses of
+   different families to one cell conflict when one of them writes
+   (E-NV12). How far NVSHMEM visibility
+   reaches is a parameter of the edge relation (`ShmemReach`: `global` or
+   `ownRank`): the 3.6.5 manual states both readings in different places
+   (section 10, item 4), so neither is fixed. D2 is therefore not weakened in
+   this table, and each kernel theorem states the reach it needs.
+2. **Spin wait.** A loop with an empty body whose condition re-reads memory
+   until a comparison holds is one blocking event; a spin on a
+   compare-and-swap is a wait and the swap in the same step (A3).
+3. **Group barrier.** `T.sync_threads(id, count)` is a barrier of `count`
+   threads (A4).
+4. **Block barrier.** A block barrier orders every thread's accesses before
+   it ahead of every thread's accesses after it (A5).
+5. **Waits of the DeepEP port.** `T.wait_ge` and `T.wait_ne` at `9ba8a605`
+   take the scope and order that the documentation at `71e7145` gives as
+   defaults (A6).
+6. **`volatile` loads of the DeepEP port.** In that port only they are
+   relaxed atomic loads at the scope given (A7). Everywhere else item 9 of
+   the list above stands.
+7. **Native atomics between GPUs.** A system-scope atomic on memory of
+   another GPU is atomic where the P2P native-atomic attribute is 1; the
+   attribute is assumed, and a GPU run records it (A8). This replaces the
+   former open item on cross-GPU atomic support.
+8. **Left open by the same comment:** `dl.wait` on a word that an NVSHMEM
+   signal writes (section 10, item 6), and whether the docstring of the grid
+   barrier is a documented rendezvous (decided on 2026-11-21: A9).
+
+### Decisions of 2026-11-21
+
+The user decided these on 2026-11-21. Items 3 to 10 answer the points that
+came up while the readings of 2026-11-13 were applied (section 6, I7 to I11);
+item 11 answers an older open item.
+
+1. **Clause (d) of A1 is confirmed.** The `sem` and `scope` strings of base
+   Triton's `tl.atomic_add` have the meaning of the strings of the same name
+   in `language_extra`; tutorial 08 uses `release` and `gpu`. The statement
+   of A1 is unchanged and the row of section 5.7 stays under A1. The former
+   open item on base Triton strings is closed.
+2. **The DeepEP-like kernel files of Triton-distributed are no longer proof
+   targets.** The files `ep_a2a*`, `ep_all2all_fused` and `low_latency_*`
+   under `kernels/` are no longer proof targets, since the DeepEP target is
+   the TileScale version 1 port; `tl.load(volatile=True)` of base Triton,
+   which those files use, therefore stays a parse failure and gets no row.
+   Read at the pin on 2026-11-21: the docstring line of the parameter
+   (`TR:python/triton/language/core.py`, line 2112) explains it by an option
+   of PTX, so by the rule on docstrings of section 1 it gives nothing, and it
+   is not quoted. Outside the files named, the call occurs in
+   `TD:python/triton_dist/kernels/nvidia/memory_ops.py`, lines 310 and 317
+   (`copy_1d_tilewise_kernel`), and in two test files. That function is
+   called from the files named, from the host function `copy_tensor` of
+   `memory_ops.py` (line 483), whose only callers are in
+   `layers/nvidia/ep_a2a_fused_layer.py`, and from
+   `kernels/nvidia/gemm_allreduce.py`, line 604, which the map defers. No
+   tutorial 01 to 08 and none of `CO`, `RS` and
+   `kernels/nvidia/allgather_gemm.py` contains the call (text search).
+3. **Group and warp barriers order memory.** A group barrier
+   `T.sync_threads(id, count)` and `T.sync_warp` order the accesses of the
+   threads that take part, before and after: the threads of that group,
+   respectively of that warp (A5, clauses (b) and (c); I8). A4 stays the
+   rendezvous. A5 was renamed.
+4. **`volatile` loads of the port.** A7 stays as decided. The port's four
+   loads without a scope are, under A7 and the default `gpu`, a data race
+   between ranks. The proof target is the variant with `scope="sys"` on those
+   four loads. The port as written has this defect, a finding to report
+   upstream at the end of the project (I9; section 10, item 1).
+5. **Spin forms of the port.** They are not covered by A3 and are left to the
+   per-agent continuation (A3, field "Affected kernels"; I11).
+6. **Wait-and-swap.** The compare-and-swap spin is mapped to a `wait` and a
+   `set` write that S2.6 and S4.1 fire as one step. No constructor is added
+   to the event interface (A3, field "Event interface").
+7. **K15 under A8.** K15 is kept as proved under A8. It is not claimed on a
+   platform that selects it. The point is revisited when a run records the
+   attribute (I10; section 10, item 7).
+8. **Fence after a block barrier.** D7 stays as written (I7).
+9. **The CUDA Programming Guide is admitted as a source** for the CUDA C++
+   constructs that the front ends expose, above PTX and within the limit of
+   section 1. Its sentence that `__syncthreads*()` "provide memory ordering
+   among participating threads" is evidence (CU-PG, E-CU7). `__syncthreads`
+   has a documented reading for its memory order (D8), and A5 keeps only what
+   that sentence does not cover: `T.sync_threads()` where its documentation
+   does not tie it to `__syncthreads`, and the group and warp barriers of
+   item 3.
+10. **The port is read by the rows at `71e7145`.** A call of the port at
+    `9ba8a605` is read by the documentation row of the same name at `71e7145`
+    where the signatures fit; where they differ, for the waits and their
+    `peer` argument, the entry says what is assumed (A10).
+11. **Grid barrier.** `barrier_on_this_grid`, through either of its two
+    callees, is a rendezvous of all thread blocks of one kernel launch, and
+    every access of every block before it is ordered before every access of
+    every block after it, for a kernel launched as a cooperative grid (A9).
+    The row of section 5.8 moves from weakest to named assumption, and the
+    open item on the grid-barrier docstrings is closed.
+
 ## 10. Still open
 
 These points came up while the decisions were applied. No decision covers
-them.
+items 2 to 6. Items 1 and 7 are decided and stay listed, one as a finding to
+report and one as a point to revisit.
 
-1. **Base Triton strings.** `tl.atomic_add` is a base Triton operation, and
-   the Triton documentation lists its strings without defining them (E-TR1).
-   This revision put all of them under A1, clause (d), by analogy with
-   TileScale. The alternative is to let D5 cover `gpu`, `sys`, `acquire` and
-   `release` for any operation in kernel code of Triton-distributed; the row
-   would then be `documented` for the call of tutorial 08. Either way the row
-   needs a confirmation.
+1. **Finding: the scope of the port's `volatile` loads** (I9; decided on
+   2026-11-21). The four loads `DD:432`, `DD:434`, `DD:674` and `DD:676` pass
+   no scope, the default is `gpu`, and the word is stored from another GPU: a
+   data race between ranks under A7. The port as written has this defect. The
+   proof target is the variant with `scope="sys"` on those four loads. To
+   report upstream at the end of the project; nobody has been contacted.
 2. **Tutorial 07 and the host signals.** `common_ops.set_signal` has the
    weakest semantics, so it races with the `dl.wait` of the kernel (I6).
    Tutorial 07 as written needs a further decision on the host signal; no
@@ -1089,26 +1568,45 @@ them.
    | [3.6.5 release Limitations](https://github.com/NVIDIA/nvshmem/releases/tag/v3.6.5-0) (E-NV26) | "`nvshmem_barrier*`, `nvshmem_quiet`, and `nvshmem_wait_until` only ensure ordering and visibility between the source and destination PEs. They *do not* ensure global ordering and visibility." |
    | [Ordering, fence Notes](https://archive.docs.nvidia.com/nvshmem/api/3.6.5/gen/api/ordering.html#nvshmem-fence) (E-NV1; unchanged in latest) | "nvshmem_quiet guarantees completion of all operations on symmetric data objects which makes the updates visible to all other PEs." |
 
-   The user still chooses whether to weaken D2. The project's topology was
-   not checked, and the stronger reading is not silently made universal.
+   The user still chooses whether to weaken D2. On 2026-11-13 the user fixed
+   neither reading in the event interface: the reach is a parameter, and each
+   kernel theorem states the reach it needs (section 9). The project's
+   topology was not checked, and the stronger reading is not silently made
+   universal.
 5. **Triton version in the `triton-dist` environment.** Triton-distributed
    bundles Triton at commit `f797708`, not `v3.5.1`. The passage cited for
    `tl.atomic_add` is the same at both (E-TR1). If further base Triton rows
    are added, the commit to cite has to be chosen.
 
-6. **Cross-GPU atomic support.** E-CU5 requires a native-atomic P2P property
-   for GPU-memory system-scope atomics. D5, A1 and A2 do not currently state
-   that condition. The user must decide whether to record it as a launch
-   precondition or an assumption. No assumption or launch contract is changed.
+6. **`dl.wait` on a word that an NVSHMEM signal writes.** The kernel of
+   tutorial 07 waits with `dl.wait(..., "gpu", "acquire")` on words that
+   `putmem_signal_block` writes (E-TD17). D5 reads the wait as loads of the
+   CUDA C++ model; the signal write is an NVSHMEM signal operation, and E-NV12
+   makes a concurrent access by anything else undefined. In the signed event
+   interface the two are of different families and conflict (LIT-b07), and no
+   assumption can remove that conflict; one could only change which event
+   `dl.wait` is on such a word. The user left this open on 2026-11-13. No
+   assumption is introduced. (The former item 6, cross-GPU atomic support, was
+   decided on 2026-11-13: A8.)
 
-7. **Grid-barrier callee docstrings.** Do the two pinned `common_ops.py`
-   docstrings quoted in section 5.8, which name a grid `sync()` and warn about
-   launch configuration, count as a documented rendezvous? They state no
-   memory-ordering contract. The wrapper currently has no guarantee and the
-   callees have no rows. This is an open semantic question, not a decision to
-   strengthen the wrapper or introduce an assumption.
+7. **K15 under A8, to revisit** (I10; decided on 2026-11-21). K15 is kept as
+   proved under A8 and is not claimed on a platform that selects it. Revisit
+   when a run records the attribute.
 
+Closed by the decisions of 2026-11-21 and no longer listed: base Triton
+strings (clause (d) of A1), `tl.load(volatile=True)` of base Triton, the
+grid-barrier docstrings (A9), the CUDA Programming Guide sentence on
+`__syncthreads` (D8), the order through the group and warp barriers (A5), the
+spin forms outside A3 and the carrier of wait-and-swap (A3), what a fence
+after a block barrier covers (D7 stays), and the rows at `71e7145` for a port
+at `9ba8a605` (A10). Cross-GPU atomic support was closed on 2026-11-13 (A8).
 
 Not checked in this revision: the call graph from each kernel to the helpers
 it reaches; runtime applicability of the later signal-wait fix; the
-NVSHMEM versions and P2P capabilities on the GPU node.
+NVSHMEM versions and P2P capabilities on the GPU node. For A3 to A10 and D8:
+nothing was compiled or run; the call graph is that of `EventControlFlow.md`,
+section 2; files outside the two target sets were searched, not read, except
+the lines cited; whether the registry of ticket S5.3 holds the entries;
+whether a launch of a K-M kernel is a cooperative grid on a device (A9); the
+page of the CUDA Programming Guide on cooperative groups, which A9 does not
+use.
