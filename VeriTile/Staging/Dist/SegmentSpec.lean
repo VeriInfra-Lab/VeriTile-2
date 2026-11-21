@@ -45,8 +45,23 @@ Decisions (user decision, 2026-11-13, recorded on #43):
    the multi-rank state of ticket S1.5 (#34).
 9. Signing is in two steps: part 1 first, part 2 after it.
 
-By a decision of the same day a spin loop with an empty body is one blocking
-event. It is an event of the step relation, not a loop of segments.
+Decisions on spin loops and waits (user decisions), recorded where they meet
+part 2:
+
+- 2026-11-13: a spin loop with an empty body is one blocking event. It is an
+  event of the step relation, not a loop of segments.
+- 2026-11-21: the spin loops of the DeepEP port have bodies that are not empty
+  and are left to the continuation. A round is steps of one agent: it
+  evaluates the condition, which reads memory another agent writes, and then
+  runs the body or leaves the loop. `AgentProgram` expresses both ways of
+  reading: a load that is an event hands its value to the continuation
+  (`Next.emit e k`; `k v` is the body or the exit), and a load inside the
+  segment is seen by `next`, which reads the state the segment starts in.
+- 2026-11-21: a wait followed by a swap in one step is a `wait` and a `set`
+  write that the step relation fires together; there is no new event
+  constructor. `Next.emit` carries one event, so the file does not express
+  this yet: two `emit`s in a row are two steps. Recorded only; part 2 has to
+  settle it before it is signed.
 
 New choices, not decided. Each was needed to make the file elaborate; the file
 takes the option marked "taken". The pull request of this revision gives the
