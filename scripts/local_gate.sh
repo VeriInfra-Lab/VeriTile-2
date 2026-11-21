@@ -6,7 +6,7 @@
 #
 # --no-lean  documents and Python only
 # --status   post the outcome on the head commit as the status `local-gate`
-#            (coordinator; needs push access to dnyBLUESKY007/VeriTile)
+#            (coordinator; needs push access to VeriInfra-Lab/VeriTile-2)
 #
 # Prints one line per command with its exit code; exits 0 only if all are 0.
 set -uo pipefail
@@ -58,7 +58,7 @@ echo "logs: $log"
 if [ "$status" = 1 ]; then
   state=success; [ "$failed" = 0 ] || state=failure
   scope="full"; [ "$lean" = 1 ] || scope="documents and Python only"
-  gh api -X POST "repos/dnyBLUESKY007/VeriTile/statuses/$(git rev-parse HEAD)" \
+  gh api -X POST "repos/VeriInfra-Lab/VeriTile-2/statuses/$(git rev-parse HEAD)" \
     -f state="$state" -f context=local-gate \
     -f description="${#commands[@]} commands, $failed failed ($scope)" -q .state
 fi

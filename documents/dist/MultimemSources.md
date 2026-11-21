@@ -1,7 +1,7 @@
 # Multimem front-end documentation: guarantees and gaps
 
-Research for S6.7 ([#352](https://github.com/dnyBLUESKY007/VeriTile/issues/352)).
-Revised for S6.8 ([#422](https://github.com/dnyBLUESKY007/VeriTile/issues/422)).
+Research for S6.7 ([#352](https://github.com/VeriInfra-Lab/VeriTile-2/issues/352)).
+Revised for S6.8 ([#422](https://github.com/VeriInfra-Lab/VeriTile-2/issues/422)).
 Sources rechecked **2026-11-13**. This document changes no semantics or assumption
 registry. The governing decisions are [PrimitiveSources.md](PrimitiveSources.md),
 sections 1, 6 and 9; this revision uses the same-branch source table.
