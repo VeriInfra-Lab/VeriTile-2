@@ -1,15 +1,15 @@
 # Real synchronization-defect corpus
 
-E.3 ([#266](https://github.com/dnyBLUESKY007/VeriTile/issues/266)).
+E.3 ([#266](https://github.com/VeriInfra-Lab/VeriTile-2/issues/266)).
 Original six-entry evidence was accessed on **2026-11-12**; the source-pin and
-coverage audit for E.3b ([#423](https://github.com/dnyBLUESKY007/VeriTile/issues/423))
+coverage audit for E.3b ([#423](https://github.com/VeriInfra-Lab/VeriTile-2/issues/423))
 was performed on **2026-11-13**. Individual dated observations remain dated.
 This is a bounded, evidence-graded corpus of reports, not a count of defects
 reproduced or detected by VeriTile. No external kernel or reproducer was run.
 
 ## Scope and selection
 
-The [map](https://github.com/dnyBLUESKY007/VeriTile/issues/1) owns the proof
+The [map](https://github.com/VeriInfra-Lab/VeriTile-2/issues/1) owns the proof
 boundary and source pins. The front-end semantics and their limitations are
 recorded in [PrimitiveSources](../dist/PrimitiveSources.md); the
 [syntax census](../census/MinimalSyntax.md) is an inventory, not evidence that
@@ -117,7 +117,7 @@ require reassessment.
   cannot order a remote writer (I3). Thus the table does not establish a passing
   corrected control that isolates the address bug. A missed notification can
   produce spin-wait non-termination, rather than a demonstrated cyclic
-  deadlock; the project's [forward-progress decision #20](https://github.com/dnyBLUESKY007/VeriTile/issues/20)
+  deadlock; the project's [forward-progress decision #20](https://github.com/VeriInfra-Lab/VeriTile-2/issues/20)
   is a separate assumption and cannot repair a wrong address or grant acquire
   semantics. No claim is made that a run actually hung.
 
