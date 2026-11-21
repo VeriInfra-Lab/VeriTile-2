@@ -3,7 +3,7 @@
 Sources of the lake target `VeriTileInterp`: the executable interpreter and its bridge to the proof semantics.
 `VeriTile/Interp.lean` is its root module.
 
-`Bridge/` holds the bridge to the proof semantics: `RealAlgebra.lean` defines the algebra and the erasure, and `EvalOp.lean` proves that expressions evaluate alike on both sides; its header lists the named preconditions and every constructor it covers.
+`Bridge/` holds the bridge to the proof semantics: `RealAlgebra.lean` defines the algebra and the erasure, `EvalOp.lean` proves that expressions evaluate alike on both sides, and `Exec.lean` defines `BridgePre` and proves the signed theorem `bridge_exec` for statements and kernels. The headers of `EvalOp.lean` and `Exec.lean` list the named preconditions and every constructor they cover.
 
 `Adequacy/` holds the lemmas that connect the executable definitions to `FP.Structural`; the header of `Adequacy/State.lean` lists each state operation and helper twin with its upstream original and the lemma that states their agreement.
 
