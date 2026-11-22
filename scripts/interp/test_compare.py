@@ -127,7 +127,7 @@ class Compare(unittest.TestCase):
 
 
 class Report(unittest.TestCase):
-    def test_non_ok_tests_get_one_null_output_row(self):
+    def test_failed_or_outputless_tests_get_one_null_output_row(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             request, bundle = root / 'request', root / 'bundle'
@@ -137,12 +137,14 @@ class Report(unittest.TestCase):
             tensorfile.write(bundle / 'clean/out/out.tensor', fp32(1))
             self.assertEqual(tensorfile.read(bundle / 'clean/out/out.tensor'), fp32(1))
             (bundle / 'DONE').touch()
-            for status in ('runtime_error', 'compile_error', 'timeout', 'skipped_env', 'input_mismatch', 'not_run'):
-                for outputs in ([], [spec], [spec, {**spec, 'name': 'second'}]):
-                    with self.subTest(status=status, outputs=len(outputs)):
+            for status in ('ok', 'runtime_error', 'compile_error', 'timeout', 'skipped_env', 'input_mismatch', 'not_run'):
+                cases = [{}, {'outputs': []}] if status == 'ok' else [
+                    {'outputs': outputs} for outputs in ([], [spec], [spec, {**spec, 'name': 'second'}])]
+                for fields in cases:
+                    with self.subTest(status=status, fields=fields):
                         (request / 'batch.json').write_text(json.dumps({
                             'batch_id': 'mixed', 'mode': 'compare', 'tests': [
-                                {'id': 'clean', 'outputs': [spec]}, {'id': 'failed', 'outputs': outputs}]}))
+                                {'id': 'clean', 'outputs': [spec]}, {'id': 'failed', **fields}]}))
                         statuses = {'clean': 'ok'}
                         if status != 'not_run':
                             statuses['failed'] = status
@@ -152,7 +154,8 @@ class Report(unittest.TestCase):
                         self.assertEqual(len(built['rows']), 2)
                         self.assertTrue(built['rows'][0]['passed'])
                         self.assertEqual(built['rows'][1], {'test': 'failed', 'output': None,
-                                         'status': status, 'against': None, 'passed': False})
+                                         'status': status, 'against': None, 'passed': False,
+                                         **({'error': 'no output declared'} if status == 'ok' else {})})
                         self.assertEqual(json.loads(json.dumps(built)), built)
                         markdown = report.render(built)
                         self.assertIn('## Batch `mixed`: FAIL', markdown)
