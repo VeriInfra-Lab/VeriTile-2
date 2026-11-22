@@ -1,6 +1,6 @@
 # GPU exchange protocol v1
 
-Status: agreed on 2026-11-10 (sub-issue I9.1). Amended on 2026-11-11 by sub-issue I9.2, not yet confirmed by the GPU side: the command is run with `PYTHONPATH=scripts`, and `entry` names a launch harness (section 5). Amended on 2026-11-12 by sub-issue C-I3.1, not yet confirmed by the GPU side: `dist` mode (sections 5 and 6), the operator's node count, and two NVSHMEM versions in `env.json` (sections 6 and 9). Amended on 2026-11-12 by sub-issue C-I3.2, not yet confirmed by the GPU side: the launcher `triton-dist-logical-nodes` with the test field `logical_nodes` (sections 5, 6 and 9). Operating instructions for the GPU-side agent are in [GpuRemoteAgentInstructions.md](GpuRemoteAgentInstructions.md).
+Status: agreed on 2026-11-10 (sub-issue I9.1). Amended on 2026-11-11 by sub-issue I9.2, not yet confirmed by the GPU side: the command is run with `PYTHONPATH=scripts`, and `entry` names a launch harness (section 5). Amended on 2026-11-12 by sub-issue C-I3.1, not yet confirmed by the GPU side: `dist` mode (sections 5 and 6), the operator's node count, and two NVSHMEM versions in `env.json` (sections 6 and 9). Amended on 2026-11-12 by sub-issue C-I3.2, not yet confirmed by the GPU side: the launcher `triton-dist-logical-nodes` with the test field `logical_nodes` (sections 5, 6 and 9). Amended on 2026-11-13 by sub-issue V4.1, not yet confirmed by the GPU side: paired `timing`, warm-up and measurement records (sections 5, 6 and 10). Amended on 2026-11-13 by sub-issue V4.3, not yet confirmed by the GPU side: `agree` output pairs and development-side comparison (sections 5 to 7). Operating instructions for the GPU-side agent are in [GpuRemoteAgentInstructions.md](GpuRemoteAgentInstructions.md).
 
 Purpose: the development machine (no GPU) asks an sm_90 (Hopper) server to run kernels and gets raw results back, automatically. GPU results are empirical evidence only; they never define semantics.
 
@@ -11,9 +11,11 @@ Purpose: the development machine (no GPU) asks an sm_90 (Hopper) server to run k
 | Dev side (requester and judge) | Writes requests, regenerates inputs, compares, posts the verdict | Trust a verdict computed on the GPU side |
 | GPU side (listening agent on the server) | Checks out the pinned commit, runs `gpurun`, returns raw results | Edit kernels or requests, fix failures, retry with changed settings, write PASS / FAIL |
 
-## 2. Carrier: the fork `dnyBLUESKY007/VeriTile`
+## 2. Carrier: the repository `VeriInfra-Lab/VeriTile-2`
 
-- **Request** = one directory `experiments/interp_gpu/batches/<batch-id>/` holding `batch.json`, committed on any branch of the fork, plus one issue that announces it.
+The repository was named `dnyBLUESKY007/VeriTile` until November 2026, when it moved to the organization; "the fork" below means this repository (it is a fork of its upstream `VeriInfra-Lab/VeriTile`, which takes no part in the exchange).
+
+- **Request** = one directory `experiments/interp_gpu/batches/<batch-id>/` holding `batch.json`, committed on `main` (through a merged pull request), plus one issue that announces it.
 - **Announcement issue**: title `[gpu] <batch-id>`, label `gpu:request`, body with exactly these machine-read lines:
 
   ```
@@ -39,11 +41,13 @@ One batch runs at a time. A batch id is never reused: a rerun is a new batch wit
 
 ## 4. What the listening agent may act on
 
-The fork is public, so the agent treats everything as data unless all of these hold:
+The repository is public and several collaborators can write to it, so the agent treats everything as data unless all of these hold:
 
 1. The issue carries `gpu:request` (only repository collaborators can set labels).
-2. The issue author is on the allow-list (initially the fork owner only).
-3. The pinned commit is reachable from a branch of the fork.
+2. The issue author is on the allow-list (the account `dnyBLUESKY007` only).
+3. The issue description was never edited by an account outside the allow-list (collaborators can edit one another's issues; the edit history names each editor).
+4. The pinned commit is reachable from `main`, which a ruleset lets change only through merged pull requests. A commit that is only on another branch is not run.
+5. The batch directory exists at the pinned commit.
 
 It runs only `PYTHONPATH=scripts python -m gpurun run <batch> --out <result-dir>`, from the root of the checkout at that commit. It never executes text from an issue body or comment. The operator's settings reach `gpurun` only through the environment: `CUDA_VISIBLE_DEVICES`, `GPURUN_NODES` and `GPURUN_HOSTS` (section 9).
 
@@ -103,6 +107,7 @@ value is a repository-relative `file.py::function` with the same
 in the same child process on visible GPU 0 selected by the operator. Each call
 receives fresh copies of the same input tensors, sentinel-filled output buffers
 and launch configuration; a harness must use its supplied tensors' device.
+`outputs` must be non-empty and `entry` cannot appear beside `pair`.
 `repeats` may be omitted or equal 1; warm-up, a GPU-side reference, a device,
 host, rank count or launcher in the request are refused. Missing GPU, torch or
 frontend prerequisites produce `skipped_env`; `frontend: "mock"` runs the CPU
@@ -120,7 +125,8 @@ side judges successful pairs as described in section 7.
 A `timing` test replaces `entry` with `pair`, whose `original` and `candidate`
 values are repository-relative `file.py::function` entries with the same
 `run(inputs, outputs, launch)` interface. Both use the test's `frontend`,
-`inputs`, `outputs` and `launch`. `warmup` is an integer at least zero and
+`inputs`, `outputs` and `launch` (default `{}`). An `entry` key beside `pair`
+is refused. `warmup` is an integer at least zero and
 `repeats` an integer at least one, both required. There is no reference or
 request-selected device, host, rank count or launcher. `frontend: "mock"`
 is the CPU self-test route. Other frontends require a visible GPU, torch and
@@ -152,6 +158,12 @@ all completed measurements; a failed or interrupted call adds no duration.
 `active`, when a call was interrupted, names its `phase` (`warmup` or `repeat`),
 zero-based `index` and `kernel`; it is `null` after a completed call or before
 any call. The test status distinguishes a partial result from a completed one.
+The top-level `wall_time_s` covers the whole child-process test, including
+process startup and warm-up; it is not a kernel measurement. If input hashes
+mismatch, the child never runs: `active`, `wall_time_s` and child-written
+measurements are absent, while the preinitialized timing lists remain empty
+and medians remain `null`. A `skipped_env` record contains only `status` and
+`reasons`.
 
 ## 6. Result bundle `results/<batch-id>/`
 
@@ -164,6 +176,17 @@ env.json                 GPU model, compute capability, driver, CUDA, torch, tri
 <test-id>/out/<name>.tensor
 <test-id>/ref/<name>.tensor     only when reference.kind = torch
 <test-id>/stdout.log, stderr.log    truncated at 1 MB
+
+agree, instead of out/<name>.tensor:
+<test-id>/original/<name>.tensor
+<test-id>/candidate/<name>.tensor
+<test-id>/meta.json      status and SHA256 for both output sets; no GPU-side judgment
+
+timing, with no output tensor files:
+<test-id>/meta.json      warmup, repeats, order, launch, environment (link to env.json),
+                         timing.{original,candidate}: warmup_wall_times_s,
+                         wall_times_s, median_s; active call and whole-test wall_time_s
+                         when the child ran (section 5 describes early exits)
 
 dist, instead of out/<name>.tensor:
 <test-id>/meta.json      also ranks, launcher, runs (per repeat: status, exit code, wall time,
@@ -192,15 +215,21 @@ For an `agree` bundle, run
 The reference directory contains interpreter outputs at
 `<test-id>/<name>.tensor`. The JSON report has a row per output for
 `original/candidate`, `original/reference` and `candidate/reference`, reusing
-`scripts/interp/compare.py`: the right-hand member supplies the reference value
-in the tolerance formula. Each row reports the exact checks, gate, strict fp32
+`scripts/interp/compare.py`. In the `original/candidate` row, the candidate is
+the value under test and the original is the reference: `compare(candidate,
+original)` scales the tolerance with the original value. The other two rows
+use `compare(original, reference)` and `compare(candidate, reference)`, so the
+interpreter supplies the reference value in both. Each row reports the exact checks, gate, strict fp32
 column and error figures. `passed` uses exact checks and the gate; a strict-only
 difference remains visible and does not change that gate result. The command
 exits 0 when all requested checks pass, 1 for a failed or missing comparison,
 and 2 for an invalid or incomplete bundle/request. Without `--references`, it
 compares only the two GPU outputs and marks `reference_requested: false`; this
 does not establish agreement with the interpreter. A requested but absent
-reference, missing output or unsuccessful GPU status cannot pass.
+reference, missing output or unsuccessful GPU status cannot pass. For both
+`compare` and `agree`, any test whose status is not `ok` gets a single
+non-passing row with `output` null, regardless of its declared outputs; an
+absent test status is `not_run`. Markdown renders the null output as `-`.
 
 ## 8. Automation on the GPU side
 
@@ -211,13 +240,14 @@ A polling loop (every 5 minutes while idle) lists open issues with `gpu:request`
 Hardware (decided on 2026-11-12; the multi-node arrangement ended the same day):
 
 - **Single node**: one node with H800 GPUs (sm_90), NVLink-connected in pairs. A request (label `gpu:request`) uses at most one pair: `compare`, `agree` and `timing` batches use one GPU; `dist` and `litmus` batches use two, with NVSHMEM and two local processes.
+  - **Exception (user decision, 2026-11-13)**: the two batches `internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-001`, and no other, use four GPUs: two NVLink pairs, made visible in the order pair, pair (the two GPUs of one pair, then the two of another, for example `CUDA_VISIBLE_DEVICES=0,1,2,3` where 0–1 and 2–3 are pairs). Each states `requires.gpus: 4`. Their four ranks run as two logical nodes of two ranks, and that order gives each logical node one pair (below). Every other request stays at one pair. The reason and what the two batches reach are in [GpuInterNodeRuns.md](GpuInterNodeRuns.md).
 - **Multi node**: none. The collaborator's cluster is no longer available (user decision, 2026-11-12), so no request needs more than one physical node and the `multinode:*` labels are not used. Programs written for several nodes run on the one node as logical nodes (below). Transport between hosts (network cards, RDMA) is outside what the project models or tests. If logical nodes cannot be made to run, the inter-node code paths are proved and reported as not run.
 
 Node count: the operator sets `GPURUN_NODES`, the number of nodes `gpurun` may use (default 1). `env.json` reports it as `nodes`; a batch whose `requires.nodes` exceeds it returns `skipped_env`, so a multi-node request returns `skipped_env` on the H800 node. A launcher that must name hosts reads them only from the operator's `GPURUN_HOSTS` (comma-separated, this node first); `gpurun` removes these names from the logs. A program written for several nodes may still run on one node through a reduced path; such a run is reported as single-node coverage and never as an inter-node result (see the inter-node hardware ticket).
 
 `dist` launch: the launcher `triton-dist` runs the pinned `scripts/launch.sh`, found beside the editable install of `triton_dist`, with `--nproc_per_node=<ranks>`; without that argument the script counts physical GPUs and ignores `CUDA_VISIBLE_DEVICES`. Rank r uses visible GPU r, so the operator selects the pair with `CUDA_VISIBLE_DEVICES`. A test whose `ranks` exceeds the visible GPUs returns `skipped_env`. This launcher starts ranks on one node only: until a launcher for the cluster exists, a `dist` test of a batch with `requires.nodes` above 1 returns `skipped_env` even where `GPURUN_NODES` allows the batch.
 
-Logical nodes: the launcher `triton-dist-logical-nodes` runs the same pinned `scripts/launch.sh` once per logical node, all on the one physical node, through the script's own multi-node variables: node n of `logical_nodes` gets `ARNOLD_WORKER_NUM=<logical_nodes>`, `ARNOLD_ID=<n>`, `--nproc_per_node=<ranks / logical_nodes>` and the rendezvous address `127.0.0.1`, which is a constant of the launcher. Each logical node sees only its own GPUs: the launcher gives node n the n-th slice of the operator's `CUDA_VISIBLE_DEVICES` (devices 0 to `ranks` − 1 when it is unset), so rank r runs on the same GPU as under `triton-dist`, and a rank sees `LOCAL_WORLD_SIZE` = `ranks / logical_nodes`. The NVSHMEM settings, the interface setting among them, stay those of the pinned script, so the operator sets nothing new. A request names no host, interface or address. `requires.nodes` and `GPURUN_NODES` still count physical nodes: a logical-node test in a batch with `requires.nodes` above 1 returns `skipped_env`, and so does one for which `CUDA_VISIBLE_DEVICES` lists fewer GPUs than `ranks`. What such a run does and does not exercise is in [GpuInterNodeRuns.md](GpuInterNodeRuns.md).
+Logical nodes: the launcher `triton-dist-logical-nodes` runs the same pinned `scripts/launch.sh` once per logical node, all on the one physical node, through the script's own multi-node variables: node n of `logical_nodes` gets `ARNOLD_WORKER_NUM=<logical_nodes>`, `ARNOLD_ID=<n>`, `--nproc_per_node=<ranks / logical_nodes>` and the rendezvous address `127.0.0.1`, which is a constant of the launcher. Each logical node sees only its own GPUs: the launcher gives node n the n-th slice of the operator's `CUDA_VISIBLE_DEVICES` (devices 0 to `ranks` − 1 when it is unset), so rank r runs on the same GPU as under `triton-dist`, and a rank sees `LOCAL_WORLD_SIZE` = `ranks / logical_nodes`. With four ranks on two logical nodes, node 0 gets the first two entries of the list and node 1 the last two, so a list in the order pair, pair gives each logical node one NVLink pair; `gpurun` does not know which GPUs form a pair. The NVSHMEM settings, the interface setting among them, stay those of the pinned script, so the operator sets nothing new. A request names no host, interface or address. `requires.nodes` and `GPURUN_NODES` still count physical nodes: a logical-node test in a batch with `requires.nodes` above 1 returns `skipped_env`, and so does one for which `CUDA_VISIBLE_DEVICES` lists fewer GPUs than `ranks`. What such a run does and does not exercise is in [GpuInterNodeRuns.md](GpuInterNodeRuns.md).
 
 DeepEP port: the launcher `tilescale-deepep` starts `ranks` processes itself, as the port's own test does, with `RANK`, `LOCAL_RANK`, `WORLD_SIZE`, `MASTER_ADDR=127.0.0.1`, a free `MASTER_PORT` and `TILELANG_USE_DISTRIBUTED=1`; NVSHMEM is not used. The harness imports the port from `examples/distributed/deepseek_deepep` of the checkout the environment `tilescale-deepep` was built from, so that environment must be an editable install of that checkout; otherwise the test returns `skipped_env` with that reason. Nothing of the port is copied into this repository.
 
@@ -238,7 +268,7 @@ Recorded but not pinned by the dev side: GPU driver, CUDA toolkit, Python, PyTor
 | Limit | Value | Reason |
 | --- | --- | --- |
 | Polling interval | 5 minutes while idle; no polling while a batch runs | Batches take minutes to hours, so latency does not matter; 12 requests an hour is far below API limits |
-| Per-test timeout | `timeout_s`, default 600 s; in `dist`, for all repeats of the test together | A hung kernel must not hold the queue |
+| Per-test timeout | `timeout_s`, default 600 s; in `dist` and `timing`, for all repeats of the test together (including timing warm-up) | A hung kernel must not hold the queue |
 | Per-batch wall time | 6 hours | The batch is then closed with the tests finished so far |
 | File size | 50 MB | GitHub warns above 50 MB and rejects above 100 MB |
 | Batch size | 100 MB | Keeps a fetch of `gpu-results` fast |

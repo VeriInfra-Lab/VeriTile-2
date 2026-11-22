@@ -507,6 +507,7 @@ globs = [
   "tests.lean.WelfordCallMetadata",
   "tests.lean.WelfordSourceContexts",
   "tests.lean.InterpReflectSmoke",
+  "tests.lean.InterpEvalSmoke",
   "tests.lean.dist.SwizzleSource",
 ]
 

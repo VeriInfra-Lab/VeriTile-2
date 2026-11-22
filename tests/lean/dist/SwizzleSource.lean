@@ -6,6 +6,7 @@ import VeriTile.Meta.StatementAudit
 
 namespace VeriTile.Tests.SwizzleSource
 open VeriTile.Triton
+open VeriTile.Dist.Frontend.TritonExt.Swizzle
 noncomputable section
 set_option maxRecDepth 10000
 set_option maxHeartbeats 2000000

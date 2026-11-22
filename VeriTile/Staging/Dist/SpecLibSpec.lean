@@ -75,38 +75,15 @@ Decisions that the tickets left open:
 16. Negative examples are concrete instances; S7.2–S7.5 choose them.
 -/
 import VeriTile.Triton.KernelLemmas.Matmul
+import VeriTile.Dist.Spec.AllReduce
+import VeriTile.Dist.Spec.AllGather
 
 namespace VeriTile.Dist
 
 open VeriTile.Triton
+open scoped BigOperators
 
 /-! ## Rank-indexed tensors and reduction orders -/
-
-/-- Owner: S7.2. One real tensor per rank: `x r i` is the element at
-index `i` of the tensor of rank `r`. -/
-abbrev RankTensor (numRanks : Nat) (ι : Type) : Type := Fin numRanks → ι → ℝ
-
-/-- Owner: S7.2. The order of a sum over operands named by `ι`:
-`zero` is the empty sum, `input i` is operand `i`, `add l r` adds the value of
-`l` and the value of `r`. -/
-inductive ReduceOrder (ι : Type) where
-  | zero : ReduceOrder ι
-  | input : ι → ReduceOrder ι
-  | add : ReduceOrder ι → ReduceOrder ι → ReduceOrder ι
-
-/-- Owner: S7.2. The value of a sum in the given order, with `f i`
-as operand `i`, in any carrier `α` that has a zero and an addition. -/
-def ReduceOrder.eval {ι α : Type} [Zero α] [Add α] (f : ι → α) : ReduceOrder ι → α
-  | .zero => 0
-  | .input i => f i
-  | .add l r => l.eval f + r.eval f
-
-/-- Owner: S7.2. The operands of an order, from left to right, each
-as often as it occurs. -/
-def ReduceOrder.leaves {ι : Type} : ReduceOrder ι → List ι
-  | .zero => []
-  | .input i => [i]
-  | .add l r => l.leaves ++ r.leaves
 
 /-- UNSIGNED. Owner: S7.2. The left fold from zero over a list of operands:
 `ofList [a, b, c]` is `((0 + a) + b) + c`. -/
@@ -114,12 +91,6 @@ def ReduceOrder.ofList {ι : Type} (operands : List ι) : ReduceOrder ι :=
   operands.foldl (fun order i => .add order (.input i)) .zero
 
 /-! ## Allgather and reduce-scatter (S7.2) -/
-
-/-- Owner: S7.2. Each rank holds a chunk of `n` rows. Afterwards
-every rank holds all chunks in rank order. -/
-def allGather {numRanks n : Nat} {ι : Type} (x : RankTensor numRanks (Fin n × ι)) :
-    RankTensor numRanks (Fin (numRanks * n) × ι) :=
-  fun _ i => x i.1.divNat (i.1.modNat, i.2)
 
 /-- UNSIGNED. Owner: S7.2. Each rank holds a full tensor of `numRanks * n`
 rows. Afterwards rank `r` holds chunk `r` of the sum over ranks; the element at
@@ -130,6 +101,26 @@ noncomputable def reduceScatter {numRanks n : Nat} {ι : Type}
     RankTensor numRanks (Fin n × ι) :=
   fun r i => (order r i).eval fun q => x q (finProdFinEquiv (r, i.1), i.2)
 
+/-- S7.2 sanity check for the unsigned specification: rank `r` gets chunk
+`r` of the sum, with rank 0 added before rank 1. -/
+theorem reduceScatter_twoRanks {n : Nat} {ι : Type}
+    (x : RankTensor 2 (Fin (2 * n) × ι)) (r : Fin 2) (i : Fin n) (j : ι) :
+    reduceScatter (fun _ _ => .add (.input 0) (.input 1)) x r (i, j) =
+      x 0 (finProdFinEquiv (r, i), j) + x 1 (finProdFinEquiv (r, i), j) := rfl
+
+/-- The same interface preserves the reverse source order as well. -/
+example {n : Nat} {ι : Type} (x : RankTensor 2 (Fin (2 * n) × ι))
+    (r : Fin 2) (i : Fin n) (j : ι) :
+    reduceScatter (fun _ _ => .add (.input 1) (.input 0)) x r (i, j) =
+      x 1 (finProdFinEquiv (r, i), j) + x 0 (finProdFinEquiv (r, i), j) := rfl
+
+/-- The unsigned interface permits an empty tree; full-rank coverage must
+therefore be supplied by the eventual contract if a full sum is intended. -/
+example :
+    reduceScatter (numRanks := 2) (n := 1) (ι := Unit)
+      (fun _ _ => .zero) (fun _ _ => 1) 0 (0, ()) ≠ (1 : ℝ) + 1 := by
+  norm_num [reduceScatter, ReduceOrder.eval]
+
 /-- UNSIGNED. Owner: S7.2. The matrix product of the upstream matmul
 specification `gemmSum`, on tensors: entry `(i, j)` is `∑ k, A i k * B k j`. -/
 noncomputable def gemm {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileIndex [K, N] → ℝ) :
@@ -138,12 +129,37 @@ noncomputable def gemm {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileInd
     gemmSum (fun k => if h : k < K then A (i.1, ⟨k, h⟩, PUnit.unit) else 0)
       (fun k => if h : k < K then B (⟨k, h⟩, i.2.1, PUnit.unit) else 0) K
 
+/-- S7.2 sanity check for the unsigned specification: the Nat-indexed zero
+padding is never read by `gemmSum`, whose sum stops at `K`. -/
+theorem gemm_apply {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileIndex [K, N] → ℝ)
+    (i : Fin M) (j : Fin N) :
+    gemm A B (i, j, PUnit.unit) =
+      ∑ k : Fin K, A (i, k, PUnit.unit) * B (k, j, PUnit.unit) := by
+  unfold gemm gemmSum
+  rw [Finset.sum_range]
+  simp
+
 /-- UNSIGNED. Owner: S7.2. Allgather followed by a matrix product: rank `r`
 holds the product of the gathered `A` with its own `B r`. -/
 noncomputable def allGatherGemm {numRanks m K N : Nat}
     (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N])) :
     RankTensor numRanks (TileIndex [numRanks * m, N]) :=
   fun r => gemm (allGather A r) (B r)
+
+/-- S7.2 sanity check for the unsigned composition: the right operand is
+local to the destination rank. -/
+theorem allGatherGemm_eq {numRanks m K N : Nat}
+    (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N]))
+    (r : Fin numRanks) : allGatherGemm A B r = gemm (allGather A r) (B r) := rfl
+
+/-- The row gathered from rank `q` is multiplied by the destination's `B`. -/
+theorem allGatherGemm_apply {numRanks m K N : Nat}
+    (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N]))
+    (r q : Fin numRanks) (i : Fin m) (j : Fin N) :
+    allGatherGemm A B r (finProdFinEquiv (q, i), j, PUnit.unit) =
+      ∑ k : Fin K, A q (i, k, PUnit.unit) * B r (k, j, PUnit.unit) := by
+  rw [allGatherGemm_eq, gemm_apply]
+  simp only [allGather_apply]
 
 /-- UNSIGNED. Owner: S7.2. A matrix product followed by reduce-scatter: rank
 `r` holds chunk `r` of the sum over ranks `q` of the products `A q * B q`. -/
@@ -154,28 +170,21 @@ noncomputable def gemmReduceScatter {numRanks m K N : Nat}
     RankTensor numRanks (TileIndex [m, N]) :=
   reduceScatter order fun q => gemm (A q) (B q)
 
-/-- Owner: S7.2. On every rank, row `q * n + i` of the allgather
-result is row `i` of the chunk of rank `q`. -/
-theorem allGather_apply {numRanks n : Nat} {ι : Type} (x : RankTensor numRanks (Fin n × ι))
-    (r q : Fin numRanks) (i : Fin n) (j : ι) :
-    allGather x r (finProdFinEquiv (q, i), j) = x q (i, j) := sorry
-
-/-! ## Allreduce (S7.3) -/
-
-/-- Owner: S7.3. Every rank holds a tensor. Afterwards rank `r`
-holds the sum over ranks; its element at index `i` is added in the order
-`order r i`. -/
-noncomputable def allReduce {numRanks : Nat} {ι : Type}
-    (order : Fin numRanks → ι → ReduceOrder (Fin numRanks)) (x : RankTensor numRanks ι) :
-    RankTensor numRanks ι :=
-  fun r i => (order r i).eval fun q => x q i
-
-/-- Owner: S7.3. Two orders that add the same operands equally often
-give the same allreduce result over `ℝ`. -/
-theorem allReduce_eq_of_leaves_perm {numRanks : Nat} {ι : Type}
-    (order₁ order₂ : Fin numRanks → ι → ReduceOrder (Fin numRanks))
-    (h : ∀ r i, (order₁ r i).leaves.Perm (order₂ r i).leaves) (x : RankTensor numRanks ι) :
-    allReduce order₁ x = allReduce order₂ x := sorry
+/-- S7.2 sanity check for the unsigned composition: destination `r` takes
+its own row chunk, and the supplied tree keeps the cross-rank sum order. -/
+theorem gemmReduceScatter_apply {numRanks m K N : Nat}
+    (order : Fin numRanks → TileIndex [m, N] → ReduceOrder (Fin numRanks))
+    (A : RankTensor numRanks (TileIndex [numRanks * m, K]))
+    (B : RankTensor numRanks (TileIndex [K, N]))
+    (r : Fin numRanks) (i : Fin m) (j : Fin N) :
+    gemmReduceScatter order A B r (i, j, PUnit.unit) =
+      (order r (i, j, PUnit.unit)).eval (fun q =>
+        ∑ k : Fin K, A q (finProdFinEquiv (r, i), k, PUnit.unit) *
+          B q (k, j, PUnit.unit)) := by
+  unfold gemmReduceScatter reduceScatter
+  apply congrArg (fun f : Fin numRanks → ℝ => (order r (i, j, PUnit.unit)).eval f)
+  funext q
+  exact gemm_apply (A q) (B q) (finProdFinEquiv (r, i)) j
 
 /-! ## All-to-all (S7.4) -/
 

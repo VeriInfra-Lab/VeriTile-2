@@ -477,7 +477,7 @@ def matrix(rows, checkouts, root, read=None):
     out = [
         BEGIN, '',
         '## Triton 3.5.1 Coverage Matrix (generated, unreviewed)', '',
-        'Ticket A1.1 (issue #75 of the fork `dnyBLUESKY007/VeriTile`; every issue number in this section is an '
+        'Ticket A1.1 (issue #75 of the fork `VeriInfra-Lab/VeriTile-2`; every issue number in this section is an '
         'issue of that fork). **This section is generated and has not been reviewed.** It is written by '
         '`scripts/census/triton_coverage.py`; edit the generator, not the text between the two marker comments. '
         'The sections above it are maintained by hand and are not changed by the generator.', '',

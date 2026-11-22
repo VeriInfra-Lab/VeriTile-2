@@ -31,7 +31,7 @@ namespace VeriTile.Dist.Frontend.TritonExt.Swizzle
 open Lean Elab Term
 open VeriTile.Triton.DSL
 
-syntax (name := swizzleAssign) ident ", " ident " = " "tl.swizzle2d("
+scoped syntax (name := swizzleAssign) ident ", " ident " = " "tl.swizzle2d("
   tritonExpr ", " tritonExpr ", " tritonExpr ", " tritonExpr ", " tritonExpr ")" : tritonStmt
 
 private partial def identifiers (raw : Syntax) : List Name :=

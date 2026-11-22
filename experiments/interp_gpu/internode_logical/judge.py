@@ -3,28 +3,37 @@
 
     python3 experiments/interp_gpu/internode_logical/judge.py <result-bundle-dir> <batch-id>
 
-for `internode-logical-ag03-001` and `internode-logical-rs06-001`. Per test,
-rank and output it prints `equal` or `different`: `equal` when the output has
-the bytes of the reference in every repeat. The references are computed here
-from the regenerated inputs, with the standard library only:
+for `internode-logical-ag03-001` and `internode-logical-rs06-001` (2 ranks) and
+for `internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-001`
+(4 ranks; 2 logical nodes of 2). Per test, rank and output it prints `equal`
+or `different`: `equal` when the output has the bytes of the reference in
+every repeat. The references are computed here from the regenerated inputs,
+for any number of ranks, with the standard library only:
 
 - `gathered` (tutorial 03): the segments of all ranks in rank order, the same
-  in every rank (`all_gather`). Rank r contributes segment r of the input.
+  in every rank (`all_gather`). Rank r contributes segment r of the input. A
+  difference names the segments that differ: with 2 logical nodes of 2, rank r
+  gets segment `r ^ 1` from the other rank of its node, segment `r ^ 2` from
+  the other node, and segment `3 - r` forwarded by the other rank of its node
+  (`T03:156-177`; documents/GpuInterNodeRuns.md).
 - `reduced` (tutorial 06): rank r holds rows `r * M / ranks` onwards of the
   element-wise sum of the inputs of all ranks (`reduce_scatter`). The inputs
-  are integers of magnitude at most 100, so every sum of two is an integer of
-  magnitude at most 200, which bfloat16 holds exactly: no order of additions
-  and no rounding mode can change a bit, and the comparison has no tolerance.
+  are integers of magnitude at most 100 with 2 ranks and at most 64 with 4,
+  so the sum of any of them has magnitude at most 256, which bfloat16 holds
+  exactly: no order of additions and no rounding mode can change a bit, and
+  the comparison has no tolerance. `encode` refuses a sum that is not exact.
 - `topology`: what the launcher of the test must give rank r (`topology`).
 - `barrier` (tutorial 06): local rank r of a node of all `ranks` ranks, native
   atomics 1, under both launchers. NVSHMEM puts the ranks whose host name
   hashes agree into one node team (`src/host/team/team_internal.cpp:1106-1130`
-  at tag `v3.6.5-0`), so the tutorial's intra-node barrier spans both logical
+  at tag `v3.6.5-0`), so the tutorial's intra-node barrier spans all logical
   nodes. `supports_p2p_native_atomic()` returns true without asking the
   driver when the process sees one GPU (`python/triton_dist/utils.py:534-547`
-  at the pin), as under logical nodes; under one node it asks for the pair. A
-  0 there means the pair has no native atomics and the logical-node test used
-  them all the same.
+  at the pin), as under logical nodes of one rank; otherwise it asks about
+  visible devices 0 and 1 only. A 0 there means that the first two visible
+  devices are not an NVLink pair with native atomics: with 2 ranks, that the
+  logical-node test used them all the same; with 4, that the GPUs were not
+  visible in the order pair, pair.
 
 One test is expected to fail (`predicted_failure`): tutorial 06 with its own
 context constructor under logical nodes. Its verdict is `failed as predicted`
@@ -154,6 +163,12 @@ def judge(batch_dir, bundle_dir):
                         if found != outputs[spec['name']]:
                             checks = compare(found, outputs[spec['name']], spec.get('sentinel'))
                             differences.append({'repeats': repeats, **{name: checks[name] for name in CHECKS}})
+                            if spec['name'] == 'gathered':  # which of the routes into this rank delivered wrongly
+                                size = len(found.data) // test['ranks']
+                                differences[-1]['segments'] = [
+                                    segment for segment in range(test['ranks'])
+                                    if found.data[segment * size:(segment + 1) * size]
+                                    != outputs['gathered'].data[segment * size:(segment + 1) * size]]
                     except (OSError, ValueError) as error:
                         differences.append({'repeats': repeats, 'error': str(error)})
         entry['verdict'] = 'different' if any(entry['outputs'].values()) else 'equal'
