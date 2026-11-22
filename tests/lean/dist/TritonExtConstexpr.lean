@@ -140,6 +140,26 @@ def callExpected : ComputeKernel :=
 
 example : byCall = callExpected := rfl
 
+-- allgather_group_gemm.py:73–75. The alias belongs to the runtime branch;
+-- its integer specialization changes only the arange bound.
+def conditionalSource : ComputeKernel :=
+  let NUM_RANKS : Nat := 9
+  with_triton_call ({constexpr := ["NUM_RANKS"]} : CallSignature) call_args [] in triton {
+    pid = tl.program_id(0)
+    if pid == 0:
+        NUM_RANKS_NEXT_POW_OF_2: tl.constexpr = next_power_of_2(NUM_RANKS)
+        offs_by_rank = tl.arange(0, NUM_RANKS_NEXT_POW_OF_2)
+  }
+
+def conditionalExpected : ComputeKernel :=
+  with_triton_call ({} : CallSignature) call_args [] in triton {
+    pid = tl.program_id(0)
+    if pid == 0:
+        offs_by_rank = tl.arange(0, 16)
+  }
+
+example : conditionalSource = conditionalExpected := rfl
+
 /-- error: tl.constexpr requires a statically known value -/
 #guard_msgs in
 def runtimeConstexpr : ComputeKernel := triton {
@@ -180,11 +200,22 @@ example : upperPower = triton { tl.static_assert(true) } := rfl
 #guard_msgs in
 def oversizedPower : ComputeKernel := triton { x = next_power_of_2(18446744073709551617) }
 
-/-- error: constexpr alias used before its binding -/
+/-- error: constexpr alias is not in scope -/
 #guard_msgs in
 def earlyAlias : ComputeKernel := triton {
   x = tl.cast(P, tl.int64)
   P : tl.constexpr = next_power_of_2(7)
+}
+
+/-- error: constexpr alias is not in scope -/
+#guard_msgs in
+def conditionalAliasEscape : ComputeKernel := triton {
+  pid = tl.program_id(0)
+  if pid == 0 {
+    P : tl.constexpr = next_power_of_2(7)
+    ranks = tl.arange(0, P)
+  }
+  x = tl.cast(P, tl.int64)
 }
 
 /-- error: constexpr alias must be immutable and distinct -/

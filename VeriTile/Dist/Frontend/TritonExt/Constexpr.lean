@@ -28,6 +28,8 @@ pointer dtypes by `tl.region`. Pasted call bodies use signature constexpr
 names, source constants and fixed pointer types. Runtime arguments are never
 compile-time bindings. The adapter evaluates only Lean data and leaves
 unrelated expressions and source instructions to the existing frontend.
+Integer aliases from these calls have block scope, including inside a runtime
+`if`. The condition and runtime statements remain in the kernel.
 Float and torch-derived constants belong in the transcription's existing
 explicit bindings. Stored source procedures use their own entry point.
 -/
@@ -213,6 +215,12 @@ private def call (raw : Syntax) : Option (SourceCall × SourceExpr) :=
 private partial def containsCall (raw : Syntax) : Bool :=
   (call raw).isSome || raw.getArgs.any containsCall
 
+private partial def aliasDeclarations (raw : Syntax) : List (Name × Bool) :=
+  match raw with
+  | `(tritonStmt| $id:ident : tl.constexpr = $value:tritonExpr) =>
+    [(key id.raw, containsCall value.raw)]
+  | _ => raw.getArgs.toList.flatMap aliasDeclarations
+
 private def shadows (ctx : Bindings) (name : Name) : Bool :=
   ctx.assigned.contains name || ctx.runtime.contains name || ctx.aliasNames.contains name ||
   ctx.constants.any (·.1 == name) || ctx.signatureNames.any (·.contains name)
@@ -260,9 +268,28 @@ private partial def evaluate (ctx : Bindings) (e : SourceExpr) : TermElabM (Opti
     staticName ctx id
   | _ => return none
 
+mutual
+
 private partial def lower (ctx : Bindings) (aliases : List Name) (raw : Syntax) :
     TermElabM Syntax := do
   if raw.getKind == choiceKind && containsCall raw then return ← lower ctx aliases raw[0]!
+  match raw with
+  | `(tritonStmt| if $c:tritonExpr { $yes:tritonStmt* } else { $no:tritonStmt* })
+  | `(tritonStmt| tl.if $c:tritonExpr { $yes:tritonStmt* } else { $no:tritonStmt* }) =>
+    let condition : SourceExpr := ⟨← lower ctx aliases c.raw⟩
+    let yes ← lowerBlock ctx aliases yes
+    let no ← lowerBlock ctx aliases no
+    if raw[0]!.getAtomVal.trimAscii.toString == "tl.if" then
+      return (← liftMacroM `(tritonStmt| tl.if $condition { $yes* } else { $no* })).raw
+    return (← liftMacroM `(tritonStmt| if $condition { $yes* } else { $no* })).raw
+  | `(tritonStmt| if $c:tritonExpr { $yes:tritonStmt* })
+  | `(tritonStmt| tl.if $c:tritonExpr { $yes:tritonStmt* }) =>
+    let condition : SourceExpr := ⟨← lower ctx aliases c.raw⟩
+    let yes ← lowerBlock ctx aliases yes
+    if raw[0]!.getAtomVal.trimAscii.toString == "tl.if" then
+      return (← liftMacroM `(tritonStmt| tl.if $condition { $yes* })).raw
+    return (← liftMacroM `(tritonStmt| if $condition { $yes* })).raw
+  | _ => pure ()
   if let some _ := call raw then
     let some value ← evaluate ctx ⟨raw⟩ | throwErrorAt raw "unresolved constexpr call"
     return (← liftMacroM (literal value)).raw
@@ -273,7 +300,7 @@ private partial def lower (ctx : Bindings) (aliases : List Name) (raw : Syntax) 
   if let `(tritonExpr| $id:ident) := raw then
     if aliases.contains (key id.raw) then
       if let some value := ctx.constants.lookup (key id.raw) then return value.raw
-      throwErrorAt id "constexpr alias used before its binding"
+      throwErrorAt id "constexpr alias is not in scope"
   if let `(tritonStmt| tl.static_assert($pred:tritonExpr $[, $message:str]?)) := raw then
     if containsCall pred.raw then
       let `(tritonExpr| $left:tritonExpr == $right:tritonExpr) := pred
@@ -285,17 +312,12 @@ private partial def lower (ctx : Bindings) (aliases : List Name) (raw : Syntax) 
       unless a == b do throwErrorAt pred "constexpr static assertion failed"
       return (← liftMacroM `(tritonStmt| tl.static_assert(true $[, $message:str]?))).raw
   if let `(tritonStmt| $_:ident : tl.constexpr = $value:tritonExpr) := raw then
-    if containsCall value.raw then throwErrorAt raw "constexpr helper alias must be declared at top level"
+    if containsCall value.raw then throwErrorAt raw "constexpr helper alias requires a block or if branch"
   return raw.setArgs (← raw.getArgs.mapM (lower ctx aliases))
 
-private def prepare (ctx : Bindings) (stmts : Array SourceStmt) : TermElabM (Array SourceStmt) := do
-  let declarations := stmts.toList.filterMap fun stmt =>
-    match stmt with
-    | `(tritonStmt| $id:ident : tl.constexpr = $value:tritonExpr) =>
-      some (key id.raw, containsCall value.raw)
-    | _ => none
-  let aliases := declarations.filterMap (fun (name, extended) => if extended then some name else none)
-  let mut ctx := { ctx with aliasNames := declarations.map Prod.fst }
+private partial def lowerBlock (ctx : Bindings) (aliases : List Name)
+    (stmts : Array SourceStmt) : TermElabM (Array SourceStmt) := do
+  let mut ctx := ctx
   let mut lowered := #[]
   for stmt in stmts do
     if let `(tritonStmt| $id:ident : tl.constexpr = $value:tritonExpr) := stmt then
@@ -311,6 +333,13 @@ private def prepare (ctx : Bindings) (stmts : Array SourceStmt) : TermElabM (Arr
         continue
     lowered := lowered.push ⟨← lower ctx aliases stmt.raw⟩
   return lowered
+
+end
+
+private def prepare (ctx : Bindings) (stmts : Array SourceStmt) : TermElabM (Array SourceStmt) := do
+  let declarations := stmts.toList.flatMap (aliasDeclarations ·.raw)
+  let aliases := declarations.filterMap (fun (name, extended) => if extended then some name else none)
+  lowerBlock { ctx with aliasNames := declarations.map Prod.fst } aliases stmts
 
 @[term_elab VeriTile.Triton.DSL.tritonBlock]
 def elaborateBlock : TermElab := fun stx expected => do
