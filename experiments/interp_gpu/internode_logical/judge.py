@@ -4,7 +4,7 @@
     python3 experiments/interp_gpu/internode_logical/judge.py <result-bundle-dir> <batch-id>
 
 for `internode-logical-ag03-001` and `internode-logical-rs06-001` (2 ranks) and
-for `internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-001`
+for `internode-logical-ag03-2x2-001` and the `internode-logical-rs06-2x2` batches
 (4 ranks; 2 logical nodes of 2). Per test, rank and output it prints `equal`
 or `different`: `equal` when the output has the bytes of the reference in
 every repeat. The references are computed here from the regenerated inputs,
@@ -23,7 +23,8 @@ for any number of ranks, with the standard library only:
   exactly: no order of additions and no rounding mode can change a bit, and
   the comparison has no tolerance. `encode` refuses a sum that is not exact.
 - `topology`: what the launcher of the test must give rank r (`topology`).
-- `barrier` (tutorial 06): local rank r of a node of all `ranks` ranks, native
+- `barrier` (tutorial 06): [-1, -1, 2] for the requested NVSHMEM global barrier.
+  For the original intra-node context: local rank r of a node of all `ranks` ranks, native
   atomics 1, under both launchers. NVSHMEM puts the ranks whose host name
   hashes agree into one node team (`src/host/team/team_internal.cpp:1106-1130`
   at tag `v3.6.5-0`), so the tutorial's intra-node barrier spans all logical
@@ -114,7 +115,8 @@ def references(test):
         gathered = all_gather([x[rank * segment:(rank + 1) * segment] for rank in ranks])
         values = [{'gathered': gathered} for _ in ranks]
     else:
-        values = [{'reduced': reduced, 'barrier': [rank, test['ranks'], 1]}
+        values = [{'reduced': reduced, 'barrier': ([-1, -1, 2] if test['launch'].get('barrier') == 'nvshmem'
+                                                  else [rank, test['ranks'], 1])}
                   for rank, reduced in enumerate(reduce_scatter(x))]
     result = {}
     for rank in ranks:
