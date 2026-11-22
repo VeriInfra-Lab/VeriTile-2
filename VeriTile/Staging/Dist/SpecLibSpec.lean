@@ -22,8 +22,9 @@ with a zero and an addition, and every definition here calls it at `ℝ`.
 
 Reduction order. A sum over ranks is the value of a `ReduceOrder`: a tree that
 fixes which operands are added and in what nesting. The specifications use no
-associativity or commutativity; `allReduce_eq_of_leaves_perm` is the only
-statement that relates two orders, and it is a statement over `ℝ`.
+associativity or commutativity. The unsigned coverage contract
+`ReduceOrder.Covers` requires each rank to appear exactly once. The
+full-sum lemmas use this contract and the laws of addition.
 
 MoE source. The MoE declarations follow the deduplicated layout
 (`do_expand=False`) of the DeepEP port in TileScale, branch
@@ -90,6 +91,44 @@ open scoped BigOperators
 def ReduceOrder.ofList {ι : Type} (operands : List ι) : ReduceOrder ι :=
   operands.foldl (fun order i => .add order (.input i)) .zero
 
+/-- UNSIGNED (#66). A reduction tree covers the ranks if each rank occurs
+exactly once among its leaves, in any order. -/
+def ReduceOrder.Covers {numRanks : Nat} (order : ReduceOrder (Fin numRanks)) : Prop :=
+  order.leaves.Perm (List.finRange numRanks)
+
+/-- UNSIGNED (#66). A covering tree evaluates to the sum of the contribution
+from every rank in a commutative additive monoid. -/
+theorem ReduceOrder.eval_eq_sum_of_covers {numRanks : Nat} {α : Type} [AddCommMonoid α]
+    {order : ReduceOrder (Fin numRanks)} (f : Fin numRanks → α) (h : order.Covers) :
+    order.eval f = ∑ q, f q := by
+  change order.leaves.Perm (List.finRange numRanks) at h
+  calc
+    order.eval f = ((List.finRange numRanks).map f).sum := by
+      rw [order.eval_eq_sum_leaves]
+      exact (h.map f).sum_eq
+    _ = ∑ q, f q := by
+      rw [← List.sum_toFinset f (List.nodup_finRange _), List.toFinset_finRange]
+
+/-- UNSIGNED (#66). A covered output cell contains the sum over all ranks. -/
+theorem allReduce_eq_sum_of_covers {numRanks : Nat} {ι : Type}
+    (order : Fin numRanks → ι → ReduceOrder (Fin numRanks)) (x : RankTensor numRanks ι)
+    (r : Fin numRanks) (i : ι) (h : (order r i).Covers) :
+    allReduce order x r i = ∑ q, x q i :=
+  ReduceOrder.eval_eq_sum_of_covers (fun q => x q i) h
+
+-- Reordering the leaves is allowed. Omitting a rank or repeating a rank is not.
+example : (ReduceOrder.add (.input (1 : Fin 2)) (.input 0)).Covers := by
+  unfold ReduceOrder.Covers
+  decide
+
+example : ¬ (ReduceOrder.input (0 : Fin 2)).Covers := by
+  unfold ReduceOrder.Covers
+  decide
+
+example : ¬ (ReduceOrder.add (.input (0 : Fin 2)) (.input 0)).Covers := by
+  unfold ReduceOrder.Covers
+  decide
+
 /-! ## Allgather and reduce-scatter (S7.2) -/
 
 /-- UNSIGNED. Owner: S7.2. Each rank holds a full tensor of `numRanks * n`
@@ -100,6 +139,15 @@ noncomputable def reduceScatter {numRanks n : Nat} {ι : Type}
     (x : RankTensor numRanks (Fin (numRanks * n) × ι)) :
     RankTensor numRanks (Fin n × ι) :=
   fun r i => (order r i).eval fun q => x q (finProdFinEquiv (r, i.1), i.2)
+
+/-- UNSIGNED (#66). With coverage, destination `r` receives its row chunk
+of the sum across all source ranks. -/
+theorem reduceScatter_eq_sum_of_covers {numRanks n : Nat} {ι : Type}
+    (order : Fin numRanks → Fin n × ι → ReduceOrder (Fin numRanks))
+    (x : RankTensor numRanks (Fin (numRanks * n) × ι))
+    (r : Fin numRanks) (i : Fin n) (j : ι) (h : (order r (i, j)).Covers) :
+    reduceScatter order x r (i, j) = ∑ q, x q (finProdFinEquiv (r, i), j) :=
+  ReduceOrder.eval_eq_sum_of_covers (fun q => x q (finProdFinEquiv (r, i), j)) h
 
 /-- S7.2 sanity check for the unsigned specification: rank `r` gets chunk
 `r` of the sum, with rank 0 added before rank 1. -/
@@ -185,6 +233,19 @@ theorem gemmReduceScatter_apply {numRanks m K N : Nat}
   apply congrArg (fun f : Fin numRanks → ℝ => (order r (i, j, PUnit.unit)).eval f)
   funext q
   exact gemm_apply (A q) (B q) (finProdFinEquiv (r, i)) j
+
+/-- UNSIGNED (#66). With coverage, a destination cell sums the corresponding
+local matrix product cell from every source rank. -/
+theorem gemmReduceScatter_eq_sum_of_covers {numRanks m K N : Nat}
+    (order : Fin numRanks → TileIndex [m, N] → ReduceOrder (Fin numRanks))
+    (A : RankTensor numRanks (TileIndex [numRanks * m, K]))
+    (B : RankTensor numRanks (TileIndex [K, N]))
+    (r : Fin numRanks) (i : Fin m) (j : Fin N) (h : (order r (i, j, PUnit.unit)).Covers) :
+    gemmReduceScatter order A B r (i, j, PUnit.unit) =
+      ∑ q, ∑ k : Fin K, A q (finProdFinEquiv (r, i), k, PUnit.unit) *
+        B q (k, j, PUnit.unit) := by
+  rw [gemmReduceScatter_apply]
+  exact ReduceOrder.eval_eq_sum_of_covers _ h
 
 /-! ## All-to-all (S7.4) -/
 
