@@ -86,6 +86,7 @@ class Timing(unittest.TestCase):
         for repeats, median in ((3, 2), (4, 3)):
             shutil.rmtree(self.root / 'work', ignore_errors=True)
             (self.root / 'calls').unlink(missing_ok=True)
+            (self.root / 'input-hashes').unlink(missing_ok=True)
             with self.subTest(repeats=repeats):
                 # Neither the odd nor even measured mean equals its median.
                 durations = [100, 200, 1, 2, 9, 18, 2, 4, 4, 8][:2 * (1 + repeats)]
@@ -93,7 +94,8 @@ class Timing(unittest.TestCase):
                 for duration in durations:
                     values.extend((clock, clock + duration))
                     clock += duration
-                result = self.child(case(repeats=repeats), values)
+                test = case(repeats=repeats)
+                result = self.child(test, values)
                 for name, factor in (('original', 1), ('candidate', 2)):
                     record = result['timing'][name]
                     self.assertEqual(record['warmup_wall_times_s'], [100 * factor])
@@ -102,6 +104,8 @@ class Timing(unittest.TestCase):
                 self.assertIsNone(result['active'])
                 self.assertEqual((self.root / 'calls').read_text().splitlines(),
                                  ['original', 'candidate'] * (1 + repeats))
+                self.assertEqual((self.root / 'input-hashes').read_text().splitlines(),
+                                 [name + ' ' + test['inputs'][0]['sha256'] for name in timing.ORDER] * (1 + repeats))
 
     def test_gpu_clock_is_bracketed_by_sync_and_buffers_are_outside_it(self):
         events = []
@@ -119,14 +123,14 @@ class Timing(unittest.TestCase):
                 mock.patch.object(timing.time, 'perf_counter', side_effect=clock):
             work = self.root / 'work'
             work.mkdir()
-            test = case(frontend='triton', warmup=0, repeats=1)
+            test = case(frontend='triton', warmup=1, repeats=2)
             run.write_inputs(test, work)
             (work / 'spec.json').write_text(json.dumps({'test': test, 'root': str(self.root)}))
             timing.child(work)
         self.assertEqual(events, [('device', 0)] +
-                         [('device', 0), 'buffer', 'buffer', ('sync', 0), 'clock', ('sync', 0), 'clock'] * 2)
+                         [('device', 0), 'buffer', 'buffer', ('sync', 0), 'clock', ('sync', 0), 'clock'] * 6)
         self.assertEqual((self.root / 'input-hashes').read_text().splitlines(),
-                         [name + ' ' + test['inputs'][0]['sha256'] for name in timing.ORDER])
+                         [name + ' ' + test['inputs'][0]['sha256'] for name in timing.ORDER] * 3)
 
     def test_subprocess_failure_preserves_partial_times_and_stops(self):
         test = case(launch={'grid': [1], 'stop_on': 3})
