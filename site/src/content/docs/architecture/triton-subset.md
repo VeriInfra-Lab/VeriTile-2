@@ -604,7 +604,7 @@ The second command rewrites this section; the third refreshes the copy of this p
 
 - Triton: `0add68262ab0a2e33b84524346cb27cbb2787356`, the tag `v3.5.1`. The rows are the names of `triton.language.__all__` in `python/triton/language/__init__.py`. A function has one more row per optional parameter of its signature (a class: of its `__init__`; names starting with `_` are left out) and per keyword that a scanned kernel passes.
 - The macro: the `syntax` declarations in the 143 Lean files under `VeriTile/Triton/DSL/` of this repository, 454 declarations. File names in the table are relative to that directory.
-- Target kernels: the files that `scripts/census/targets.tsv` lists for the front ends Triton (23 kernels) and Triton-distributed (119 kernels), scanned by `scripts/census/scan.py` as in `documents/census/MinimalSyntax.md`. A kernel is charged with the constructs of the functions of its own file that it reaches.
+- Target kernels: the files that `scripts/census/targets.tsv` lists for the front ends Triton (23 kernels) and Triton-distributed (78 kernels), scanned by `scripts/census/scan.py` as in `documents/census/MinimalSyntax.md`. A kernel is charged with the constructs of the functions of its own file that it reaches.
 - Benchmark kernels: the 183 files `bench/tritonbench_g/*/*.py` of `VeriInfra-Lab/VeriTileBench` at `750a79190dfb33539e4868a51629f6db5303d91d`; a file counts when a kernel in it uses the construct. The map (#1) names no commit of that repository. It says the benchmark requires VeriTile at `3bf30ea`, and this is the one commit whose `lake-manifest.json` pins that revision.
 
 ### How a row is decided
@@ -639,28 +639,28 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 
 ### Totals
 
-350 rows.
+341 rows.
 
 | status | rows | decided mechanically | decided by reading |
 | --- | --- | --- | --- |
-| never (PTX boundary) | 8 | 7 | 1 |
-| no rule | 156 | 145 | 11 |
-| not determined | 3 | 2 | 1 |
+| never (PTX boundary) | 7 | 6 | 1 |
+| no rule | 149 | 138 | 11 |
+| not determined | 2 | 1 | 1 |
 | partial | 54 | 45 | 9 |
 | rule | 129 | 94 | 35 |
 
 ### `triton.language.__all__` (139 names)
 
-| construct | status | basis | Triton (23) | Triton-distributed (119) | bench (183 files) | ticket |
+| construct | status | basis | Triton (23) | Triton-distributed (78) | bench (183 files) | ticket |
 | --- | --- | --- | --- | --- | --- | --- |
 | `tl.PropagateNan` | no rule | no declaration spells `tl.PropagateNan` | - | - | - | not determined: uses are not counted |
 | `tl.TRITON_MAX_TENSOR_NUMEL` | no rule | no declaration spells `tl.TRITON_MAX_TENSOR_NUMEL` | - | - | - | not determined: uses are not counted |
-| `tl.abs(...)` | rule | `tritonExpr` `Syntax.lean:98` | 1 | 3 | 6 |  |
+| `tl.abs(...)` | rule | `tritonExpr` `Syntax.lean:98` | 1 | 2 | 6 |  |
 | `tl.add(...)` | no rule | no declaration spells `tl.add(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.add(sanitize_overflow=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.advance(...)` | rule | `tritonExpr` `Syntax.lean:247-249` | 0 | 0 | 9 |  |
 | `tl.advance(offsets=)` | rule | a keyword position exists (`Syntax.lean:249`), so the expander decides; by reading `Expansion/Main.lean:1927` | 0 | 0 | 1 |  |
-| `tl.arange(...)` | rule | `tritonExpr` `Syntax.lean:45-46` | 22 | 63 | 178 |  |
+| `tl.arange(...)` | rule | `tritonExpr` `Syntax.lean:45-46` | 22 | 40 | 178 |  |
 | `tl.argmax(...)` | partial | `tritonExpr` `Syntax.lean:226`; a keyword below has no rule | 0 | 0 | 2 | see its keyword rows |
 | `tl.argmax(tie_break_left=)` | partial | a keyword position exists (`Syntax.lean:210, 212`), so the expander decides; by reading `Expansion/Compute.lean:743`: only the literal `True` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.argmax(keep_dims=)` | no rule | a keyword position exists (`Syntax.lean:203-204, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:715`: rejected | 0 | 0 | 0 | none: no target kernel uses it |
@@ -672,10 +672,10 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.associative_scan(reverse=)` | rule | a keyword position exists (`Syntax.lean:207-208, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:654` | 0 | 0 | 0 |  |
 | `tl.assume(...)` | no rule | no declaration spells `tl.assume(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.async_task(...)` | no rule | no declaration spells `tl.async_task(` | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.atomic_add(...)` | partial | `tritonStmt` `Syntax.lean:407`; a keyword below has no rule | 0 | 8 | 6 | see its keyword rows |
+| `tl.atomic_add(...)` | partial | `tritonStmt` `Syntax.lean:407`; a keyword below has no rule | 0 | 2 | 6 | see its keyword rows |
 | `tl.atomic_add(mask=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:517` | 0 | 1 | 6 |  |
-| `tl.atomic_add(sem=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`) and no file mentions `sem` | 0 | 3 | 0 | #77 |
-| `tl.atomic_add(scope=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:527`: rejected as an unknown keyword | 0 | 3 | 0 | #77 |
+| `tl.atomic_add(sem=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`) and no file mentions `sem` | 0 | 2 | 0 | #77 |
+| `tl.atomic_add(scope=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:527`: rejected as an unknown keyword | 0 | 2 | 0 | #77 |
 | `tl.atomic_and(...)` | partial | `tritonStmt` `Syntax.lean:410`; lowers to a failure marker only (`Expansion/Main.lean:3974`) | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.atomic_and(mask=)` | partial | the call lowers to a failure marker only | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.atomic_and(sem=)` | partial | the call lowers to a failure marker only | 0 | 0 | 0 | none: no target kernel uses it |
@@ -710,27 +710,25 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.block_type(...)` | no rule | no declaration spells `tl.block_type(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.broadcast(...)` | rule | `tritonExpr` `Syntax.lean:274`; `tritonStmt` `Syntax.lean:379-382` | 0 | 0 | 1 |  |
 | `tl.broadcast_to(...)` | rule | `tritonExpr` `RegisterShapeBroadcast.lean:9`, `Syntax.lean:278` | 0 | 0 | 3 |  |
-| `tl.cast(...)` | partial | `tritonExpr` `Syntax.lean:115`; a keyword below has no rule | 0 | 39 | 50 | see its keyword rows |
+| `tl.cast(...)` | partial | `tritonExpr` `Syntax.lean:115`; a keyword below has no rule | 0 | 21 | 50 | see its keyword rows |
 | `tl.cast(fp_downcast_rounding=)` | no rule | no declaration of `tl.cast(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.cast(bitcast=)` | no rule | no declaration of `tl.cast(` has a position for this keyword | 0 | 10 | 0 | #77 |
-| `tl.cast(_semantic=)` | no rule | no declaration of `tl.cast(` has a position for this keyword | 0 | 3 | 0 | #77 |
-| `tl.cast(dtype=)` | no rule | no declaration of `tl.cast(` has a position for this keyword | 0 | 10 | 0 | #77 |
+| `tl.cast(bitcast=)` | no rule | no declaration of `tl.cast(` has a position for this keyword | 0 | 6 | 0 | #77 |
 | `tl.cat(...)` | no rule | no declaration spells `tl.cat(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.cat(can_reorder=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.cdiv(...)` | rule | `tritonExpr` `Syntax.lean:102` | 0 | 55 | 45 |  |
+| `tl.cdiv(...)` | rule | `tritonExpr` `Syntax.lean:102` | 0 | 39 | 45 |  |
 | `tl.ceil(...)` | no rule | no declaration spells `tl.ceil(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.clamp(...)` | no rule | no declaration spells `tl.clamp(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.clamp(propagate_nan=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.condition(...)` | no rule | no declaration spells `tl.condition(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.condition(disable_licm=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.const(...)` | no rule | no declaration spells `tl.const(` | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.constexpr(...)` | no rule | no declaration spells `tl.constexpr(`; the bare name has one: `tritonStmt` `SourceDType.lean:16` | 0 | 26 | 1 | #77 |
+| `tl.constexpr(...)` | no rule | no declaration spells `tl.constexpr(`; the bare name has one: `tritonStmt` `SourceDType.lean:16` | 0 | 18 | 1 | #77 |
 | `tl.constexpr_type(...)` | no rule | no declaration spells `tl.constexpr_type(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.cos(...)` | rule | `tritonExpr` `Syntax.lean:91` | 0 | 0 | 4 |  |
 | `tl.cumprod(...)` | rule | `tritonExpr` `Syntax.lean:224` | 0 | 0 | 0 |  |
 | `tl.cumprod(axis=)` | rule | a keyword position exists (`Syntax.lean:200-201, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:667`: a numeric literal | 0 | 0 | 0 |  |
 | `tl.cumprod(reverse=)` | rule | a keyword position exists (`Syntax.lean:207-208, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:654` | 0 | 0 | 0 |  |
-| `tl.cumsum(...)` | partial | `tritonExpr` `Syntax.lean:223`; a keyword below has no rule | 0 | 6 | 4 | see its keyword rows |
+| `tl.cumsum(...)` | partial | `tritonExpr` `Syntax.lean:223`; a keyword below has no rule | 0 | 3 | 4 | see its keyword rows |
 | `tl.cumsum(axis=)` | rule | a keyword position exists (`Syntax.lean:200-201, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:667`: a numeric literal | 0 | 3 | 3 |  |
 | `tl.cumsum(reverse=)` | rule | a keyword position exists (`Syntax.lean:207-208, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:654` | 0 | 0 | 0 |  |
 | `tl.cumsum(dtype=)` | no rule | a keyword position exists (`Syntax.lean:210, 212`), so the expander decides; by reading `Expansion/Compute.lean:682`: rejected | 0 | 0 | 0 | none: no target kernel uses it |
@@ -741,7 +739,7 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.device_print(...)` | no rule | no declaration spells `tl.device_print(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.device_print(hex=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.div_rn(...)` | rule | `tritonExpr` `Syntax.lean:60` | 0 | 0 | 1 |  |
-| `tl.dot(...)` | partial | `tritonExpr` `Syntax.lean:181-184`; a keyword below has no rule | 0 | 22 | 60 | see its keyword rows |
+| `tl.dot(...)` | partial | `tritonExpr` `Syntax.lean:181-184`; a keyword below has no rule | 0 | 15 | 60 | see its keyword rows |
 | `tl.dot(acc=)` | no rule | a keyword position exists (`Syntax.lean:210, 212`), so the expander decides; by reading `Expansion/Compute.lean:1214`: rejected as a keyword; a third positional argument has a declaration | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.dot(input_precision=)` | rule | a keyword position exists (`Syntax.lean:210-212`), so the expander decides; by reading `Expansion/Compute.lean:1198` | 0 | 0 | 0 |  |
 | `tl.dot(allow_tf32=)` | rule | a keyword position exists (`Syntax.lean:210, 212`), so the expander decides; by reading `Expansion/Compute.lean:1210` | 0 | 0 | 15 |  |
@@ -770,9 +768,7 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.extra.cuda.libdevice.pow(...)` | rule | `tritonExpr` `Syntax.lean:72` | 0 | 0 | 5 |  |
 | `tl.extra.cuda.libdevice.rsqrt(...)` | rule | `tritonExpr` `Syntax.lean:83` | 0 | 0 | 0 |  |
 | `tl.extra.cuda.libdevice.tanh(...)` | rule | `tritonExpr` `Syntax.lean:87` | 0 | 0 | 1 |  |
-| `tl.extra.cuda.num_threads(...)` | no rule | no declaration spells `tl.extra.cuda.num_threads(` | 0 | 1 | 0 | #77 |
-| `tl.extra.cuda.num_warps(...)` | no rule | no declaration spells `tl.extra.cuda.num_warps(` | 0 | 3 | 0 | #77 |
-| `tl.extra.cuda.utils.num_warps(...)` | no rule | no declaration spells `tl.extra.cuda.utils.num_warps(` | 0 | 3 | 0 | #77 |
+| `tl.extra.cuda.utils.num_warps(...)` | no rule | no declaration spells `tl.extra.cuda.utils.num_warps(` | 0 | 2 | 0 | #77 |
 | `tl.extra.libdevice.tanh(...)` | rule | under the spelling `libdevice.tanh(`: `tritonExpr` `Syntax.lean:86` | 0 | 0 | 1 |  |
 | `tl.fdiv(...)` | no rule | no declaration spells `tl.fdiv(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.fdiv(ieee_rounding=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
@@ -788,35 +784,34 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.float8e5b16` | no rule | no declaration spells `tl.float8e5b16` | - | - | - | not determined: uses are not counted |
 | `tl.floor(...)` | no rule | no declaration spells `tl.floor(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.fma(...)` | rule | `tritonExpr` `Syntax.lean:109` | 0 | 0 | 2 |  |
-| `tl.full(...)` | rule | `tritonExpr` `ControlSource.lean:64`, `FloatDTypeConstants.lean:11`, `PythonFullConstructors.lean:9`, `RawBodyControl.lean:4`, `Syntax.lean:280-289` | 5 | 10 | 14 |  |
+| `tl.full(...)` | rule | `tritonExpr` `ControlSource.lean:64`, `FloatDTypeConstants.lean:11`, `PythonFullConstructors.lean:9`, `RawBodyControl.lean:4`, `Syntax.lean:280-289` | 5 | 4 | 14 |  |
 | `tl.full(dtype=)` | rule | a keyword position exists (`Syntax.lean:281-289`), so the expander decides; by reading `Expansion/Main.lean:2197` | 0 | 4 | 4 |  |
 | `tl.full(value=)` | rule | a keyword position exists (`Syntax.lean:281-289`), so the expander decides; by reading `Expansion/Main.lean:2212`: only together with `dtype=` | 0 | 0 | 3 |  |
 | `tl.gather(...)` | no rule | no declaration spells `tl.gather(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.histogram(...)` | no rule | no declaration spells `tl.histogram(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.histogram(mask=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.inline_asm_elementwise(...)` | never (PTX boundary) | `tritonExpr` `InlineAsmWordAdd.lean:10`; by reading `InlineAsmWordAdd.lean:26`: the map (#1) keeps everything at or below PTX out of scope. The one declaration takes a single fixed form, a pure `add.u32` of two inputs, and rejects any other assembly | 0 | 14 | 2 |  |
-| `tl.inline_asm_elementwise(_semantic=)` | never (PTX boundary) | as the call | 0 | 9 | 0 |  |
-| `tl.inline_asm_elementwise(args=)` | never (PTX boundary) | as the call | 0 | 14 | 2 |  |
-| `tl.inline_asm_elementwise(asm=)` | never (PTX boundary) | as the call | 0 | 14 | 0 |  |
-| `tl.inline_asm_elementwise(constraints=)` | never (PTX boundary) | as the call | 0 | 14 | 2 |  |
-| `tl.inline_asm_elementwise(dtype=)` | never (PTX boundary) | as the call | 0 | 14 | 2 |  |
-| `tl.inline_asm_elementwise(is_pure=)` | never (PTX boundary) | as the call | 0 | 14 | 2 |  |
-| `tl.inline_asm_elementwise(pack=)` | never (PTX boundary) | as the call | 0 | 14 | 2 |  |
+| `tl.inline_asm_elementwise(...)` | never (PTX boundary) | `tritonExpr` `InlineAsmWordAdd.lean:10`; by reading `InlineAsmWordAdd.lean:26`: the map (#1) keeps everything at or below PTX out of scope. The one declaration takes a single fixed form, a pure `add.u32` of two inputs, and rejects any other assembly | 0 | 5 | 2 |  |
+| `tl.inline_asm_elementwise(args=)` | never (PTX boundary) | as the call | 0 | 5 | 2 |  |
+| `tl.inline_asm_elementwise(asm=)` | never (PTX boundary) | as the call | 0 | 5 | 0 |  |
+| `tl.inline_asm_elementwise(constraints=)` | never (PTX boundary) | as the call | 0 | 5 | 2 |  |
+| `tl.inline_asm_elementwise(dtype=)` | never (PTX boundary) | as the call | 0 | 5 | 2 |  |
+| `tl.inline_asm_elementwise(is_pure=)` | never (PTX boundary) | as the call | 0 | 5 | 2 |  |
+| `tl.inline_asm_elementwise(pack=)` | never (PTX boundary) | as the call | 0 | 5 | 2 |  |
 | `tl.int1` | rule | `tritonDType` `Syntax.lean:167` | - | - | - |  |
 | `tl.int16` | rule | `tritonDType` `Syntax.lean:169` | - | - | - |  |
 | `tl.int32` | rule | `tritonDType` `Syntax.lean:170` | - | - | - |  |
 | `tl.int64` | rule | `tritonDType` `Syntax.lean:171` | - | - | - |  |
 | `tl.int8` | rule | `tritonDType` `Syntax.lean:168` | - | - | - |  |
-| `tl.interleave(...)` | rule | `tritonExpr` `Syntax.lean:272` | 0 | 6 | 1 |  |
+| `tl.interleave(...)` | rule | `tritonExpr` `Syntax.lean:272` | 0 | 0 | 1 |  |
 | `tl.join(...)` | rule | `tritonExpr` `Syntax.lean:271` | 0 | 0 | 2 |  |
-| `tl.load(...)` | partial | `tritonExpr` `PositionalLoadOther.lean:9`, `Syntax.lean:230-237`; a keyword below has no rule | 23 | 72 | 182 | see its keyword rows |
-| `tl.load(mask=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:168` | 3 | 50 | 153 |  |
-| `tl.load(other=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:175` | 3 | 19 | 134 |  |
+| `tl.load(...)` | partial | `tritonExpr` `PositionalLoadOther.lean:9`, `Syntax.lean:230-237`; a keyword below has no rule | 23 | 41 | 182 | see its keyword rows |
+| `tl.load(mask=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:168` | 3 | 28 | 153 |  |
+| `tl.load(other=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:175` | 3 | 13 | 134 |  |
 | `tl.load(boundary_check=)` | rule | a keyword position exists (`SignedRankOneBlockPointers.lean:13`, `Syntax.lean:186-187, 190-194`), so the expander decides; by reading `Expansion/Memory.lean:132` | 0 | 0 | 19 |  |
 | `tl.load(padding_option=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190, 195`), so the expander decides; by reading `Expansion/Memory.lean:148` | 0 | 0 | 15 |  |
 | `tl.load(cache_modifier=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`) and no file mentions `cache_modifier` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.load(eviction_policy=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190, 196-198`), so the expander decides; by reading `Expansion/Memory.lean:153`: only the literals `"evict_last"` and `"evict_first"`, which are dropped as hints | 0 | 0 | 5 |  |
-| `tl.load(volatile=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`) and no file mentions `volatile` | 0 | 4 | 0 | #77 |
+| `tl.load(volatile=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`) and no file mentions `volatile` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.load_tensor_descriptor(...)` | no rule | no declaration spells `tl.load_tensor_descriptor(` | 0 | 0 | 0 | #76 |
 | `tl.log(...)` | rule | `tritonExpr` `Syntax.lean:73` | 2 | 0 | 11 |  |
 | `tl.log2(...)` | rule | `tritonExpr` `Syntax.lean:74` | 0 | 0 | 0 |  |
@@ -839,11 +834,11 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.math.log2(...)` | rule | `tritonExpr` `Syntax.lean:75` | 0 | 0 | 5 |  |
 | `tl.math.rsqrt(...)` | rule | `tritonExpr` `Syntax.lean:80` | 0 | 0 | 6 |  |
 | `tl.math.sin(...)` | rule | `tritonExpr` `Syntax.lean:90` | 0 | 0 | 1 |  |
-| `tl.max(...)` | rule | `tritonExpr` `Syntax.lean:219, 221`; `tritonStmt` `Syntax.lean:396-397, 415-416` | 5 | 3 | 44 |  |
+| `tl.max(...)` | rule | `tritonExpr` `Syntax.lean:219, 221`; `tritonStmt` `Syntax.lean:396-397, 415-416` | 5 | 2 | 44 |  |
 | `tl.max(axis=)` | rule | a keyword position exists (`Syntax.lean:200-201, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:965`: a numeric literal | 5 | 0 | 16 |  |
 | `tl.max(return_indices=)` | partial | a keyword position exists (`Syntax.lean:205-206, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:984`: `return_indices=True` is rejected in an expression; the tuple statement `v, i = tl.max(...)` has a declaration of its own | 0 | 0 | 2 | none: no target kernel uses it |
 | `tl.max(return_indices_tie_break_left=)` | partial | a keyword position exists (`Syntax.lean:210, 212`), so the expander decides; by reading `Expansion/Main.lean:142`: only in the tuple statement `v, i = tl.max(...)`, and only the literal `True` | 0 | 0 | 1 | none: no target kernel uses it |
-| `tl.max(keep_dims=)` | rule | a keyword position exists (`Syntax.lean:203-204, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:978` | 0 | 3 | 0 |  |
+| `tl.max(keep_dims=)` | rule | a keyword position exists (`Syntax.lean:203-204, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:978` | 0 | 2 | 0 |  |
 | `tl.max_constancy(...)` | no rule | no declaration spells `tl.max_constancy(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.max_contiguous(...)` | rule | `tritonExpr` `Syntax.lean:152` | 0 | 0 | 3 |  |
 | `tl.maximum(...)` | partial | `tritonExpr` `Syntax.lean:105`; a keyword below has no rule | 1 | 4 | 31 | see its keyword rows |
@@ -855,9 +850,9 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.min(keep_dims=)` | rule | a keyword position exists (`Syntax.lean:203-204, 210, 212`), so the expander decides; by reading `Expansion/Compute.lean:828` | 0 | 0 | 0 |  |
 | `tl.minimum(...)` | partial | `tritonExpr` `Syntax.lean:106`; a keyword below has no rule | 0 | 6 | 16 | see its keyword rows |
 | `tl.minimum(propagate_nan=)` | no rule | no declaration of `tl.minimum(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.multiple_of(...)` | rule | `tritonExpr` `Syntax.lean:151` | 0 | 8 | 16 |  |
-| `tl.num_programs(...)` | rule | `tritonExpr` `Syntax.lean:43-44` | 0 | 46 | 8 |  |
-| `tl.num_programs(axis=)` | rule | `axis=` is spelled in `Syntax.lean:44` | 0 | 24 | 0 |  |
+| `tl.multiple_of(...)` | rule | `tritonExpr` `Syntax.lean:151` | 0 | 6 | 16 |  |
+| `tl.num_programs(...)` | rule | `tritonExpr` `Syntax.lean:43-44` | 0 | 30 | 8 |  |
+| `tl.num_programs(axis=)` | rule | `axis=` is spelled in `Syntax.lean:44` | 0 | 22 | 0 |  |
 | `tl.pair_uniform_to_normal(...)` | no rule | no declaration spells `tl.pair_uniform_to_normal(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.permute(...)` | rule | `tritonExpr` `Syntax.lean:265` | 0 | 2 | 0 |  |
 | `tl.philox(...)` | partial | `tritonStmt` `Syntax.lean:373`; a keyword below has no rule | 0 | 0 | 1 | see its keyword rows |
@@ -865,11 +860,11 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.philox_impl(...)` | no rule | no declaration spells `tl.philox_impl(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.philox_impl(n_rounds=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.pi32_t` | no rule | no declaration spells `tl.pi32_t` | - | - | - | not determined: uses are not counted |
-| `tl.pointer_type(...)` | no rule | no declaration spells `tl.pointer_type(` | 0 | 32 | 0 | #77 |
+| `tl.pointer_type(...)` | no rule | no declaration spells `tl.pointer_type(` | 0 | 14 | 0 | #77 |
 | `tl.pointer_type(address_space=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.pointer_type(const=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.program_id(...)` | rule | `tritonExpr` `Syntax.lean:41-42` | 23 | 82 | 178 |  |
-| `tl.program_id(axis=)` | rule | `axis=` is spelled in `Syntax.lean:42` | 0 | 34 | 47 |  |
+| `tl.program_id(...)` | rule | `tritonExpr` `Syntax.lean:41-42` | 23 | 57 | 178 |  |
+| `tl.program_id(axis=)` | rule | `axis=` is spelled in `Syntax.lean:42` | 0 | 32 | 47 |  |
 | `tl.rand(...)` | rule | `tritonExpr` `Syntax.lean:48-50` | 0 | 0 | 3 |  |
 | `tl.rand(n_rounds=)` | rule | `n_rounds=` is spelled in `Syntax.lean:50` | 0 | 0 | 1 |  |
 | `tl.rand4x(...)` | no rule | no declaration spells `tl.rand4x(` | 0 | 0 | 0 | none: no target kernel uses it |
@@ -897,7 +892,7 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.reduce(keep_dims=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.reduce_or(...)` | no rule | no declaration spells `tl.reduce_or(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.reduce_or(keep_dims=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.reshape(...)` | partial | `tritonExpr` `PythonTensorTuples.lean:12`, `Syntax.lean:266`, `WelfordCallMetadata.lean:15`; a keyword below has no rule | 0 | 6 | 3 | see its keyword rows |
+| `tl.reshape(...)` | partial | `tritonExpr` `PythonTensorTuples.lean:12`, `Syntax.lean:266`, `WelfordCallMetadata.lean:15`; a keyword below has no rule | 0 | 5 | 3 | see its keyword rows |
 | `tl.reshape(can_reorder=)` | no rule | no declaration of `tl.reshape(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.rsqrt(...)` | rule | `tritonExpr` `Syntax.lean:81` | 0 | 0 | 1 |  |
 | `tl.sigmoid(...)` | rule | `tritonExpr` `Syntax.lean:76` | 4 | 0 | 5 |  |
@@ -913,7 +908,7 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.split(...)` | rule | `tritonExpr` `Syntax.lean:273`; `tritonStmt` `PythonTensorTuples.lean:13` | 0 | 2 | 2 |  |
 | `tl.sqrt(...)` | rule | `tritonExpr` `Syntax.lean:79` | 2 | 0 | 11 |  |
 | `tl.sqrt_rn(...)` | no rule | no declaration spells `tl.sqrt_rn(` | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.static_assert(...)` | partial | `tritonStmt` `Syntax.lean:421`; a keyword below has no rule | 0 | 26 | 6 | see its keyword rows |
+| `tl.static_assert(...)` | partial | `tritonStmt` `Syntax.lean:421`; a keyword below has no rule | 0 | 10 | 6 | see its keyword rows |
 | `tl.static_assert(msg=)` | no rule | no declaration of `tl.static_assert(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.static_print(...)` | partial | `tritonStmt` `Syntax.lean:420`; a keyword below has no rule | 0 | 0 | 0 | see its keyword rows |
 | `tl.static_print(sep=)` | no rule | no declaration of `tl.static_print(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
@@ -923,17 +918,17 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.static_range(...)` | partial | `tritonStmt` `StaticRanges.lean:10`, `Syntax.lean:430-431`; a keyword below has no rule | 0 | 3 | 3 | see its keyword rows |
 | `tl.static_range(arg2=)` | no rule | no declaration of `tl.static_range(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.static_range(step=)` | no rule | no declaration of `tl.static_range(` has a position for this keyword | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.store(...)` | partial | `tritonStmt` `Syntax.lean:404-406`; a keyword below has no rule | 23 | 62 | 183 | see its keyword rows |
-| `tl.store(mask=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:371` | 3 | 50 | 149 |  |
+| `tl.store(...)` | partial | `tritonStmt` `Syntax.lean:404-406`; a keyword below has no rule | 23 | 39 | 183 | see its keyword rows |
+| `tl.store(mask=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190`), so the expander decides; by reading `Expansion/Memory.lean:371` | 3 | 29 | 149 |  |
 | `tl.store(boundary_check=)` | rule | a keyword position exists (`SignedRankOneBlockPointers.lean:13`, `Syntax.lean:186-187, 190-194`), so the expander decides; by reading `Expansion/Memory.lean:343` | 0 | 0 | 17 |  |
 | `tl.store(cache_modifier=)` | no rule | a keyword position exists (`Syntax.lean:186-187, 190`) and no file mentions `cache_modifier` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.store(eviction_policy=)` | rule | a keyword position exists (`Syntax.lean:186-187, 190, 196-198`), so the expander decides; by reading `Expansion/Memory.lean:338`: only the literals `"evict_first"` and `"evict_last"`, which are dropped as hints | 0 | 0 | 1 |  |
 | `tl.store_tensor_descriptor(...)` | no rule | no declaration spells `tl.store_tensor_descriptor(` | 0 | 0 | 0 | #76 |
-| `tl.sum(...)` | rule | `tritonExpr` `Syntax.lean:214, 217` | 9 | 8 | 76 |  |
-| `tl.sum(axis=)` | rule | `axis=` is spelled in `Syntax.lean:217` | 9 | 2 | 40 |  |
+| `tl.sum(...)` | rule | `tritonExpr` `Syntax.lean:214, 217` | 9 | 4 | 76 |  |
+| `tl.sum(axis=)` | rule | `axis=` is spelled in `Syntax.lean:217` | 9 | 1 | 40 |  |
 | `tl.sum(keep_dims=)` | rule | `keep_dims=` is spelled in `Syntax.lean:217` | 0 | 0 | 0 |  |
 | `tl.sum(dtype=)` | rule | a keyword position exists (`Syntax.lean:210, 212`), so the expander decides; by reading `Expansion/Compute.lean:836` | 0 | 0 | 0 |  |
-| `tl.swizzle2d(...)` | no rule | no declaration spells `tl.swizzle2d(` | 0 | 5 | 0 | #77 |
+| `tl.swizzle2d(...)` | no rule | no declaration spells `tl.swizzle2d(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.target_info` (module) | no rule | no declaration spells a name under it | - | - | - | not determined: uses are not counted |
 | `tl.tensor(...)` | no rule | no declaration spells `tl.tensor(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.tensor_descriptor(...)` | no rule | no declaration spells `tl.tensor_descriptor(` | 0 | 0 | 0 | #76 |
@@ -950,36 +945,35 @@ The ticket column names the ticket of epic A1 (#299) that owns a gap, for rows w
 | `tl.umulhi(...)` | no rule | no declaration spells `tl.umulhi(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.view(...)` | rule | `tritonExpr` `Syntax.lean:267` | 0 | 0 | 0 |  |
 | `tl.void` | no rule | no declaration spells `tl.void` | - | - | - | not determined: uses are not counted |
-| `tl.where(...)` | rule | `tritonExpr` `Syntax.lean:112` | 1 | 17 | 85 |  |
+| `tl.where(...)` | rule | `tritonExpr` `Syntax.lean:112` | 1 | 16 | 85 |  |
 | `tl.xor_sum(...)` | no rule | no declaration spells `tl.xor_sum(` | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.xor_sum(axis=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
 | `tl.xor_sum(keep_dims=)` | no rule | the call has no rule | 0 | 0 | 0 | none: no target kernel uses it |
-| `tl.zeros(...)` | rule | `tritonExpr` `CallSignature.lean:65-67`, `Syntax.lean:290-293` | 0 | 24 | 88 |  |
-| `tl.zeros(dtype=)` | rule | a keyword position exists (`CallSignature.lean:67`, `Syntax.lean:292-293`), so the expander decides; by reading `Expansion/Main.lean:2257` | 0 | 24 | 85 |  |
+| `tl.zeros(...)` | rule | `tritonExpr` `CallSignature.lean:65-67`, `Syntax.lean:290-293` | 0 | 16 | 88 |  |
+| `tl.zeros(dtype=)` | rule | a keyword position exists (`CallSignature.lean:67`, `Syntax.lean:292-293`), so the expander decides; by reading `Expansion/Main.lean:2257` | 0 | 16 | 85 |  |
 | `tl.zeros_like(...)` | rule | `tritonExpr` `Syntax.lean:294` | 0 | 0 | 1 |  |
 
 ### Python forms
 
 The statement kinds of Python that a kernel body can hold, and the calls in the scanned kernels that are not names of `triton.language`: builtins, methods (a leading dot) and functions of the same file. Keyword rows are the keywords the kernels pass.
 
-| construct | status | basis | Triton (23) | Triton-distributed (119) | bench (183 files) | ticket |
+| construct | status | basis | Triton (23) | Triton-distributed (78) | bench (183 files) | ticket |
 | --- | --- | --- | --- | --- | --- | --- |
-| `Assign` | rule | `Syntax.lean:399` | 23 | 116 | 183 |  |
-| `AugAssign` | partial | `+=` `-=` `*=` `/=`: `Syntax.lean:400-403`; no declaration for `//=` `%=` `**=` `<<=` `>>=` `&=` `\|=` `^=` `@=` | 0 | 44 | 106 | #77 if it is a gap |
-| `AnnAssign` | partial | only with the annotation `tl.constexpr`: `SourceDType.lean:16` | 0 | 30 | 8 | #77 if it is a gap |
-| `Expr` | partial | follows the call: a call stands as a statement only through a `tritonStmt` declaration, which its row then cites | 23 | 109 | 183 | see the calls |
-| `For` | rule | over `range(...)`, `tl.static_range(...)`: `CallSignature.lean:68-70`, `StaticRanges.lean:10`, `Syntax.lean:425-431` | 3 | 88 | 105 |  |
-| `While` | rule | `RawBodyControl.lean:5` | 0 | 29 | 5 |  |
-| `If` | rule | `Syntax.lean:439, 441, 443, 446-447, 449, 451-452` | 0 | 82 | 87 |  |
-| `With` | no rule | no `tritonStmt` declaration has this form; by reading `RawSourceText.lean:230`: pasted Python source is rejected for any compound statement other than `if`, `for` and `while` | 0 | 9 | 0 | none in A1: every target kernel that uses it calls `dl.simt_exec_region` (epic A2, #300) |
-| `Return` | rule | `StatementJitFunctions.lean:26`, `Syntax.lean:422` | 0 | 43 | 49 |  |
-| `Pass` | no rule | no `tritonStmt` declaration has this form; other categories have one: `controlSourceStmt` `ControlSource.lean:61` | 0 | 15 | 1 | #77 |
+| `Assign` | rule | `Syntax.lean:399` | 23 | 75 | 183 |  |
+| `AugAssign` | partial | `+=` `-=` `*=` `/=`: `Syntax.lean:400-403`; no declaration for `//=` `%=` `**=` `<<=` `>>=` `&=` `\|=` `^=` `@=` | 0 | 30 | 106 | #77 if it is a gap |
+| `AnnAssign` | partial | only with the annotation `tl.constexpr`: `SourceDType.lean:16` | 0 | 14 | 8 | #77 if it is a gap |
+| `Expr` | partial | follows the call: a call stands as a statement only through a `tritonStmt` declaration, which its row then cites | 23 | 68 | 183 | see the calls |
+| `For` | rule | over `range(...)`, `tl.static_range(...)`: `CallSignature.lean:68-70`, `StaticRanges.lean:10`, `Syntax.lean:425-431` | 3 | 51 | 105 |  |
+| `While` | rule | `RawBodyControl.lean:5` | 0 | 12 | 5 |  |
+| `If` | rule | `Syntax.lean:439, 441, 443, 446-447, 449, 451-452` | 0 | 47 | 87 |  |
+| `With` | no rule | no `tritonStmt` declaration has this form; by reading `RawSourceText.lean:230`: pasted Python source is rejected for any compound statement other than `if`, `for` and `while` | 0 | 8 | 0 | none in A1: every target kernel that uses it calls `dl.simt_exec_region` (epic A2, #300) |
+| `Return` | rule | `StatementJitFunctions.lean:26`, `Syntax.lean:422` | 0 | 32 | 49 |  |
+| `Pass` | no rule | no `tritonStmt` declaration has this form; other categories have one: `controlSourceStmt` `ControlSource.lean:61` | 0 | 9 | 1 | #77 |
 | `Break` | no rule | no `tritonStmt` declaration has this form | 0 | 0 | 0 | none: no target kernel uses it |
 | `Continue` | no rule | no `tritonStmt` declaration has this form | 0 | 0 | 0 | none: no target kernel uses it |
 | `Assert` | no rule | no `tritonStmt` declaration has this form | 0 | 0 | 0 | none: no target kernel uses it |
 | call of a local function decorated `triton.constexpr_function` | not determined | no mechanical test for the call of a function of the same file | 0 | 1 | 0 | #77 if it is a gap |
 | call of a local function decorated `triton.jit` | not determined | no mechanical test for the call of a function of the same file; by reading `StatementJitFunctions.lean:23`: a call of a named helper has a declaration, and the helper must be bound outside the block; whether the calls of the kernels fit was not checked | 0 | 25 | 24 | #77 if it is a gap |
-| call of a local function decorated `triton.language.core.extern` | not determined | no mechanical test for the call of a function of the same file | 0 | 9 | 0 | #77 if it is a gap |
 | `.bit_length(...)` | no rule | no declaration spells `.bit_length(` | 0 | 1 | 0 | #77 |
 | `.is_floating(...)` | partial | no declaration spells `.is_floating(`; by reading `SourceDType.lean:57`: recognised only in the dotted name `<pointer>.dtype.element_ty.is_floating` | 0 | 0 | 1 | none: no target kernel uses it |
 | `.is_fp64(...)` | partial | no declaration spells `.is_fp64(`; by reading `FiniteHelperSource.lean:57`: `x.dtype.is_fp64()` parses as one dotted identifier (`Syntax.lean:368`) and is accepted only inside a checked source helper | 0 | 0 | 1 | none: no target kernel uses it |
@@ -987,19 +981,17 @@ The statement kinds of Python that a kernel body can hold, and the calls in the 
 | `.is_int1(...)` | partial | no declaration spells `.is_int1(`; by reading `SourceDType.lean:55`: recognised only in the dotted name `<pointer>.dtype.element_ty.is_int1` | 0 | 0 | 1 | none: no target kernel uses it |
 | `.is_int_signed(...)` | partial | no declaration spells `.is_int_signed(`; by reading `SourceDType.lean:56`: recognised only in the dotted name `<pointer>.dtype.element_ty.is_int_signed` | 0 | 0 | 1 | none: no target kernel uses it |
 | `.load(...)` | no rule | no declaration spells `.load(` | 0 | 5 | 0 | #76 |
-| `.record(...)` | no rule | no declaration spells `.record(` | 0 | 15 | 0 | #77 |
-| `.record(is_start=)` | no rule | the call has no rule | 0 | 15 | 0 | #77 |
-| `.record(task_type=)` | no rule | the call has no rule | 0 | 15 | 0 | #77 |
+| `.record(...)` | no rule | no declaration spells `.record(` | 0 | 3 | 0 | #77 |
+| `.record(is_start=)` | no rule | the call has no rule | 0 | 3 | 0 | #77 |
+| `.record(task_type=)` | no rule | the call has no rule | 0 | 3 | 0 | #77 |
 | `.store(...)` | no rule | no declaration spells `.store(` | 0 | 4 | 0 | #76 |
-| `.sum(...)` | no rule | no declaration spells `.sum(` | 0 | 1 | 0 | #77 |
-| `.sum(axis=)` | no rule | the call has no rule | 0 | 1 | 0 | #77 |
-| `.to(...)` | rule | `tritonExpr` `ChainedSourceCasts.lean:9-10`, `MutableScalarCalls.lean:11`, `PastedControlSource.lean:20-22`, `PythonBitcastBooleans.lean:10`, `Syntax.lean:120-122, 132-137, 147-150, 232-237` | 13 | 44 | 154 |  |
+| `.to(...)` | rule | `tritonExpr` `ChainedSourceCasts.lean:9-10`, `MutableScalarCalls.lean:11`, `PastedControlSource.lean:20-22`, `PythonBitcastBooleans.lean:10`, `Syntax.lean:120-122, 132-137, 147-150, 232-237` | 13 | 25 | 154 |  |
 | `.to(bitcast=)` | rule | `bitcast=` is spelled in `MutableScalarCalls.lean:11`, `PastedControlSource.lean:20-22`, `PythonBitcastBooleans.lean:10`, `Syntax.lean:120-122` | 0 | 0 | 7 |  |
 | `bin(...)` | no rule | no declaration spells `bin(` | 0 | 1 | 0 | #77 |
-| `float(...)` | rule | `tritonExpr` `Syntax.lean:154-155, 159` | 1 | 1 | 38 |  |
+| `float(...)` | rule | `tritonExpr` `Syntax.lean:154-155, 159` | 1 | 0 | 38 |  |
 | `len(...)` | no rule | no declaration spells `len(` | 0 | 4 | 0 | #77 |
-| `min(...)` | rule | `tritonExpr` `Syntax.lean:104` | 0 | 21 | 28 |  |
-| `range(...)` | partial | `tritonStmt` `CallSignature.lean:68-70`, `Syntax.lean:425-429`; a keyword below has no rule | 3 | 80 | 104 | see its keyword rows |
+| `min(...)` | rule | `tritonExpr` `Syntax.lean:104` | 0 | 13 | 28 |  |
+| `range(...)` | partial | `tritonStmt` `CallSignature.lean:68-70`, `Syntax.lean:425-429`; a keyword below has no rule | 3 | 43 | 104 | see its keyword rows |
 | `range(step=)` | no rule | no declaration of `range(` has a position for this keyword | 0 | 1 | 0 | #77 |
 | `torch._inductor.runtime.triton_helpers.libdevice.rsqrt(...)` | rule | under the spelling `libdevice.rsqrt(`: `tritonExpr` `Syntax.lean:82` | 0 | 0 | 2 |  |
 | `torch._inductor.runtime.triton_helpers.welford(...)` | rule | under the spelling `triton_helpers.welford(`: `tritonStmt` `Syntax.lean:388`, `WelfordCallMetadata.lean:13` | 0 | 0 | 1 |  |
@@ -1008,10 +1000,9 @@ The statement kinds of Python that a kernel body can hold, and the calls in the 
 | `tl.libdevice.finitef(...)` | rule | under the spelling `libdevice.finitef(`: `tritonExpr` `Syntax.lean:130` | 0 | 0 | 1 |  |
 | `tl.libdevice.isfinited(...)` | rule | under the spelling `libdevice.isfinited(`: `tritonExpr` `Syntax.lean:131` | 0 | 0 | 1 |  |
 | `tl.libdevice.pow(...)` | no rule | no declaration spells `tl.libdevice.pow(` | 0 | 0 | 1 | none: no target kernel uses it |
-| `triton.next_power_of_2(...)` | no rule | no declaration spells `triton.next_power_of_2(` | 0 | 2 | 0 | #77 |
 | `triton_tanh(...)` | rule | `tritonExpr` `Syntax.lean:85` | 0 | 0 | 1 |  |
 
-75 further call names of the scanned kernels are not rows: names under `triton_dist` and names from relative imports. They are the requirement for the Triton-distributed front end (epic A2, #300) and are listed in `documents/census/MinimalSyntax.md`.
+53 further call names of the scanned kernels are not rows: names under `triton_dist` and names from relative imports. They are the requirement for the Triton-distributed front end (epic A2, #300) and are listed in `documents/census/MinimalSyntax.md`.
 
 ### Rules for names outside `__all__`
 

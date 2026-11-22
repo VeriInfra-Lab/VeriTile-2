@@ -1,5 +1,5 @@
 """Per-rank harnesses of the batches `internode-logical-ag03-001` and `internode-logical-rs06-001` (2 ranks) and
-`internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-001` (4 ranks).
+`internode-logical-ag03-2x2-001` and the `internode-logical-rs06-2x2` batches (4 ranks).
 
 They call the functions of tutorials 03 and 06 of Triton-distributed at
 `7908e4ea` on small fixed inputs and return what every rank holds afterwards.
@@ -41,7 +41,8 @@ What it does differently from that program:
 
     x          int8 [ranks, M, N]   rank r reduces `x[r]` converted to bfloat16, the tutorial's dtype
     barrier    int32 [3]            local rank and node size of the tutorial's intra-node barrier (the
-                                    NVSHMEM node team), and whether `supports_p2p_native_atomic()`
+                                    NVSHMEM node team), and whether `supports_p2p_native_atomic()`;
+                                    [-1, -1, 2] for the global NVSHMEM barrier (no node-team fields)
     reduced    bf16 [M / ranks, N]  what `reduce_scatter_2d_op` returns; `judge.py` expects rows
                                     r * M / ranks onwards of the sum of all `x[s]`
 
@@ -61,8 +62,8 @@ node team holds all four ranks, the barrier takes its compare-and-swap kernel
 whenever visible devices 0 and 1 report native atomic operations (`UT:536-547`,
 `CO:257-258`), and that kernel then operates on the memory of the two ranks of
 the other NVLink pair, reached over PCIe (`CO:155-157` forbids it). The harness
-changes nothing of this; every rank prints what each pair of its visible
-devices reports, so that the result shows on which links the kernel ran.
+selects the global NVSHMEM barrier for the replacement batch via is_intra_node=False
+(CO:234-237, 254-255). Every rank also prints the native atomic capability of its visible pairs.
 """
 import ast
 import importlib.util
@@ -171,13 +172,16 @@ def reduce_scatter(rank, ranks, inputs, outputs, launch):
         context = tutorial.ReduceScatter2DContext(
             max_M=M, N=N, rank=rank, world_size=world, local_world_size=local, dtype=x.dtype, overlap_with_gemm=False,
             symm_scatter_bufs=scatter, symm_rs_per_node_bufs=per_node, symm_p2p_bufs=p2p, symm_signal_bufs=signal,
-            barrier=BarrierAllContext(True), reduction_stream=torch.cuda.Stream(priority=-1),
+            barrier=BarrierAllContext({'intra_node': True, 'nvshmem': False}[launch.get('barrier', 'intra_node')]),
+            reduction_stream=torch.cuda.Stream(priority=-1),
             p2p_stream=torch.cuda.Stream(priority=-1), num_sync_sms=0, num_p2p_sms=1, num_reduction_sms=15)
     # The tutorial's barrier asks NVSHMEM, not the launcher, which ranks share its node.
-    team = [context.barrier.local_rank, context.barrier.num_local_ranks, int(supports_p2p_native_atomic())]
+    if context.barrier.is_intra_node:
+        team = [context.barrier.local_rank, context.barrier.num_local_ranks, int(supports_p2p_native_atomic())]
+    else:
+        team = [-1, -1, 2]  # CO:234-243,254-255: no node-team fields on the NVSHMEM path.
     outputs['barrier'].copy_(torch.tensor(team, dtype=torch.int32))
-    print(f'rank {rank}: context {launch["context"]}, barrier local rank {team[0]} of {team[1]}, '
-          f'native atomics {team[2]}', flush=True)
+    print(f'rank {rank}: context {launch["context"]}, barrier report {team}', flush=True)
     # `supports_p2p_native_atomic` asks about visible devices 0 and 1 only (`UT:544-545`); the barrier's kernel uses
     # atomic operations on every rank of the node team. The same question for every pair of visible devices:
     links = []
