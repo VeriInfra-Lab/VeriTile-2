@@ -5,8 +5,17 @@ Triton 3.5.1 documents a descriptor's shape, strides and block shape;
 loads zero-fill outside the tensor and stores ignore those lanes:
 https://github.com/triton-lang/triton/blob/v3.5.1/python/triton/language/core.py#L1389-L1407
 https://github.com/triton-lang/triton/blob/v3.5.1/python/triton/language/core.py#L2226-L2280
-Accessed 2026-11-13. Device lowering is compiler trust base; documented alignment and stride
-requirements remain source input preconditions. Source procedures inherit their
+Accessed 2026-11-23. Device lowering is compiler trust base. The following
+source input preconditions are documented above and are not encoded in the term:
+- The base pointer is 16-byte aligned (core.py:2236).
+- Shape entries are non-negative (2237).
+- Leading strides are multiples of 16 bytes and the last dimension is contiguous (2238–2239).
+- Every load/store offset is a multiple of 16 bytes (1395, 1405).
+
+Activate this adapter with `open VeriTile.Dist.Frontend.TritonExt.TensorDescriptor`.
+The unused free descriptor functions and `tl.tensor_descriptor` remain unsupported.
+Descriptor rebinding through `dl.consume_token` remains rejected; this adapter alone
+does not elaborate the complete tutorial-07 kernel (#451). Source procedures inherit their
 existing prohibition on Lean expressions, so conditional block dimensions are
 accepted through the ordinary/signature entrypoints, not stored procedures (#449).
 -/
@@ -18,16 +27,14 @@ open Lean Elab Term
 open VeriTile.Triton.DSL
 
 declare_syntax_cat descriptorBlockDim
-syntax tritonExpr : descriptorBlockDim
-syntax tritonExpr " if " "not " ident " else " tritonExpr : descriptorBlockDim
+scoped syntax tritonExpr : descriptorBlockDim
+scoped syntax tritonExpr " if " "not " ident " else " tritonExpr : descriptorBlockDim
 
-syntax (name := makeDescriptor) "tl.make_tensor_descriptor(" tritonExpr ","
+scoped syntax (name := makeDescriptor) "tl.make_tensor_descriptor(" tritonExpr ","
   ident "=" "[" tritonExpr,* "]" "," ident "=" "[" tritonExpr,* "]" ","
   ident "=" "[" descriptorBlockDim,* "]" ")" : tritonExpr
-syntax (name := loadDescriptor) "tl.load_tensor_descriptor(" ident "," "[" tritonExpr,* "]" ")" : tritonExpr
-syntax (name := storeDescriptor) "tl.store_tensor_descriptor(" ident "," "[" tritonExpr,* "]" "," tritonExpr ")" : tritonStmt
-syntax (name := methodLoad) ident noWs "(" "[" tritonExpr,* "]" ")" : tritonExpr
-syntax (name := methodStore) ident noWs "(" "[" tritonExpr,* "]" "," tritonExpr ")" : tritonStmt
+scoped syntax (name := methodLoad) ident noWs "(" "[" tritonExpr,* "]" ")" : tritonExpr
+scoped syntax (name := methodStore) ident noWs "(" "[" tritonExpr,* "]" "," tritonExpr ")" : tritonStmt
 
 private partial def ranks (raw : Syntax) : MacroM (List (Name × Nat)) := do
   let mut found := []
@@ -98,20 +105,12 @@ private partial def rewrite (known : List (Name × Nat)) (raw : Syntax) : MacroM
     let checks ← axes known name offsets.getElems
     return (← `(tritonExpr| tl.load(tl.advance($name:ident, ($offsets,*)),
       boundary_check=$checks:term, padding_option="zero"))).raw
-  | `(tritonExpr| tl.load_tensor_descriptor($name:ident, [$offsets:tritonExpr,*])) =>
-    let checks ← axes known name offsets.getElems
-    return (← `(tritonExpr| tl.load(tl.advance($name:ident, ($offsets,*)),
-      boundary_check=$checks:term, padding_option="zero"))).raw
   | _ => pure ()
   match (⟨raw⟩ : TSyntax `tritonStmt) with
   | `(tritonStmt| $method:ident([$offsets:tritonExpr,*], $value:tritonExpr)) =>
     let .str receiver "store" := method.getId.eraseMacroScopes
       | Macro.throwErrorAt method "tensor descriptor: expected a .store method"
     let name := mkIdentFrom method receiver
-    let checks ← axes known name offsets.getElems
-    return (← `(tritonStmt| tl.store(tl.advance($name:ident, ($offsets,*)), $value,
-      boundary_check=$checks:term))).raw
-  | `(tritonStmt| tl.store_tensor_descriptor($name:ident, [$offsets:tritonExpr,*], $value:tritonExpr)) =>
     let checks ← axes known name offsets.getElems
     return (← `(tritonStmt| tl.store(tl.advance($name:ident, ($offsets,*)), $value,
       boundary_check=$checks:term))).raw

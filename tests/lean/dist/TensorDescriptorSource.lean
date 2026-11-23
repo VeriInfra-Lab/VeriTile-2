@@ -10,7 +10,27 @@ and synthetic c loads supply intermediate values outside the distributed kernel.
 -/
 import VeriTile.Dist.Frontend.TritonExt.TensorDescriptor
 
+-- Importing the adapter must not activate its descriptor or identifier-led rules.
+open Lean Elab Command in
+run_cmd do
+  for token in ["tl.make_tensor_descriptor(", "tl.load_tensor_descriptor(", "tl.store_tensor_descriptor("] do
+    if (Parser.getTokenTable (← getEnv)).find? token |>.isSome then
+      throwError "descriptor token unexpectedly active without open: {token}"
+  for source in [
+    "triton { d = tl.make_tensor_descriptor(x, shape=[8,8], strides=[8,1], block_shape=[2,4]) }",
+    "triton { v = d.load([0,0]) }", "triton { d.store([0,0],v) }"] do
+    match Parser.runParserCategory (← getEnv) `term source with
+    | .ok _ => throwError "descriptor syntax unexpectedly active without open: {source}"
+    | .error _ => pure ()
+
 namespace VeriTile.Tests.Dist.TensorDescriptorSource
+open VeriTile.Dist.Frontend.TritonExt.TensorDescriptor
+
+open Lean Elab Command in
+run_cmd do
+  for token in ["tl.load_tensor_descriptor(", "tl.store_tensor_descriptor("] do
+    if (Parser.getTokenTable (← getEnv)).find? token |>.isSome then
+      throwError "unused descriptor function has a token rule: {token}"
 open VeriTile Triton
 
 private def signature : CallSignature where
@@ -60,19 +80,12 @@ def tutorialCalls (a_ptr b_ptr c_ptr : RegionName) (EPILOGUE_SUBTILE : Bool) : C
     c_desc.store([offs_am, offs_bn], c)
   }
 
-/-- The actual descriptor methods and their free-function spellings agree. -/
+/-- The descriptor methods preserve the corresponding block-pointer program. -/
 def methods (x : Region .fp32) : ComputeKernel := triton {
   d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 4])
   row = tl.program_id(0) * 2
   v = d.load([row, 4])
   d.store([row, 0], v)
-}
-
-def functions (x : Region .fp32) : ComputeKernel := triton {
-  d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 4])
-  row = tl.program_id(0) * 2
-  v = tl.load_tensor_descriptor(d, [row, 4])
-  tl.store_tensor_descriptor(d, [row, 0], v)
 }
 
 def blockPointers (x : Region .fp32) : ComputeKernel := triton {
@@ -82,7 +95,6 @@ def blockPointers (x : Region .fp32) : ComputeKernel := triton {
   tl.store(tl.advance(d, [row, 0]), v, boundary_check=([0, 1] : List Nat))
 }
 
-example (x : Region .fp32) : methods x = functions x := rfl
 -- Worked case: every statement, port, dtype and boundary check agrees. Thus the
 -- descriptor load is the corresponding tl.load, not just a matching output.
 example (x : Region .fp32) : methods x = blockPointers x := rfl
@@ -165,12 +177,12 @@ example (x : RegionName) : ComputeKernel := with_triton_signature ({} : CallSign
   v = d.load([0, 0])
 }
 
--- The call-argument entrypoint uses the same signature-aware lowering.
+-- The method spelling also preserves signature-aware call-argument lowering.
 def descriptorCall (x : RegionName) : ComputeKernel :=
   with_triton_call ({pointers := [("x", .fp32)]} : CallSignature) call_args [] in triton {
     d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 4])
-    v = tl.load_tensor_descriptor(d, [0, 0])
-    tl.store_tensor_descriptor(d, [0, 0], v)
+    v = d.load([0, 0])
+    d.store([0, 0], v)
   }
 
 def pointerCall (x : RegionName) : ComputeKernel :=
@@ -285,5 +297,32 @@ example : SourceProcedure :=
     d = tl.make_tensor_descriptor(x, shape=[8,8], strides=[8,1], block_shape=[2, 8 if not FLAG else 4])
     v = d.load([0,0])
   }
+
+-- Unused names have no descriptor syntax rule, even with this scope open.
+/-- error: <input>:2:33: expected tritonExpr -/
+#guard_msgs in
+example (d : RegionName) : ComputeKernel := with_triton_signature ({} : CallSignature) in triton {
+  v = tl.load_tensor_descriptor(d, [0, 0])
+}
+
+/-- error: <input>:2:30: expected tritonExpr -/
+#guard_msgs in
+example (d : RegionName) : ComputeKernel := with_triton_signature ({} : CallSignature) in triton {
+  tl.store_tensor_descriptor(d, [0, 0], v)
+}
+
+/-- error: random source helper requires an explicit tl.source_helper binding -/
+#guard_msgs in
+example (x : RegionName) : ComputeKernel := with_triton_signature ({} : CallSignature) in triton {
+  d = tl.tensor_descriptor(x)
+}
+
+-- Tutorial 07:186 / allgather_gemm.py:279 at the pinned revision; #451 owns this boundary.
+/-- error: tensor descriptor: descriptor names cannot be rebound to other values -/
+#guard_msgs in
+example (x : RegionName) : ComputeKernel := with_triton_signature ({} : CallSignature) in triton {
+  a_desc = tl.make_tensor_descriptor(x, shape=[8,8], strides=[8,1], block_shape=[2,4])
+  a_desc = dl.consume_token(a_desc, token)
+}
 
 end VeriTile.Tests.Dist.TensorDescriptorSource
