@@ -171,3 +171,61 @@ integer output states a sentinel outside the kernel's result range.
 - How inputs are generated from a seed: owned by `scripts/interp/gen_inputs.py` (I8.1), which must produce identical bytes on every machine.
 - The directory layout of requests and results: `documents/GpuExchangeProtocol.md`.
 - The export format of the symbolic carrier (I6.3).
+
+## 4. Expression tree format, version 1
+
+`VeriTile.Interp.Symbolic.writeTrees` writes one UTF-8 JSON object with an integer
+`version` of 1 and an `outputs` array. Each entry is one output element in caller
+order. Every tree is an array `[kind, metadata, children]`. Metadata and
+children are ordered arrays. For example, one third is
+`["literal",[null,"real",1,3],[]]`. The numerator and positive denominator are
+JSON integers; the reader uses exact integer arithmetic. Inputs are supplied to
+the interpreter as trees, so an export can be evaluated without variable bindings.
+
+In the table, P is the compute precision (`null`, `uint32`, `int32`, `fp32` or
+`fp64`). D, L, R and O are source floating dtypes (`real`, `fp32`, `fp16`,
+`bf16`, `f8e4`, `f8e5`). Each name below is a distinct node kind, including
+operations with the same mathematical reference. The reference treats numeric
+casts and rounding as identity and does not predict machine rounding.
+
+| Kind | Metadata, in order | Children, in order |
+| --- | --- | --- |
+| literal | P, D, numerator, denominator | none |
+| negInf | none | none |
+| fromNat, fromInt | P, integer | none |
+| fp32Bits | unsigned 32-bit pattern | none |
+| float8E5Bits | D, unsigned E5M2 byte | none |
+| fp32Load | none | loaded element |
+| cast | P, source D, target D | operand |
+| binary | P, D, Structural.Binary constructor name | left, right |
+| unary | P, Structural.Unary constructor name, then D for neg/abs only | operand |
+| fma, fmaTyped | index precision (fp32/fp64) for fma, D for fmaTyped | two factors, addend |
+| atomicAdd | D | old value, addend |
+| libdevicePowi | P, integer exponent | base |
+| minimum | P, D | left, right |
+| divRN | none | dividend, divisor |
+| reduceMin, reduceMax, reduceSum, reduceSumTyped, reduceMaxTyped | P, D, input shape, axis, keepDims | the lanes contributing to this element, in increasing axis order |
+| scan | P, operation (sum/prod/min/max), direction (forward/reverse), input shape, axis | prefix or suffix in traversal order |
+| dot, dotWithOptions, dotTyped, dotAcc | P, L, R, O, options, contraction length | accumulator first for dotAcc only, then alternating left and right factors |
+
+Dot options are the four-element array of outDType, allowTF32, inputPrecision
+and maxNumImpreciseAcc; each missing field is null. The options are preserved
+for inspection. These trees describe arithmetic over real values. A divergent
+operation (such as division by zero) can fail in the reference.
+
+The other CAlgebra callbacks require concrete Bool, Int or Nat results:
+`isFinite`, `compareLt`, `compareLe`, `compareEq`, `floatToInt`, `floatToNat`,
+`indexedMax` and `integerDot`. They have no floating output tree in v1 and
+are absent from this carrier. The interpreter returns failure when the required
+backend is absent. The exporter also rejects foreign upstream real literal
+symbols for which it has no exact rational preimage, and foreign full-tile
+reduceMax symbols outside the carrier's lane format.
+
+Run `PYTHONPATH=scripts python3 -m interp.symeval trees.json` for the reference.
+Optional `--float float.tensor` and `--gpu gpu.tensor` report absolute distance
+for each output. Both tensors must have the same number of elements as the
+export. Rational operations use Fraction. The GPU protocol, section 9, pins
+neither SymPy nor mpmath. The standard-library reference uses Decimal with
+50 significant digits for exp, log and related operations, and binary64 libm
+for sin, cos, tan, atan and erf. Values and distances are printed as strings
+to preserve rational fractions and decimal precision.
