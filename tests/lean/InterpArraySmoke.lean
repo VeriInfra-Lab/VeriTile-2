@@ -29,8 +29,11 @@ private def initial (pid : Nat) : Array.State Nat where
   numPids := fun _ => 2
   undef := fun d _ _ => Structural.defaultValue d
 
-reflect_kernel VectorAdd.Kernels.originalKernel
-reflect_kernel FlatVectorAdd.Kernels.addMaskedKernel
+-- Keep these specialized mirrors local to this regression namespace.
+def vectorProgram := VectorAdd.Kernels.originalKernel 4
+def maskedProgram := FlatVectorAdd.Kernels.addMaskedKernel "x" "y" "out" 2 3
+reflect_kernel vectorProgram
+reflect_kernel maskedProgram
 
 private def outputs (k : QKernel) (pid : Nat) : Option (List Nat) × Option (List Nat) :=
   let s := initial pid
@@ -38,13 +41,10 @@ private def outputs (k : QKernel) (pid : Nat) : Option (List Nat) × Option (Lis
   ((Array.interp algebra k s).map fun t => offsets.map fun i => (t.read "out" i).read .real,
    (interp algebra k s.view).map fun t => offsets.map fun i => (t.read "out" i).read .real)
 
-private def vector := VectorAdd.Kernels.originalKernel.mirror 4
-private def masked := FlatVectorAdd.Kernels.addMaskedKernel.mirror "x" "y" "out" 2 3
-
-#eval outputs vector 0
-#guard outputs vector 0 = (some [4, 7, 10, 13, 99], some [4, 7, 10, 13, 99])
-#eval outputs masked 1
-#guard outputs masked 1 = (some [99, 99, 10, 99, 99], some [99, 99, 10, 99, 99])
+#eval outputs vectorProgram.mirror 0
+#guard outputs vectorProgram.mirror 0 = (some [4, 7, 10, 13, 99], some [4, 7, 10, 13, 99])
+#eval outputs maskedProgram.mirror 1
+#guard outputs maskedProgram.mirror 1 = (some [99, 99, 10, 99, 99], some [99, 99, 10, 99, 99])
 
 -- Aliased lanes accumulate in iteration order at one sparse address.
 private def accumulate : QKernel := .mk [] [] [.forLoop "i" 2
