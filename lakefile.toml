@@ -537,3 +537,7 @@ globs = ["VeriTile.Equiv", "VeriTile.Equiv.+"]
 [[lean_lib]]
 name = "VeriTileStaging"
 globs = ["VeriTile.Staging.+"]
+
+[[lean_exe]]
+name = "veritile-run"
+root = "tests.interp.Main"

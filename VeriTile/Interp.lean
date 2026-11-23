@@ -24,3 +24,5 @@ import VeriTile.Interp.Reflect
 import VeriTile.Interp.State
 import VeriTile.Interp.Step
 import VeriTile.Interp.Run.TensorIO
+import VeriTile.Interp.Run.Grid
+import VeriTile.Interp.Run.Main
