@@ -513,6 +513,7 @@ globs = [
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtProfiler",
+  "tests.lean.InterpReflectBench",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
