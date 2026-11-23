@@ -40,6 +40,7 @@ if [ "$lean" = 1 ]; then
              # Fork-owned regression modules that no target gate builds.
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpEvalSmoke"
+             "lake build tests.lean.InterpFloatCarrier"
              "lake build tests.lean.InterpBridgeInvariant"
              "lake build tests.lean.dist.SwizzleSource")
 fi

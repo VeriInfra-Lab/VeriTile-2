@@ -480,6 +480,7 @@ globs = [
   "tests.lean.WelfordSourceContexts",
   "tests.lean.InterpReflectSmoke",
   "tests.lean.InterpEvalSmoke",
+  "tests.lean.InterpFloatCarrier",
   "tests.lean.InterpBridgeInvariant",
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.TritonExtConstexpr",
