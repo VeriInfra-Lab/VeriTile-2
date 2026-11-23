@@ -7,7 +7,7 @@ kernel that has every supported literal form, and the kernels it must reject.
 import Mathlib.Data.Real.Sqrt
 import VeriTile.Interp.Reflect
 import bench.examples.LogExp.Kernels
-import bench.examples.VectorAdd.Kernels
+import tests.lean.InterpEvalSmoke
 
 namespace VeriTile.Tests.InterpReflectSmoke
 
@@ -17,8 +17,7 @@ open VeriTile.Bench.Examples
 /-! ## Bench kernels -/
 
 -- `originalKernel` is `addKernel` at three fixed regions, and `addKernel` renames its
--- parameters with `let`: two definitions are unfolded and four `let`s replaced.
-reflect_kernel VectorAdd.Kernels.originalKernel
+-- parameters with `let`. Reuse the mirror declared by the execution smoke test.
 
 example (blockSize : Nat) :
     (VectorAdd.Kernels.originalKernel.mirror blockSize).toReal
@@ -62,6 +61,14 @@ example (n : Nat) (q : ℚ) : literalForms.mirror n q = .mk [] [] [.forLoop "i" 
 example (n : Nat) (q : ℚ) : (literalForms.mirror n q).toReal = literalForms n q :=
   literalForms.toReal_mirror n q
 
+def realParameter (ε : ℝ) : ComputeKernel :=
+  .mk [] [] [.assign .real [] "a" (.alg (.const ε))]
+
+reflect_kernel realParameter
+
+example (q : ℚ) : (realParameter.mirror q).toReal = realParameter (q : ℝ) :=
+  realParameter.toReal_mirror q
+
 /-! ## Negative examples: kernels that must be rejected -/
 
 noncomputable def irrationalLiteral : ComputeKernel :=
@@ -70,13 +77,6 @@ noncomputable def irrationalLiteral : ComputeKernel :=
 /-- error: reflect_kernel: non-rational literal √2 -/
 #guard_msgs in
 reflect_kernel irrationalLiteral
-
-def realParameter (ε : ℝ) : ComputeKernel :=
-  .mk [] [] [.assign .real [] "a" (.alg (.const ε))]
-
-/-- error: reflect_kernel: non-rational literal ε -/
-#guard_msgs in
-reflect_kernel realParameter
 
 def swapPorts : ComputeKernel → ComputeKernel
   | .mk inputs outputs body => .mk outputs inputs body
