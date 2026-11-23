@@ -1,7 +1,7 @@
 /- Reflection and kernel-checked equations for the bench examples, rejection tests,
 source coverage, and three executions with rational parameters. -/
 import VeriTile.Interp.Reflect
-import tests.lean.InterpEvalSmoke
+import tests.lean.InterpReflectSmoke
 import bench.examples.AdamUpdateGridLaunch.Kernels
 import bench.examples.FlatVectorAdd.Kernels
 import bench.examples.FloatDTypeAdd.Kernels
@@ -80,13 +80,12 @@ run_cmd Lean.withoutModifyingEnv do
 reflect_kernel HyperConnectionsWidth.Kernels.originalKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixOriginal
 reflect_kernel LogExp.originalKernel
-reflect_kernel LogExp.optimizedKernel
 reflect_kernel OnlineSoftmax.Kernels.stableSoftmaxKernel
 reflect_kernel OnlineSoftmax.Kernels.onlineSoftmaxKernel
 reflect_kernel OnlineSoftmax.Kernels.batchSoftmaxKernel
 reflect_kernel RowWiseMax.Kernels.rowWiseMaxKernel
 reflect_kernel RowWiseMax.Kernels.inlinedKernel
--- The row-wise sum and vector-add mirrors already come from InterpEvalSmoke.
+-- The smoke tests already provide mirrors for RowWiseSum, VectorAdd and optimized LogExp.
 reflect_kernel RowWiseSum.Kernels.reversedKernel
 reflect_kernel SoftmaxReciprocal.Kernels.stableSoftmaxKernel
 reflect_kernel SoftmaxReciprocal.Kernels.softmaxRecipKernel
