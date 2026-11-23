@@ -16,8 +16,9 @@ The location model (`VeriTile/Staging/Dist/LocationSpec.lean`, ticket S1.1)
 keeps `Rank := Nat`. The bridge between the two is `Fin.val`. This file does
 not import the location model.
 
-Arithmetic. Collective values are real numbers. `ReduceOrder.eval` is
-generic in the carrier and requires only zero and addition.
+Arithmetic. Collective values are real numbers. No floating-point type and
+no rounding appears. `ReduceOrder.eval` is generic in the carrier and
+requires only zero and addition.
 
 Reduction order. A sum over ranks is the value of a `ReduceOrder`: a tree that
 fixes which operands are added and in what nesting. The specifications use no
@@ -94,28 +95,38 @@ def ReduceOrder.ofList {ι : Type} (operands : List ι) : ReduceOrder ι :=
 
 /-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
 Each member of `operands` occurs exactly once, and every leaf is a member. -/
-def ReduceOrder.CoversOn {ι : Type} [DecidableEq ι] (order : ReduceOrder ι)
+def ReduceOrder.CoversOn {ι : Type} (order : ReduceOrder ι)
     (operands : Finset ι) : Prop :=
-  order.leaves.Nodup ∧ order.leaves.toFinset = operands
+  order.leaves.Nodup ∧ ∀ q, q ∈ order.leaves ↔ q ∈ operands
 
+/-- Owner: S7.2 (`RankTensor.lean`). Convert the membership condition to
+finite set equality when the operand type has decidable equality. -/
+theorem ReduceOrder.coversOn_iff_toFinset {ι : Type} [DecidableEq ι] (order : ReduceOrder ι)
+    (operands : Finset ι) :
+    order.CoversOn operands ↔ order.leaves.Nodup ∧ order.leaves.toFinset = operands := by
+  simp [ReduceOrder.CoversOn, Finset.ext_iff]
+
+/-- Owner: S7.2 (`RankTensor.lean`). Decide coverage by testing the leaf list. -/
 instance ReduceOrder.CoversOn.decidable {ι : Type} [DecidableEq ι]
     (order : ReduceOrder ι) (operands : Finset ι) : Decidable (order.CoversOn operands) :=
-  inferInstanceAs (Decidable (order.leaves.Nodup ∧ order.leaves.toFinset = operands))
+  decidable_of_iff _ (order.coversOn_iff_toFinset operands).symm
 
 /-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
 Full coverage means coverage of the universal finite set. -/
-def ReduceOrder.Covers {ι : Type} [DecidableEq ι] [Fintype ι] (order : ReduceOrder ι) : Prop :=
+def ReduceOrder.Covers {ι : Type} [Fintype ι] (order : ReduceOrder ι) : Prop :=
   order.CoversOn Finset.univ
 
+/-- Owner: S7.2 (`RankTensor.lean`). Decide coverage of the universal set. -/
 instance ReduceOrder.Covers.decidable {ι : Type} [DecidableEq ι] [Fintype ι]
     (order : ReduceOrder ι) : Decidable order.Covers :=
   inferInstanceAs (Decidable (order.CoversOn Finset.univ))
 
-/-- For numbered ranks, full coverage is the original permutation condition. -/
+/-- Owner: S7.2 (`RankTensor.lean`). For numbered ranks, full coverage
+is the original permutation condition. -/
 theorem ReduceOrder.covers_iff_perm_finRange {n : Nat} (order : ReduceOrder (Fin n)) :
     order.Covers ↔ order.leaves.Perm (List.finRange n) := by
-  change (order.leaves.Nodup ∧ order.leaves.toFinset = Finset.univ) ↔
-    order.leaves.Perm (List.finRange n)
+  change order.CoversOn Finset.univ ↔ _
+  rw [ReduceOrder.coversOn_iff_toFinset]
   constructor
   · intro h
     exact List.perm_of_nodup_nodup_toFinset_eq h.1 (List.nodup_finRange n)
@@ -124,7 +135,8 @@ theorem ReduceOrder.covers_iff_perm_finRange {n : Nat} (order : ReduceOrder (Fin
     exact ⟨h.nodup_iff.mpr (List.nodup_finRange n),
       (List.toFinset_eq_of_perm _ _ h).trans (List.toFinset_finRange n)⟩
 
-/-- The left fold preserves the order and multiplicity of its operand list. -/
+/-- Owner: S7.2 (`RankTensor.lean`). The left fold preserves the order and
+multiplicity of its operand list. -/
 theorem ReduceOrder.leaves_ofList {ι : Type} (operands : List ι) :
     (ReduceOrder.ofList operands).leaves = operands := by
   suffices h : ∀ acc : ReduceOrder ι,
@@ -135,29 +147,33 @@ theorem ReduceOrder.leaves_ofList {ι : Type} (operands : List ι) :
   | nil => intro acc; simp
   | cons i rest ih => intro acc; simp [ih, ReduceOrder.leaves]
 
-/-- A duplicate-free list that enumerates the set gives a covering tree. -/
-theorem ReduceOrder.ofList_coversOn {ι : Type} [DecidableEq ι] {indices : List ι}
-    {operands : Finset ι} (hn : indices.Nodup) (hs : indices.toFinset = operands) :
+/-- Owner: S7.2 (`RankTensor.lean`). A duplicate-free list that enumerates
+the set gives a covering tree. -/
+theorem ReduceOrder.ofList_coversOn {ι : Type} {indices : List ι}
+    {operands : Finset ι} (hn : indices.Nodup) (hs : ∀ q, q ∈ indices ↔ q ∈ operands) :
     (ReduceOrder.ofList indices).CoversOn operands := by
   unfold ReduceOrder.CoversOn
   rw [ReduceOrder.leaves_ofList]
   exact ⟨hn, hs⟩
 
-/-- Every finite set admits a covering tree, including the empty set. -/
-theorem ReduceOrder.ofList_finset_coversOn {ι : Type} [DecidableEq ι] (operands : Finset ι) :
+/-- Owner: S7.2 (`RankTensor.lean`). Every finite set admits a covering
+tree, including the empty set. -/
+theorem ReduceOrder.ofList_finset_coversOn {ι : Type} (operands : Finset ι) :
     (ReduceOrder.ofList operands.toList).CoversOn operands :=
-  ReduceOrder.ofList_coversOn (Finset.nodup_toList operands) (Finset.toList_toFinset operands)
+  ReduceOrder.ofList_coversOn (Finset.nodup_toList operands) (fun _ => Finset.mem_toList)
 
 /-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
 A tree covering a finite set evaluates to the sum over that set. -/
-theorem ReduceOrder.eval_eq_sum_of_coversOn {ι α : Type} [DecidableEq ι] [AddCommMonoid α]
+theorem ReduceOrder.eval_eq_sum_of_coversOn {ι α : Type} [AddCommMonoid α]
     {order : ReduceOrder ι} {operands : Finset ι} (f : ι → α) (h : order.CoversOn operands) :
     order.eval f = ∑ q ∈ operands, f q := by
-  rw [order.eval_eq_sum_leaves, ← h.2, List.sum_toFinset f h.1]
+  classical
+  obtain ⟨hn, hs⟩ := (order.coversOn_iff_toFinset operands).mp h
+  rw [order.eval_eq_sum_leaves, ← hs, List.sum_toFinset f hn]
 
 /-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
 The subset sum theorem specializes to the sum over a finite index type. -/
-theorem ReduceOrder.eval_eq_sum_of_covers {ι α : Type} [DecidableEq ι] [Fintype ι] [AddCommMonoid α]
+theorem ReduceOrder.eval_eq_sum_of_covers {ι α : Type} [Fintype ι] [AddCommMonoid α]
     {order : ReduceOrder ι} (f : ι → α) (h : order.Covers) :
     order.eval f = ∑ q, f q :=
   ReduceOrder.eval_eq_sum_of_coversOn f (show order.CoversOn Finset.univ from h)
@@ -175,6 +191,11 @@ example : (ReduceOrder.add (.input (1 : Fin 2)) (.input 0)).Covers := by decide
 example : ¬ (ReduceOrder.input (0 : Fin 2)).Covers := by decide
 
 example : ¬ (ReduceOrder.add (.input (0 : Fin 2)) (.input 0)).Covers := by decide
+
+/-- A proof using classical equality can supply coverage to a concrete caller. -/
+example (order : ReduceOrder (Fin 2)) (f : Fin 2 → Nat)
+    (h : by classical exact order.Covers) : order.eval f = ∑ q, f q :=
+  ReduceOrder.eval_eq_sum_of_covers f h
 
 example (numRanks : Nat) : (ReduceOrder.ofList (List.finRange numRanks)).Covers := by
   rw [ReduceOrder.covers_iff_perm_finRange, ReduceOrder.leaves_ofList]
