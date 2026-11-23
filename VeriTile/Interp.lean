@@ -11,6 +11,7 @@ This target contains no `sorry` and imports nothing from `VeriTile/Staging/`.
 import VeriTile.Interp.Adequacy.EvalOp
 import VeriTile.Interp.Adequacy.State
 import VeriTile.Interp.Algebra
+import VeriTile.Interp.Array.Exec
 import VeriTile.Interp.Bridge.EvalOp
 import VeriTile.Interp.Bridge.Exec
 import VeriTile.Interp.Bridge.Invariant
