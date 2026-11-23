@@ -3,6 +3,38 @@ import VeriTile.Dist.Frontend.TritonExt.Range
 namespace VeriTile.Tests.Dist.TritonExtParsing
 open VeriTile Triton
 
+-- Importing the adapter must leave upstream tokens and identifiers unchanged.
+run_cmd do
+  let tokens := Lean.Parser.getTokenTable (← Lean.getEnv)
+  for token in ["step=", "loop_unroll_factor=", "pass", "tl.range(", ".sum("] do
+    if (tokens.find? token).isSome then
+      throwError "adapter token leaked before opening its scope: {token}"
+
+private def stepFn : StatementJitFunction := triton_function (x, step) constexpr_args [] {
+  total = x + step
+  return total
+}
+private def stepSignature : CallSignature where
+  scalars := [("a", .fp32), ("b", .fp32)]
+example : (with_triton_call stepSignature call_args [] jit_functions [h := stepFn] in triton {
+  c = h(a, step=b)
+} : ComputeKernel) = with_triton_call stepSignature call_args [] jit_functions [h := stepFn] in triton {
+  c = h(a, b)
+} := rfl
+
+example : ComputeKernel := triton {
+  step=1
+  x = step + 1
+}
+example : ComputeKernel := triton {
+  pass = 1
+  x = pass + 1
+}
+private def pass : Nat := 1
+example : pass = 1 := rfl
+
+open VeriTile.Dist.Frontend.TritonExt
+
 def rangeTest : ComputeKernel := triton {
   for i in tl.range(1, 4, 1) {
     x = i + 1
@@ -159,32 +191,34 @@ example : (triton {
   for i in tl.range(4) { pass }
 } : ComputeKernel) = triton { for i in range(4) { } } := rfl
 
-example : (triton {
-  v = tl.full([4], 1.0)
-  x = v.sum(axis=0)
-} : ComputeKernel) = triton {
+-- Unsupported constructs must fail during parsing, even with the scope open.
+private def rejectBody (body : String) : Lean.Elab.Command.CommandElabM Unit := do
+  match Lean.Parser.runParserCategory (← Lean.getEnv) `term ("triton { " ++ body ++ " }") with
+  | .error _ => throwError "unsupported syntax (parse failure)"
+  | .ok _ => pure ()
+
+/-- error: unsupported syntax (parse failure) -/
+#guard_msgs in
+run_cmd rejectBody "x = v.sum(axis=0)"
+
+-- The free-function sum remains the upstream operation.
+example : ComputeKernel := triton {
   v = tl.full([4], 1.0)
   x = tl.sum(v, axis=0)
-} := rfl
+}
 
--- Real Python source spelling, including the receiver that Lean lexes as a
--- dotted identifier, must work through call-source normalization as well.
-example : (with_triton_call ({} : CallSignature) call_args [] in triton {
-  v = tl.full([4], 1.0)
-  pass
-  x = v.sum(axis=0)
-} : ComputeKernel) = with_triton_call ({} : CallSignature) call_args [] in triton {
-  v = tl.full([4], 1.0)
-  x = tl.sum(v, axis=0)
-} := rfl
+-- Distributed SIMT-region semantics are tracked by #79 (the #78 subset);
+-- the current main has no such lowering, so preserve rejection at both entries.
+/-- error: unsupported syntax (parse failure) -/
+#guard_msgs in
+run_cmd rejectBody "with dl.simt_exec_region() as (thread_idx, block_size) { x = 1 }"
 
-example : (triton {
-  v = tl.full([4], 1.0)
-  x = (v + v).sum(axis=0)
-} : ComputeKernel) = triton {
-  v = tl.full([4], 1.0)
-  x = tl.sum((v + v), axis=0)
-} := rfl
+/-- error: unsupported compound statement in Triton body -/
+#guard_msgs in
+example : ComputeKernel := with_triton_signature ({} : CallSignature) in triton {
+  with dl.simt_exec_region() as (thread_idx, block_size):
+    x = 1
+}
 
 example (N : Nat) : (with_triton_signature profile in triton {
   i = 0
