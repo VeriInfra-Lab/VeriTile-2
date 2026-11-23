@@ -44,6 +44,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.InterpSymbolic"
              "lake env lean tests/lean/InterpSymbolic.lean"
              "lake build tests.lean.InterpArraySmoke"
+             "lake build tests.lean.dist.TritonExtParsing"
              "lake build tests.lean.dist.TensorDescriptorSource"
              "lake build tests.lean.dist.SourceHelperSyntax"
              "lake build tests.lean.InterpBridgeInvariant"
