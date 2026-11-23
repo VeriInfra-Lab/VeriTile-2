@@ -16,15 +16,16 @@ The location model (`VeriTile/Staging/Dist/LocationSpec.lean`, ticket S1.1)
 keeps `Rank := Nat`. The bridge between the two is `Fin.val`. This file does
 not import the location model.
 
-Arithmetic. Every value is a real number. No floating-point type and no
-rounding appears. Only `ReduceOrder.eval` is generic: it takes any carrier
-with a zero and an addition, and every definition here calls it at `ℝ`.
+Arithmetic. Collective values are real numbers. `ReduceOrder.eval` is
+generic in the carrier and requires only zero and addition.
 
 Reduction order. A sum over ranks is the value of a `ReduceOrder`: a tree that
 fixes which operands are added and in what nesting. The specifications use no
-associativity or commutativity. The unsigned coverage contract
-`ReduceOrder.Covers` requires each rank to appear exactly once. The
-full-sum lemmas use this contract and the laws of addition.
+associativity or commutativity; `allReduce_eq_of_leaves_perm` is the only
+statement that relates two orders, and it is a statement over `ℝ`. The
+unsigned `ReduceOrder.CoversOn` contract requires exactly one leaf per
+operand in a specified finite set. `ReduceOrder.Covers` specializes it to
+the whole index type. The collective sum lemmas use these contracts over `ℝ`.
 
 MoE source. The MoE declarations follow the deduplicated layout
 (`do_expand=False`) of the DeepEP port in TileScale, branch
@@ -91,43 +92,113 @@ open scoped BigOperators
 def ReduceOrder.ofList {ι : Type} (operands : List ι) : ReduceOrder ι :=
   operands.foldl (fun order i => .add order (.input i)) .zero
 
-/-- UNSIGNED (#66). A reduction tree covers the ranks if each rank occurs
-exactly once among its leaves, in any order. -/
-def ReduceOrder.Covers {numRanks : Nat} (order : ReduceOrder (Fin numRanks)) : Prop :=
-  order.leaves.Perm (List.finRange numRanks)
+/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+Each member of `operands` occurs exactly once, and every leaf is a member. -/
+def ReduceOrder.CoversOn {ι : Type} [DecidableEq ι] (order : ReduceOrder ι)
+    (operands : Finset ι) : Prop :=
+  order.leaves.Nodup ∧ order.leaves.toFinset = operands
 
-/-- UNSIGNED (#66). A covering tree evaluates to the sum of the contribution
-from every rank in a commutative additive monoid. -/
-theorem ReduceOrder.eval_eq_sum_of_covers {numRanks : Nat} {α : Type} [AddCommMonoid α]
-    {order : ReduceOrder (Fin numRanks)} (f : Fin numRanks → α) (h : order.Covers) :
-    order.eval f = ∑ q, f q := by
-  change order.leaves.Perm (List.finRange numRanks) at h
-  calc
-    order.eval f = ((List.finRange numRanks).map f).sum := by
-      rw [order.eval_eq_sum_leaves]
-      exact (h.map f).sum_eq
-    _ = ∑ q, f q := by
-      rw [← List.sum_toFinset f (List.nodup_finRange _), List.toFinset_finRange]
+instance ReduceOrder.CoversOn.decidable {ι : Type} [DecidableEq ι]
+    (order : ReduceOrder ι) (operands : Finset ι) : Decidable (order.CoversOn operands) :=
+  inferInstanceAs (Decidable (order.leaves.Nodup ∧ order.leaves.toFinset = operands))
 
-/-- UNSIGNED (#66). A covered output cell contains the sum over all ranks. -/
+/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+Full coverage means coverage of the universal finite set. -/
+def ReduceOrder.Covers {ι : Type} [DecidableEq ι] [Fintype ι] (order : ReduceOrder ι) : Prop :=
+  order.CoversOn Finset.univ
+
+instance ReduceOrder.Covers.decidable {ι : Type} [DecidableEq ι] [Fintype ι]
+    (order : ReduceOrder ι) : Decidable order.Covers :=
+  inferInstanceAs (Decidable (order.CoversOn Finset.univ))
+
+/-- For numbered ranks, full coverage is the original permutation condition. -/
+theorem ReduceOrder.covers_iff_perm_finRange {n : Nat} (order : ReduceOrder (Fin n)) :
+    order.Covers ↔ order.leaves.Perm (List.finRange n) := by
+  change (order.leaves.Nodup ∧ order.leaves.toFinset = Finset.univ) ↔
+    order.leaves.Perm (List.finRange n)
+  constructor
+  · intro h
+    exact List.perm_of_nodup_nodup_toFinset_eq h.1 (List.nodup_finRange n)
+      (h.2.trans (List.toFinset_finRange n).symm)
+  · intro h
+    exact ⟨h.nodup_iff.mpr (List.nodup_finRange n),
+      (List.toFinset_eq_of_perm _ _ h).trans (List.toFinset_finRange n)⟩
+
+/-- The left fold preserves the order and multiplicity of its operand list. -/
+theorem ReduceOrder.leaves_ofList {ι : Type} (operands : List ι) :
+    (ReduceOrder.ofList operands).leaves = operands := by
+  suffices h : ∀ acc : ReduceOrder ι,
+      (operands.foldl (fun order i => ReduceOrder.add order (.input i)) acc).leaves =
+        acc.leaves ++ operands by
+    simpa [ReduceOrder.ofList, ReduceOrder.leaves] using h .zero
+  induction operands with
+  | nil => intro acc; simp
+  | cons i rest ih => intro acc; simp [ih, ReduceOrder.leaves]
+
+/-- A duplicate-free list that enumerates the set gives a covering tree. -/
+theorem ReduceOrder.ofList_coversOn {ι : Type} [DecidableEq ι] {indices : List ι}
+    {operands : Finset ι} (hn : indices.Nodup) (hs : indices.toFinset = operands) :
+    (ReduceOrder.ofList indices).CoversOn operands := by
+  unfold ReduceOrder.CoversOn
+  rw [ReduceOrder.leaves_ofList]
+  exact ⟨hn, hs⟩
+
+/-- Every finite set admits a covering tree, including the empty set. -/
+theorem ReduceOrder.ofList_finset_coversOn {ι : Type} [DecidableEq ι] (operands : Finset ι) :
+    (ReduceOrder.ofList operands.toList).CoversOn operands :=
+  ReduceOrder.ofList_coversOn (Finset.nodup_toList operands) (Finset.toList_toFinset operands)
+
+/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+A tree covering a finite set evaluates to the sum over that set. -/
+theorem ReduceOrder.eval_eq_sum_of_coversOn {ι α : Type} [DecidableEq ι] [AddCommMonoid α]
+    {order : ReduceOrder ι} {operands : Finset ι} (f : ι → α) (h : order.CoversOn operands) :
+    order.eval f = ∑ q ∈ operands, f q := by
+  rw [order.eval_eq_sum_leaves, ← h.2, List.sum_toFinset f h.1]
+
+/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+The subset sum theorem specializes to the sum over a finite index type. -/
+theorem ReduceOrder.eval_eq_sum_of_covers {ι α : Type} [DecidableEq ι] [Fintype ι] [AddCommMonoid α]
+    {order : ReduceOrder ι} (f : ι → α) (h : order.Covers) :
+    order.eval f = ∑ q, f q :=
+  ReduceOrder.eval_eq_sum_of_coversOn f (show order.CoversOn Finset.univ from h)
+
+/-- UNSIGNED (#66). Owner: S7.3 (`AllReduce.lean`).
+A covered output cell contains the sum over all ranks. -/
 theorem allReduce_eq_sum_of_covers {numRanks : Nat} {ι : Type}
     (order : Fin numRanks → ι → ReduceOrder (Fin numRanks)) (x : RankTensor numRanks ι)
     (r : Fin numRanks) (i : ι) (h : (order r i).Covers) :
     allReduce order x r i = ∑ q, x q i :=
   ReduceOrder.eval_eq_sum_of_covers (fun q => x q i) h
 
--- Reordering the leaves is allowed. Omitting a rank or repeating a rank is not.
-example : (ReduceOrder.add (.input (1 : Fin 2)) (.input 0)).Covers := by
-  unfold ReduceOrder.Covers
-  decide
+example : (ReduceOrder.add (.input (1 : Fin 2)) (.input 0)).Covers := by decide
 
-example : ¬ (ReduceOrder.input (0 : Fin 2)).Covers := by
-  unfold ReduceOrder.Covers
-  decide
+example : ¬ (ReduceOrder.input (0 : Fin 2)).Covers := by decide
 
-example : ¬ (ReduceOrder.add (.input (0 : Fin 2)) (.input 0)).Covers := by
-  unfold ReduceOrder.Covers
-  decide
+example : ¬ (ReduceOrder.add (.input (0 : Fin 2)) (.input 0)).Covers := by decide
+
+example (numRanks : Nat) : (ReduceOrder.ofList (List.finRange numRanks)).Covers := by
+  rw [ReduceOrder.covers_iff_perm_finRange, ReduceOrder.leaves_ofList]
+
+/-- Subset evaluation works even when the index type is infinite. -/
+example (f : Nat → Nat) :
+    (ReduceOrder.add (.input 3) (.input 1)).eval f = ∑ q ∈ ({1, 3} : Finset Nat), f q :=
+  ReduceOrder.eval_eq_sum_of_coversOn f (by decide)
+
+example : (ReduceOrder.zero : ReduceOrder Nat).CoversOn ∅ := by decide
+
+example : ¬ (ReduceOrder.input (2 : Nat)).CoversOn {1} := by decide
+
+example : ¬ (ReduceOrder.add (.input (1 : Nat)) (.input 1)).CoversOn {1} := by decide
+
+/-- Omitting rank 1 changes the sum on two inputs of 1. -/
+example : allReduce (numRanks := 2) (ι := Unit) (fun _ _ => .input 0) (fun _ _ => 1) 0 () ≠
+    ∑ _q : Fin 2, (1 : ℝ) := by
+  norm_num [allReduce, ReduceOrder.eval]
+
+/-- Repeating rank 0 changes the sum even when the tree has two leaves. -/
+example : allReduce (numRanks := 2) (ι := Unit) (fun _ _ => .add (.input 0) (.input 0))
+    (fun q _ => if q = 0 then 1 else 0) 0 () ≠ ∑ q : Fin 2, (if q = 0 then (1 : ℝ) else 0) := by
+  norm_num [allReduce, ReduceOrder.eval]
 
 /-! ## Allgather and reduce-scatter (S7.2) -/
 
@@ -140,7 +211,8 @@ noncomputable def reduceScatter {numRanks n : Nat} {ι : Type}
     RankTensor numRanks (Fin n × ι) :=
   fun r i => (order r i).eval fun q => x q (finProdFinEquiv (r, i.1), i.2)
 
-/-- UNSIGNED (#66). With coverage, destination `r` receives its row chunk
+/-- UNSIGNED (#66). Owner: S7.2 (`ReduceScatter.lean`).
+With coverage, destination `r` receives its row chunk
 of the sum across all source ranks. -/
 theorem reduceScatter_eq_sum_of_covers {numRanks n : Nat} {ι : Type}
     (order : Fin numRanks → Fin n × ι → ReduceOrder (Fin numRanks))
@@ -234,7 +306,8 @@ theorem gemmReduceScatter_apply {numRanks m K N : Nat}
   funext q
   exact gemm_apply (A q) (B q) (finProdFinEquiv (r, i)) j
 
-/-- UNSIGNED (#66). With coverage, a destination cell sums the corresponding
+/-- UNSIGNED (#66). Owner: S7.2 (`ReduceScatter.lean`).
+With coverage, a destination cell sums the corresponding
 local matrix product cell from every source rank. -/
 theorem gemmReduceScatter_eq_sum_of_covers {numRanks m K N : Nat}
     (order : Fin numRanks → TileIndex [m, N] → ReduceOrder (Fin numRanks))
@@ -340,6 +413,14 @@ noncomputable def moeCombine {numRanks numTokens : Nat} {ι : Type}
     (back : Fin numRanks → RankTensor numRanks (Fin numTokens × ι)) :
     RankTensor numRanks (Fin numTokens × ι) :=
   fun s i => (order s i.1).eval fun d => back s d i
+
+/-- The generic theorem can use the destination set of a token directly. -/
+example {numRanks numTokens : Nat} {ι : Type} (R : MoERouting numRanks numTokens)
+    (order : Fin numRanks → Fin numTokens → ReduceOrder (Fin numRanks))
+    (back : Fin numRanks → RankTensor numRanks (Fin numTokens × ι))
+    (s : Fin numRanks) (t : Fin numTokens) (j : ι) (h : (order s t).CoversOn (R.dest s t)) :
+    moeCombine order back s (t, j) = ∑ d ∈ R.dest s t, back s d (t, j) :=
+  ReduceOrder.eval_eq_sum_of_coversOn (fun d => back s d (t, j)) h
 
 /-- Owner: S7.5. With identity experts, combine after dispatch gives
 each token times its weights, added in the order of the combine, for every row
