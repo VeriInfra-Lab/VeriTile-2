@@ -69,7 +69,8 @@ theorem allGatherGemm_eq {numRanks m K N : Nat}
     (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N]))
     (r : Fin numRanks) : allGatherGemm A B r = gemm (allGather A r) (B r) := rfl
 
-/-- The row gathered from rank `q` is multiplied by the destination's `B`. -/
+/-- Signed (#66). The row gathered from rank `q` is multiplied by the
+destination's `B`. -/
 theorem allGatherGemm_apply {numRanks m K N : Nat}
     (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N]))
     (r q : Fin numRanks) (i : Fin m) (j : Fin N) :
