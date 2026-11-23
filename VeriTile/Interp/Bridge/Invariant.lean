@@ -165,7 +165,7 @@ theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : Fi
   | nat | bool | int => trivial
   | literal => rw [Structural.evalOp_unfold] at h; cases h; exact ⟨_, rfl⟩
   | reg _ _ _ hn => rw [Structural.evalOp_unfold] at h; exact hs.registers _ _ _ _ hn h _
-  | broadcast _ _ ih | full _ _ ih =>
+  | broadcast _ _ ih | «full» _ _ ih =>
     rw [Structural.evalOp_unfold] at h
     obtain ⟨a, ha, ht⟩ := Option.bind_eq_some_iff.mp h
     cases ht
