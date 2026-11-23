@@ -6,7 +6,7 @@
 # sha256:    fingerprint of the elaborated statement; write - and run --fill at sign-off
 # signed:    date, ticket and who signed
 statement	module	sha256	signed
-VeriTile.Interp.interp_eq_structural_exec	VeriTile.Staging.Interp.Adequacy	17e5f6bbc4953b93ccd8b7225291b75002eeb7ce4ca7e1cb639aeecf6e61eee5	2026-11-11, I0.1 (#103), recorded by the agent on the user's delegation
+VeriTile.Interp.interp_eq_structural_exec	VeriTile.Interp.Adequacy.Exec	17e5f6bbc4953b93ccd8b7225291b75002eeb7ce4ca7e1cb639aeecf6e61eee5	2026-11-11, I0.1 (#103), recorded by the agent on the user's delegation
 VeriTile.Interp.bridge_exec	VeriTile.Interp.Bridge.Exec	a7e31bbed47a4e052658999d63e131bf329511aba107d9126e84da3c5d5e6e50	2026-11-12, I4.1 (#114), re-signed over WithBot ℝ on the user's decision, recorded by the agent on the user's delegation
 VeriTile.Dist.Space.live_of_lifetime_kernel	VeriTile.Dist.Space	114f5115db01b6c27900c279d12b12a0c61d3c212e1976bfd96160a42d3d6c86	2026-11-11, S1.1 (#30), recorded by the agent on the user's delegation
 VeriTile.Dist.Space.not_live_of_cta_ended	VeriTile.Dist.Space	45fdf4c8021fc302dfac7d05a8c2c88ecc0b66f0e841759bcac904feeee0dd0c	2026-11-11, S1.1 (#30), recorded by the agent on the user's delegation
