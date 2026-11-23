@@ -49,6 +49,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TensorDescriptorSource"
              "lake build tests.lean.dist.SourceHelperSyntax"
              "lake build tests.lean.InterpBridgeInvariant"
+             "lake build tests.lean.InterpFPValue"
              "lake build tests.lean.dist.SwizzleSource"
              "lake build tests.lean.dist.TritonExtConstexpr"
              "lake build tests.lean.dist.TritonExtProfiler")
