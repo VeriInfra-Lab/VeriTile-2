@@ -516,6 +516,7 @@ globs = [
   "tests.lean.dist.TritonExtProfiler",
   "tests.lean.InterpReflectBench",
   "tests.lean.dist.TritonExtParsing",
+  "tests.lean.dist.TensorDescriptorSource",
   "tests.lean.dist.SourceHelperSyntax",
 ]
 
