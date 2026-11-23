@@ -12,4 +12,5 @@ import VeriTile.Dist.Space
 import VeriTile.Dist.Agent
 import VeriTile.Dist.Access
 import VeriTile.Dist.SymmHeap
-import VeriTile.Dist.Frontend.TritonExt.TensorDescriptor
+import VeriTile.Dist.Spec.AllReduce
+import VeriTile.Dist.Spec.AllGather
