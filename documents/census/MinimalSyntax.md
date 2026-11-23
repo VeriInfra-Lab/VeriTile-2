@@ -243,7 +243,7 @@ two DeepEP branches depend on the choice of the DeepEP source.
 
 | repository | commit | files scanned |
 | --- | --- | --- |
-| https://github.com/ByteDance-Seed/Triton-distributed | `7908e4ea9010bb2238f9f05b28c904fd4b71c60a` | 24 |
+| https://github.com/ByteDance-Seed/Triton-distributed | `7908e4ea9010bb2238f9f05b28c904fd4b71c60a` | 18 |
 | https://github.com/VeriInfra-Lab/VeriTile | `3a0d07615a31b28e46ceff9660ce44351c425a73` | 10 |
 | https://github.com/karpathy/nanoGPT | `3adf61e154c3fe3fca428ad6bc3818b27a3b8291` | 2 |
 | https://github.com/tile-ai/tilelang | `35850c06875bcc84751417982bf7b4d662bafdbc` | 5 |
@@ -528,7 +528,7 @@ two DeepEP branches depend on the choice of the DeepEP source.
 
 ## Triton-distributed
 
-119 kernels in 24 files.
+78 kernels in 18 files.
 
 ### Triton-distributed: kernels
 
@@ -573,228 +573,157 @@ two DeepEP branches depend on the choice of the DeepEP source.
 | 37 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/common_ops.py` | `bisect_left_kernel` | 302 |
 | 38 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/common_ops.py` | `bisect_right_kernel` | 323 |
 | 39 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/common_ops.py` | `bisect_right_kernel_aligned` | 340 |
-| 40 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a.py` | `kernel_dispatch_token` | 79 |
-| 41 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a.py` | `kernel_combine_token` | 214 |
-| 42 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a.py` | `copy_1d_tilewise_kernel` | 329 |
-| 43 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a.py` | `kernel_get_ag_splits_and_recv_offset` | 382 |
-| 44 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a.py` | `kernel_bincount` | 582 |
-| 45 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a.py` | `kernel_get_dispatch_send_reqs` | 605 |
-| 46 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a_intra_node.py` | `kernel_dispatch_token_intra_node` | 39 |
-| 47 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a_intra_node.py` | `kernel_skipped_token_local_dispatch_intra_node` | 129 |
-| 48 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a_intra_node.py` | `kernel_skipped_token_inplace_local_combine_intra_node` | 174 |
-| 49 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a_intra_node.py` | `kernel_combine_token_intra_node` | 219 |
-| 50 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_a2a_intra_node.py` | `kernel_get_ag_splits_and_recv_offset_intra_node` | 293 |
-| 51 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_dispatch_token_intra_node` | 73 |
-| 52 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_dispatch_token_intra_node_two_stage` | 168 |
-| 53 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_gather_combine_token_intra_node` | 308 |
-| 54 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_scatter_token_intra_node` | 406 |
-| 55 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_topk_reduce_token_intra_node` | 485 |
-| 56 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `dot_k_const` | 561 |
-| 57 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_moe_grouped_gemm_nk_const` | 599 |
-| 58 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `transposed_dot` | 722 |
-| 59 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `tile_kernel_transposed_moe_grouped_gemm_nk_const` | 750 |
-| 60 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `mega_kernel_dispatch_token_moe_grouped_gemm` | 839 |
-| 61 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `mega_kernel_moe_grouped_gemm_combine_token` | 1020 |
-| 62 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `mega_kernel_moe_grouped_gemm_combine_token_transposed_grouped_gemm` | 1288 |
-| 63 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/ep_all2all_fused.py` | `kernel_get_ag_splits_and_recv_offset` | 1641 |
-| 64 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_all_to_all.py` | `all_to_all_kernel` | 36 |
-| 65 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_all_to_all_v2.py` | `dispatch_postprocess_kernel_v2_for_expert` | 60 |
-| 66 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_all_to_all_v2.py` | `dispatch_kernel_v2` | 156 |
-| 67 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_all_to_all_v2.py` | `combine_kernel_v2` | 360 |
-| 68 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_pull_kernel` | 48 |
-| 69 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_numa_2d_kernel` | 74 |
-| 70 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_numa_2d_ll_kernel` | 135 |
-| 71 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_numa_2d_ll_multinode_kernel` | 217 |
-| 72 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_2d_kernel` | 345 |
-| 73 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_3d_kernel` | 400 |
-| 74 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_recv_ll_block` | 531 |
-| 75 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_pack_ll_block` | 549 |
-| 76 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_recv_ll_and_multimem_st_block` | 570 |
-| 77 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_recv_ll_and_multimem_st_ll_block` | 589 |
-| 78 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `broadcast_naive_block` | 609 |
-| 79 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_2d_ll_multimem_kernel` | 623 |
-| 80 | K-D | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/low_latency_allgather.py` | `_forward_push_2d_ll_kernel` | 700 |
-| 81 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `swizzle_2d_by_group_n` | 47 |
-| 82 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_grouped_gemm_kernel` | 60 |
-| 83 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_grouped_gemm_persistent_kernel` | 130 |
-| 84 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_gather_ar_grouped_gemm_kernel` | 323 |
-| 85 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_gather_ar_grouped_gemm_persistent_kernel` | 405 |
-| 86 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `reduce_topk_allreduce_kernel` | 563 |
-| 87 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `swizzle_2d_by_group_n` | 124 |
-| 88 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_gather_rs_grouped_gemm_kernel` | 168 |
-| 89 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_gather_rs_grouped_gemm_persistent_kernel` | 250 |
-| 90 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_grouped_gemm_kernel` | 331 |
-| 91 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_grouped_gemm_persistent_kernel` | 401 |
-| 92 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `reduce_topk_reduce_scatter_a2a_intra_node_kernel` | 549 |
-| 93 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `reduce_topk_reduce_scatter_ring_intra_node_kernel` | 623 |
-| 94 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_set_signal` | 33 |
-| 95 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_wait_signal` | 47 |
-| 96 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_copy_kernel` | 66 |
-| 97 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_put_kernel` | 89 |
-| 98 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_copy_remote_to_local_kernel` | 119 |
-| 99 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `add_continuous_kernel` | 182 |
-| 100 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `copy_continuous_kernel` | 195 |
-| 101 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `reduce_scatter_ring_push_1d_intra_node_kernel` | 285 |
-| 102 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `reduce_scatter_ring_push_1d_intra_node_rma_kernel` | 380 |
-| 103 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `kernel_inter_node_p2p_for_same_local_rank` | 472 |
-| 104 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `kernel_ring_reduce_non_tma` | 639 |
-| 105 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `kernel_ring_reduce_tma` | 666 |
-| 106 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/01-distributed-notify-wait.py` | `producer_consumer_kernel` | 64 |
-| 107 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/02-intra-node-allgather.py` | `nvshmem_device_producer_all_gather_2d_put_block_kernel` | 108 |
-| 108 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/03-inter-node-allgather.py` | `all_gather_push_1d_kernel` | 62 |
-| 109 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/03-inter-node-allgather.py` | `all_gather_push_2d_kernel` | 112 |
-| 110 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `ceil_div` | 78 |
-| 111 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `all_to_all_kernel` | 94 |
-| 112 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `calc_gather_index._kernel` | 296 |
-| 113 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `_quant_kernel` | 336 |
-| 114 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `_dequant_kernel` | 375 |
-| 115 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/05-intra-node-reduce-scatter.py` | `kernel_ring_reduce` | 64 |
-| 116 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/06-inter-node-reduce-scatter.py` | `kernel_inter_node_p2p_for_same_local_rank` | 234 |
-| 117 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/07-overlapping-allgather-gemm.py` | `kernel_consumer_gemm_persistent` | 78 |
-| 118 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/07-overlapping-allgather-gemm.py` | `nvshmem_device_producer_p2p_put_block_kernel` | 270 |
-| 119 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/08-overlapping-gemm-reduce-scatter.py` | `kernel_gemm_rs_producer_persistent` | 134 |
+| 40 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `swizzle_2d_by_group_n` | 47 |
+| 41 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_grouped_gemm_kernel` | 60 |
+| 42 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_grouped_gemm_persistent_kernel` | 130 |
+| 43 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_gather_ar_grouped_gemm_kernel` | 323 |
+| 44 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `moe_gather_ar_grouped_gemm_persistent_kernel` | 405 |
+| 45 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_ar.py` | `reduce_topk_allreduce_kernel` | 563 |
+| 46 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `swizzle_2d_by_group_n` | 124 |
+| 47 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_gather_rs_grouped_gemm_kernel` | 168 |
+| 48 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_gather_rs_grouped_gemm_persistent_kernel` | 250 |
+| 49 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_grouped_gemm_kernel` | 331 |
+| 50 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `moe_grouped_gemm_persistent_kernel` | 401 |
+| 51 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `reduce_topk_reduce_scatter_a2a_intra_node_kernel` | 549 |
+| 52 | K-M | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/moe_reduce_rs.py` | `reduce_topk_reduce_scatter_ring_intra_node_kernel` | 623 |
+| 53 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_set_signal` | 33 |
+| 54 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_wait_signal` | 47 |
+| 55 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_copy_kernel` | 66 |
+| 56 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_put_kernel` | 89 |
+| 57 | K-S | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/p2p.py` | `p2p_copy_remote_to_local_kernel` | 119 |
+| 58 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `add_continuous_kernel` | 182 |
+| 59 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `copy_continuous_kernel` | 195 |
+| 60 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `reduce_scatter_ring_push_1d_intra_node_kernel` | 285 |
+| 61 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `reduce_scatter_ring_push_1d_intra_node_rma_kernel` | 380 |
+| 62 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `kernel_inter_node_p2p_for_same_local_rank` | 472 |
+| 63 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `kernel_ring_reduce_non_tma` | 639 |
+| 64 | K-T | `Triton-distributed@7908e4ea9010` | `python/triton_dist/kernels/nvidia/reduce_scatter.py` | `kernel_ring_reduce_tma` | 666 |
+| 65 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/01-distributed-notify-wait.py` | `producer_consumer_kernel` | 64 |
+| 66 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/02-intra-node-allgather.py` | `nvshmem_device_producer_all_gather_2d_put_block_kernel` | 108 |
+| 67 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/03-inter-node-allgather.py` | `all_gather_push_1d_kernel` | 62 |
+| 68 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/03-inter-node-allgather.py` | `all_gather_push_2d_kernel` | 112 |
+| 69 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `ceil_div` | 78 |
+| 70 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `all_to_all_kernel` | 94 |
+| 71 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `calc_gather_index._kernel` | 296 |
+| 72 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `_quant_kernel` | 336 |
+| 73 | K-M, K-T | `Triton-distributed@7908e4ea9010` | `tutorials/04-deepseek-infer-all2all.py` | `_dequant_kernel` | 375 |
+| 74 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/05-intra-node-reduce-scatter.py` | `kernel_ring_reduce` | 64 |
+| 75 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/06-inter-node-reduce-scatter.py` | `kernel_inter_node_p2p_for_same_local_rank` | 234 |
+| 76 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/07-overlapping-allgather-gemm.py` | `kernel_consumer_gemm_persistent` | 78 |
+| 77 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/07-overlapping-allgather-gemm.py` | `nvshmem_device_producer_p2p_put_block_kernel` | 270 |
+| 78 | K-T | `Triton-distributed@7908e4ea9010` | `tutorials/08-overlapping-gemm-reduce-scatter.py` | `kernel_gemm_rs_producer_persistent` | 134 |
 
 ### Triton-distributed: calls
 
 | call | kernels | keywords seen | used by |
 | --- | --- | --- | --- |
-| `triton.language.program_id` | 82 | `axis` | 2-3, 6-7, 9-11, 13-24, 26-27, 30-31, 35, 40-50, 61-64, 66-73, 79-80, 82-86, 88-92, 94-102, 104-109, 111-115, 117-119 |
-| `range` | 80 | `step` | 2-11, 13-14, 16-20, 22-24, 40-63, 65-67, 70-71, 73-80, 82-86, 88-93, 98-102, 104-106, 115, 117-119 |
-| `triton.language.load` | 72 | `mask` `other` `volatile` | 2-3, 6-11, 13-18, 22-23, 36-43, 45-46, 49-67, 70-71, 73, 75, 79-80, 82-86, 88-92, 98-102, 104, 106, 111-114 |
-| `triton.language.arange` | 63 |  | 1-3, 7-11, 13-23, 41-43, 45, 50, 56-67, 70-71, 73, 75, 79-80, 82-86, 88-92, 98-102, 104, 106, 111-114 |
-| `triton.language.store` | 62 | `mask` | 3, 6-11, 13-23, 41-43, 45, 50, 56-67, 70-71, 73, 75, 79-80, 82-86, 88-92, 98-102, 104, 106, 111-114 |
-| `triton.language.cdiv` | 55 |  | 3-11, 13-17, 21-23, 45, 56-57, 59-62, 65-67, 70-71, 73, 75, 79-80, 82-86, 88-92, 96-102, 104-105, 115, 117, 119 |
-| `triton_dist.language.extra.cuda.language_extra.tid` | 50 | `axis` | 4-7, 9, 18-25, 27, 30-31, 35, 40-41, 43, 45-55, 57, 60-63, 66-74, 76-80 |
-| `triton.language.num_programs` | 46 | `axis` | 2, 6-7, 9-10, 13-14, 18-20, 22-24, 27, 30-31, 35, 40-50, 61-63, 66-67, 86, 92-93, 96-97, 99-102, 104-105, 115, 118 |
-| `.to` | 44 |  | 13-17, 27, 30-31, 35, 41, 45, 48-49, 51-62, 65-67, 82-85, 88-91, 96-98, 111, 113-114, 117, 119 |
-| `triton.language.cast` | 39 | `_semantic` `bitcast` `dtype` | 4-7, 9, 18-23, 27, 29-31, 35, 53-54, 61-62, 66, 68-80, 108-109, 111, 113-114 |
-| `triton_dist.language.extra.cuda.language_extra.__syncthreads` | 39 |  | 4-7, 9, 18-23, 27, 30-35, 40-41, 43, 45, 50, 52, 57, 60-63, 66-73, 79-80 |
-| `triton.language.pointer_type` | 32 |  | 22, 27, 29-31, 35, 53-54, 61-62, 65-66, 68-74, 76-80, 96-98, 108-109, 111, 113-114 |
-| `triton_dist.language.extra.cuda.language_extra.st` | 28 | `scope` `semantic` | 4-7, 9, 33-35, 40, 43, 45-47, 50-54, 57, 60-63, 66, 70-71, 73, 80 |
-| `triton.language.constexpr` | 26 |  | 6-7, 9, 19-24, 27, 29-31, 35, 40, 43, 46, 50, 63, 65-67, 102-103, 113, 116 |
-| `triton.language.static_assert` | 26 |  | 1-3, 20, 34-35, 43, 48-50, 53-55, 61-63, 65-67, 69-71, 82, 84, 88, 90 |
-| `triton_dist.language.rank` | 26 |  | 5-7, 9, 40-41, 43, 45-47, 49-55, 60-63, 66-67, 103, 116, 119 |
-| `triton_dist.language.symm_at` | 26 |  | 5-7, 9, 32-35, 41, 46, 49, 52-54, 60-63, 67, 86, 92-93, 95, 101-102, 106 |
-| `(local function: triton.jit)` | 25 | `BLOCK_M` `BLOCK_N` `BLOCK_SIZE` `MAJOR_ALIGN` `num_warps` `use_cooperative` | 2-3, 5-7, 9, 13-15, 27, 29-31, 35, 82-85, 88-91, 101-102, 111 |
-| `triton.language.zeros` | 24 | `dtype` | 13-17, 41, 56-62, 82-86, 88-91, 117, 119 |
-| `triton_dist.language.num_ranks` | 24 |  | 5-7, 9, 40-41, 43, 45-46, 50-53, 57, 60-63, 65-67, 103, 116, 119 |
-| `triton_dist.language.extra.cuda.language_extra.ld` | 23 | `scope` `semantic` | 4-7, 9, 33-35, 40-41, 43-52, 60, 63, 67 |
-| `triton.language.dot` | 22 |  | 13-17, 56-62, 82-85, 88-91, 117, 119 |
-| `triton_dist.language.extra.libshmem_device.signal_wait_until` | 22 |  | 18-23, 40, 64, 66-73, 80, 93, 95, 108-109, 111 |
-| `min` | 21 |  | 12-15, 45, 52, 57, 59-62, 67, 84-85, 88-89, 96-98, 117, 119 |
-| `triton.language.where` | 17 |  | 1-3, 10-11, 15, 27, 30-31, 35-39, 45, 117, 119 |
-| `triton_dist.kernels.nvidia.common_ops.barrier_on_this_grid` | 17 | `use_cooperative` | 6-7, 9-10, 19-24, 43, 50, 66-67, 86, 92, 102 |
-| `triton_dist.language.extra.libshmem_device.fence` | 16 |  | 9, 21, 40, 43, 51-52, 54, 60-64, 66-67, 106, 111 |
-| `(local function: triton_dist.jit)` | 15 | `BLOCK_SCALE` `BM` `BN` `ENABLE_PROFILING` `HIDDEN` `IS_DISPATCH_TWO_STAGET` `MAX_M` `META_BYTES` `MSG_SIZE` `NEED_NOTIFY` `NEED_WAIT` `NUM_EXPERTS_PER_RANK` `NUM_QUANT_GROUPS` `USE_BLOCK_WISE_BARRIER` `USE_QUANT` `extra_barrier` `has_input_off` `num_warps` `rank_in_row` | 6, 34-35, 43, 57, 59-62, 66, 70-71, 73, 79-80 |
-| `.record` | 15 | `is_start` `task_type` | 6-7, 9, 51-55, 57, 59-62, 66-67 |
-| `triton.language.inline_asm_elementwise` | 14 | `_semantic` `args` `asm` `constraints` `dtype` `is_pure` `pack` | 28-31, 35, 51-55, 60-62, 67 |
-| `triton_dist.language.extra.cuda.language_extra.ld_acquire` | 14 | `scope` | 9, 27, 30-31, 35, 41, 52-55, 57, 60-62 |
-| `triton_dist.language.extra.language_extra.__syncthreads` | 14 |  | 11, 13, 84-85, 88-89, 93-95, 101-102, 106, 108-109 |
-| `triton_dist.language.extra.language_extra.tid` | 13 | `axis` | 64, 84-85, 88-89, 93-95, 101-102, 108-109, 111 |
-| `triton_dist.language.extra.libshmem_device.putmem_signal_nbi_block` | 13 |  | 20-22, 43, 50, 63-64, 66, 72, 97, 102, 109, 111 |
-| `triton_dist.language.extra.libshmem_device.barrier_all_block` | 12 |  | 9-10, 19-22, 24, 43, 50, 63, 101-102 |
-| `triton_dist.language.extra.libshmem_device.signal_op` | 12 |  | 9, 18, 23, 40, 51, 60, 64, 67-68, 93-94, 111 |
-| `triton_dist.language.extra.libshmem_device.putmem_signal_block` | 11 |  | 19, 69-73, 80, 107-109, 118 |
-| `triton.language.full` | 10 | `dtype` | 36-39, 70-71, 73, 75, 79-80 |
-| `triton_dist.language.extra.cuda.language_extra.ntid` | 10 | `axis` | 22, 70-71, 73-74, 76-80 |
-| `(local function: triton.language.core.extern)` | 9 |  | 51-55, 60-62, 67 |
-| `triton.language.range` | 9 | `loop_unroll_factor` `step` | 15, 36-39, 86, 92-93, 111 |
-| `triton_dist.language.consume_token` | 9 |  | 13, 43, 50, 63, 86, 92-93, 106, 117 |
-| `triton_dist.language.simt_exec_region` | 9 |  | 5-7, 9, 32-35, 44 |
-| `triton_dist.language.wait` | 9 | `scope` `semantic` `waitValue` | 13, 43, 50, 63, 86, 92-93, 106, 117 |
-| `triton.language.atomic_add` | 8 | `mask` `scope` `sem` | 11, 41, 60-62, 65-66, 119 |
-| `triton.language.multiple_of` | 8 |  | 18, 41, 49, 86, 92-93, 101-102 |
-| `triton.language.sum` | 8 | `axis` | 1-3, 11, 43, 45, 50, 63 |
-| `triton_dist.language.extra.cuda.language_extra.atomic_add` | 8 | `scope` `semantic` | 27, 30-31, 35, 44, 51, 60, 63 |
-| `triton_dist.language.extra.cuda.language_extra.load_v4_u32` | 8 |  | 70-71, 73-74, 76-77, 79-80 |
-| `triton_dist.language.extra.libshmem_device.putmem_nbi_warp` | 8 |  | 40-41, 66-67, 71, 73, 79-80 |
-| `triton_dist.tools.profiler.Profiler.create` | 8 | `ENABLE_PROFILING` `group_id` `is_leader` `num_groups` `profiler_buffer` | 6-7, 9, 60-62, 66-67 |
-| `triton_dist.kernels.nvidia.common_ops.barrier_all_intra_node_atomic_cas_block` | 7 |  | 3, 5-7, 9, 23, 92 |
-| `triton_dist.language.extra.cuda.language_extra.ld_b32` | 7 |  | 40-41, 53-55, 61-62 |
-| `triton_dist.language.extra.language_extra.atomic_add` | 7 | `scope` `semantic` | 84-85, 88-89, 93, 101-102 |
-| `triton_dist.language.extra.libshmem_device.putmem_nbi_block` | 7 |  | 2, 9, 40, 43, 63-64, 111 |
-| `triton_dist.language.extra.libshmem_device.remote_mc_ptr` | 7 |  | 22-24, 76-79 |
-| `triton.language.cumsum` | 6 | `axis` | 2-3, 11, 43, 50, 63 |
-| `triton.language.interleave` | 6 |  | 70-71, 73, 75, 79-80 |
+| `triton.language.program_id` | 57 | `axis` | 2-3, 6-7, 9-11, 13-24, 26-27, 30-31, 35, 41-45, 47-51, 53-61, 63-68, 70-74, 76-78 |
+| `range` | 43 | `step` | 2-11, 13-14, 16-20, 22-24, 41-45, 47-52, 57-61, 63-65, 74, 76-78 |
+| `triton.language.load` | 41 | `mask` `other` | 2-3, 6-11, 13-18, 22-23, 36-39, 41-45, 47-51, 57-61, 63, 65, 70-73 |
+| `triton.language.arange` | 40 |  | 1-3, 7-11, 13-23, 41-45, 47-51, 57-61, 63, 65, 70-73 |
+| `triton.language.cdiv` | 39 |  | 3-11, 13-17, 21-23, 41-45, 47-51, 55-61, 63-64, 74, 76, 78 |
+| `triton.language.store` | 39 | `mask` | 3, 6-11, 13-23, 41-45, 47-51, 57-61, 63, 65, 70-73 |
+| `triton.language.num_programs` | 30 | `axis` | 2, 6-7, 9-10, 13-14, 18-20, 22-24, 27, 30-31, 35, 45, 51-52, 55-56, 58-61, 63-64, 74, 77 |
+| `(local function: triton.jit)` | 25 | `BLOCK_M` `BLOCK_N` `BLOCK_SIZE` `MAJOR_ALIGN` `num_warps` `use_cooperative` | 2-3, 5-7, 9, 13-15, 27, 29-31, 35, 41-44, 47-50, 60-61, 70 |
+| `.to` | 25 |  | 13-17, 27, 30-31, 35, 41-44, 47-50, 55-57, 70, 72-73, 76, 78 |
+| `triton.language.cast` | 21 | `bitcast` | 4-7, 9, 18-23, 27, 29-31, 35, 67-68, 70, 72-73 |
+| `triton.language.constexpr` | 18 |  | 6-7, 9, 19-24, 27, 29-31, 35, 61-62, 72, 75 |
+| `triton_dist.language.extra.cuda.language_extra.__syncthreads` | 18 |  | 4-7, 9, 18-23, 27, 30-35 |
+| `triton_dist.language.extra.cuda.language_extra.tid` | 17 | `axis` | 4-7, 9, 18-25, 27, 30-31, 35 |
+| `triton.language.where` | 16 |  | 1-3, 10-11, 15, 27, 30-31, 35-39, 76, 78 |
+| `triton.language.zeros` | 16 | `dtype` | 13-17, 41-45, 47-50, 76, 78 |
+| `triton.language.dot` | 15 |  | 13-17, 41-44, 47-50, 76, 78 |
+| `triton_dist.language.symm_at` | 15 |  | 5-7, 9, 32-35, 45, 51-52, 54, 60-61, 65 |
+| `triton.language.pointer_type` | 14 |  | 22, 27, 29-31, 35, 55-57, 67-68, 70, 72-73 |
+| `triton_dist.language.extra.language_extra.__syncthreads` | 14 |  | 11, 13, 43-44, 47-48, 52-54, 60-61, 65, 67-68 |
+| `min` | 13 |  | 12-15, 43-44, 47-48, 55-57, 76, 78 |
+| `triton_dist.kernels.nvidia.common_ops.barrier_on_this_grid` | 13 | `use_cooperative` | 6-7, 9-10, 19-24, 45, 51, 61 |
+| `triton_dist.language.extra.language_extra.tid` | 12 | `axis` | 43-44, 47-48, 52-54, 60-61, 67-68, 70 |
+| `triton_dist.language.extra.libshmem_device.signal_wait_until` | 11 |  | 18-23, 52, 54, 67-68, 70 |
+| `triton.language.static_assert` | 10 |  | 1-3, 20, 34-35, 41, 43, 47, 49 |
+| `triton.language.range` | 9 | `loop_unroll_factor` `step` | 15, 36-39, 45, 51-52, 70 |
+| `triton_dist.language.extra.libshmem_device.barrier_all_block` | 9 |  | 9-10, 19-22, 24, 60-61 |
+| `triton_dist.language.extra.cuda.language_extra.ld` | 8 | `scope` `semantic` | 4-7, 9, 33-35 |
+| `triton_dist.language.extra.cuda.language_extra.st` | 8 | `scope` `semantic` | 4-7, 9, 33-35 |
+| `triton_dist.language.simt_exec_region` | 8 |  | 5-7, 9, 32-35 |
+| `triton_dist.kernels.nvidia.common_ops.barrier_all_intra_node_atomic_cas_block` | 7 |  | 3, 5-7, 9, 23, 51 |
+| `triton_dist.language.extra.language_extra.atomic_add` | 7 | `scope` `semantic` | 43-44, 47-48, 52, 60-61 |
+| `triton_dist.language.extra.libshmem_device.putmem_signal_nbi_block` | 7 |  | 20-22, 56, 61, 68, 70 |
+| `triton_dist.language.num_ranks` | 7 |  | 5-7, 9, 62, 75, 78 |
+| `triton_dist.language.rank` | 7 |  | 5-7, 9, 62, 75, 78 |
 | `triton.language.minimum` | 6 |  | 4-7, 16-17 |
-| `triton.language.reshape` | 6 |  | 66, 111, 113-114, 117, 119 |
-| `triton_dist.language.extra.cuda.language_extra.atomic_add_per_warp` | 6 | `scope` `semantic` | 40, 46, 51-52, 60, 66 |
-| `triton_dist.language.extra.cuda.language_extra.multimem_st_b64` | 6 |  | 22, 24, 76-79 |
-| `triton_dist.language.extra.cuda.language_extra.st_v2_u32` | 6 |  | 70-71, 73-74, 79-80 |
-| `triton_dist.language.extra.libshmem_device.putmem_warp` | 6 |  | 40, 46-47, 51-52, 60 |
-| `.load` | 5 |  | 17, 105, 115, 117, 119 |
-| `.memory_ops.load_v4` | 5 |  | 53-55, 61-62 |
-| `.memory_ops.store_v4` | 5 |  | 53-55, 61-62 |
-| `triton.language.make_tensor_descriptor` | 5 | `block_shape` `shape` `strides` | 17, 105, 115, 117, 119 |
-| `triton.language.swizzle2d` | 5 |  | 57, 59-62 |
-| `triton_dist.language.extra.cuda.language_extra.membar` | 5 | `scope` | 7, 9, 40, 66-67 |
-| `triton_dist.language.extra.language_extra.st` | 5 | `scope` `semantic` | 86, 88-89, 101-102 |
-| `triton_dist.language.extra.language_extra.threads_per_warp` | 5 |  | 41, 46-49 |
-| `triton_dist.language.ld_vector` | 5 | `vec_size` | 41, 47-49, 67 |
-| `triton_dist.language.st_vector` | 5 |  | 41, 47-49, 67 |
-| `.memory_ops.pack_f32_bf16x2` | 4 |  | 53, 55, 61-62 |
-| `.memory_ops.unpack_bf16x2_f32` | 4 |  | 53, 55, 61-62 |
-| `.memory_ops.zero_vec_f32` | 4 |  | 53, 55, 61-62 |
-| `.store` | 4 |  | 105, 115, 117, 119 |
+| `triton.language.multiple_of` | 6 |  | 18, 45, 51-52, 60-61 |
+| `triton_dist.language.consume_token` | 6 |  | 13, 45, 51-52, 65, 76 |
+| `triton_dist.language.extra.libshmem_device.signal_op` | 6 |  | 9, 18, 23, 52-53, 70 |
+| `triton_dist.language.wait` | 6 | `scope` `semantic` `waitValue` | 13, 45, 51-52, 65, 76 |
+| `.load` | 5 |  | 17, 64, 74, 76, 78 |
+| `triton.language.inline_asm_elementwise` | 5 | `args` `asm` `constraints` `dtype` `is_pure` `pack` | 28-31, 35 |
+| `triton.language.make_tensor_descriptor` | 5 | `block_shape` `shape` `strides` | 17, 64, 74, 76, 78 |
+| `triton.language.reshape` | 5 |  | 70, 72-73, 76, 78 |
+| `triton_dist.language.extra.cuda.language_extra.ld_acquire` | 5 | `scope` | 9, 27, 30-31, 35 |
+| `triton_dist.language.extra.language_extra.st` | 5 | `scope` `semantic` | 45, 47-48, 60-61 |
+| `triton_dist.language.extra.libshmem_device.putmem_signal_block` | 5 |  | 19, 66-68, 77 |
+| `.store` | 4 |  | 64, 74, 76, 78 |
 | `len` | 4 |  | 1-3, 36 |
+| `triton.language.full` | 4 | `dtype` | 36-39 |
 | `triton.language.maximum` | 4 |  | 4-7 |
+| `triton.language.sum` | 4 | `axis` | 1-3, 11 |
 | `triton_dist.kernels.nvidia.gemm_rs_threadblock_swizzle.warp_prefix_sum_kernel` | 4 |  | 4-7 |
 | `triton_dist.language.extra.cuda.language_extra.__shfl_sync_i32` | 4 |  | 4-7 |
+| `triton_dist.language.extra.cuda.language_extra.atomic_add` | 4 | `scope` `semantic` | 27, 30-31, 35 |
 | `triton_dist.language.extra.cuda.language_extra.laneid` | 4 |  | 4-7 |
-| `triton_dist.language.extra.libshmem_device.getmem_block` | 4 |  | 9, 68, 96, 98 |
-| `.common_ops.barrier_on_this_grid` | 3 |  | 61-63 |
-| `triton.language.abs` | 3 |  | 66, 111, 113 |
-| `triton.language.extra.cuda.num_warps` | 3 |  | 43, 50, 63 |
-| `triton.language.extra.cuda.utils.num_warps` | 3 |  | 23-24, 67 |
-| `triton.language.max` | 3 | `keep_dims` | 66, 111, 113 |
-| `triton.language.static_range` | 3 |  | 111, 113-114 |
-| `triton_dist.kernels.common_ops.pack_b32_v2` | 3 |  | 76-77, 79 |
-| `triton_dist.language.extra.cuda.language_extra.load_v2_b64` | 3 |  | 22, 78-79 |
-| `triton_dist.language.extra.cuda.language_extra.pack_b32_v2` | 3 |  | 24, 65-66 |
-| `triton_dist.language.extra.language_extra.ld` | 3 | `scope` `semantic` | 86, 101-102 |
-| `triton_dist.language.extra.libshmem_device.putmem_block` | 3 |  | 70, 103, 116 |
-| `triton_dist.language.zeros_vector` | 3 |  | 41, 48-49 |
-| `.common_ops.barrier_all_intra_node_atomic_cas_block` | 2 |  | 61-62 |
-| `.memory_ops.copy_warp` | 2 |  | 52, 60 |
-| `triton.language.permute` | 2 |  | 117, 119 |
-| `triton.language.split` | 2 |  | 117, 119 |
+| `triton_dist.language.extra.libshmem_device.fence` | 4 |  | 9, 21, 65, 70 |
+| `(local function: triton_dist.jit)` | 3 | `extra_barrier` `has_input_off` `num_warps` `rank_in_row` | 6, 34-35 |
+| `.record` | 3 | `is_start` `task_type` | 6-7, 9 |
+| `triton.language.cumsum` | 3 | `axis` | 2-3, 11 |
+| `triton.language.static_range` | 3 |  | 70, 72-73 |
+| `triton_dist.language.extra.language_extra.ld` | 3 | `scope` `semantic` | 45, 60-61 |
+| `triton_dist.language.extra.libshmem_device.getmem_block` | 3 |  | 9, 55, 57 |
+| `triton_dist.language.extra.libshmem_device.putmem_nbi_block` | 3 |  | 2, 9, 70 |
+| `triton_dist.language.extra.libshmem_device.remote_mc_ptr` | 3 |  | 22-24 |
+| `triton_dist.tools.profiler.Profiler.create` | 3 | `ENABLE_PROFILING` `group_id` `is_leader` `num_groups` `profiler_buffer` | 6-7, 9 |
+| `triton.language.abs` | 2 |  | 70, 72 |
+| `triton.language.atomic_add` | 2 | `mask` `scope` `sem` | 11, 78 |
+| `triton.language.extra.cuda.utils.num_warps` | 2 |  | 23-24 |
+| `triton.language.max` | 2 | `keep_dims` | 70, 72 |
+| `triton.language.permute` | 2 |  | 76, 78 |
+| `triton.language.split` | 2 |  | 76, 78 |
 | `triton.language.trans` | 2 |  | 8-9 |
-| `triton.next_power_of_2` | 2 |  | 45, 67 |
 | `triton_dist.kernels.nvidia.common_ops.next_power_of_2` | 2 |  | 10-11 |
 | `triton_dist.kernels.nvidia.reduce_scatter.kernel_ring_reduce_non_tma` | 2 | `BLOCK_SIZE` | 19, 21 |
+| `triton_dist.language.extra.cuda.language_extra.membar` | 2 | `scope` | 7, 9 |
 | `triton_dist.language.extra.cuda.language_extra.multimem_ld_reduce_v4` | 2 |  | 23-24 |
-| `triton_dist.language.extra.language_extra.num_warps` | 2 |  | 40-41 |
+| `triton_dist.language.extra.cuda.language_extra.multimem_st_b64` | 2 |  | 22, 24 |
 | `triton_dist.language.extra.libshmem_device.getmem_nbi_block` | 2 |  | 6-7 |
-| `triton_dist.language.extra.libshmem_device.putmem_signal_nbi_warp` | 2 |  | 9, 73 |
-| `triton_dist.language.notify` | 2 | `comm_scope` `sig_op` `signal` | 106, 119 |
+| `triton_dist.language.extra.libshmem_device.putmem_block` | 2 |  | 62, 75 |
+| `triton_dist.language.notify` | 2 | `comm_scope` `sig_op` `signal` | 65, 78 |
 | `(local function: triton.constexpr_function)` | 1 |  | 36 |
 | `.bit_length` | 1 |  | 39 |
-| `.memory_ops.copy_1d_tilewise_kernel` | 1 |  | 63 |
-| `.sum` | 1 | `axis` | 67 |
 | `bin` | 1 |  | 36 |
-| `float` | 1 |  | 66 |
-| `triton.language.extra.cuda.num_threads` | 1 |  | 66 |
 | `triton_dist.kernels.nvidia.all_to_all_vdev_2d_offset.single_block_prefix_sum_kernel_scan_scan` | 1 | `MAJOR_ALIGN` `num_warps` | 9 |
 | `triton_dist.kernels.nvidia.common_ops.barrier_all_intra_node_non_atomic_block` | 1 |  | 23 |
-| `triton_dist.kernels.nvidia.moe_utils.reduce_topk_non_tma_kernel` | 1 |  | 93 |
+| `triton_dist.kernels.nvidia.moe_utils.reduce_topk_non_tma_kernel` | 1 |  | 52 |
 | `triton_dist.kernels.nvidia.reduce_scatter.copy_continuous_kernel` | 1 |  | 21 |
 | `triton_dist.kernels.nvidia.reduce_scatter.kernel_ring_reduce_tma` | 1 | `BLOCK_SIZE_M` `BLOCK_SIZE_N` | 20 |
 | `triton_dist.language.extra.cuda.language_extra.atomic_cas` | 1 |  | 32 |
+| `triton_dist.language.extra.cuda.language_extra.load_v2_b64` | 1 |  | 22 |
+| `triton_dist.language.extra.cuda.language_extra.ntid` | 1 | `axis` | 22 |
+| `triton_dist.language.extra.cuda.language_extra.pack_b32_v2` | 1 |  | 24 |
 | `triton_dist.language.extra.cuda.language_extra.st_v4_b32` | 1 |  | 23 |
 | `triton_dist.language.extra.cuda.libnvshmem_device.remote_ptr` | 1 |  | 18 |
-| `triton_dist.language.extra.libshmem_device.putmem_signal_warp` | 1 |  | 46 |
+| `triton_dist.language.extra.libshmem_device.putmem_signal_nbi_warp` | 1 |  | 9 |
 
 ### Triton-distributed: statements
 
 | statement | kernels | used by |
 | --- | --- | --- |
-| `Assign` | 116 | 2-27, 29-109, 111-119 |
-| `Expr` | 109 | 1-11, 13-24, 27, 30-35, 40-109, 111-119 |
-| `For` | 88 | 2-11, 13-20, 22-24, 36-63, 65-67, 70-71, 73-80, 82-86, 88-93, 98-102, 104-106, 111, 113-115, 117-119 |
-| `If` | 82 | 2-7, 9-10, 13-15, 18-24, 27, 30-35, 40-57, 59-73, 79-80, 82-86, 88-95, 101-102, 106-109, 111, 117, 119 |
-| `AugAssign` | 44 | 4-7, 13-15, 18, 21-24, 45, 48, 52-53, 55-62, 65-66, 82-86, 88-92, 104-105, 111, 113-115, 117, 119 |
-| `Return` | 43 | 1-3, 12-15, 25-31, 35-39, 51-55, 57, 59-62, 67, 81-85, 87-91, 102, 110-111 |
-| `AnnAssign` | 30 | 1-7, 10-11, 18, 39, 41, 43, 45, 47-50, 53-55, 61-63, 65-67, 111, 113-114 |
-| `While` | 29 | 7, 9, 27, 30-35, 41, 52-55, 57, 60-62, 70-71, 73-74, 76-77, 79-80, 86, 101-102 |
-| `Pass` | 15 | 9, 32-35, 41, 54, 57, 60-62, 86, 101-102, 106 |
-| `With` | 9 | 5-7, 9, 32-35, 44 |
+| `Assign` | 75 | 2-27, 29-68, 70-78 |
+| `Expr` | 68 | 1-11, 13-24, 27, 30-35, 40-68, 70-78 |
+| `For` | 51 | 2-11, 13-20, 22-24, 36-39, 41-45, 47-52, 57-61, 63-65, 70, 72-74, 76-78 |
+| `If` | 47 | 2-7, 9-10, 13-15, 18-24, 27, 30-35, 41-45, 47-54, 60-61, 65-68, 70, 76, 78 |
+| `Return` | 32 | 1-3, 12-15, 25-31, 35-44, 46-50, 61, 69-70 |
+| `AugAssign` | 30 | 4-7, 13-15, 18, 21-24, 41-45, 47-51, 63-64, 70, 72-74, 76, 78 |
+| `AnnAssign` | 14 | 1-7, 10-11, 18, 39, 70, 72-73 |
+| `While` | 12 | 7, 9, 27, 30-35, 45, 60-61 |
+| `Pass` | 9 | 9, 32-35, 45, 60-61, 65 |
+| `With` | 8 | 5-7, 9, 32-35 |
