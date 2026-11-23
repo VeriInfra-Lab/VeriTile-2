@@ -3,7 +3,13 @@ VeriTile.Staging.Dist.SegmentSpec
 
 Segment interface, bridge statements and per-agent continuation of the Dist
 line, drafted by ticket S3.1 (#43) and revised to the user's decisions of
-2026-11-13. Nothing in this file is signed.
+2026-11-13. Part 1 is signed on 2026-11-23: its five theorems, each with the
+definitions under it (`documents/dist/FrozenStatements.tsv`,
+`FrozenDefinitions.tsv`). The user approved the choices N2, N3 and N4 below as
+taken; the agent recorded the signature on the user's delegation. The stubs of
+part 1 are under signed statements: the ticket that defines one changes its
+recorded fingerprint, and the coordinator reviews and records that change.
+Part 2 is UNSIGNED.
 
 An agent runs sequential code between synchronization or communication
 points. A segment is one such piece of code, seen as a transformer of the
@@ -63,9 +69,10 @@ part 2:
   this yet: two `emit`s in a row are two steps. Recorded only; part 2 has to
   settle it before it is signed.
 
-New choices, not decided. Each was needed to make the file elaborate; the file
-takes the option marked "taken". The pull request of this revision gives the
-evidence.
+New choices. Each was needed to make the file elaborate; the file takes the
+option marked "taken". N2, N3 and N4 bear on part 1 and are decided as taken
+(user decision, 2026-11-23). The others bear on part 2 and are not decided.
+The pull request of the revision (#474) gives the evidence.
 
 N1. The program state of an agent.
     (a) Taken: any type `P`, with two functions (`AgentProgram P`): the
@@ -142,18 +149,18 @@ open VeriTile.Triton (BlockState MemCell Stmt Kernel stepStmts exec)
 
 /-! ## State access that the statements need (stubs for S1.5 and S1.6) -/
 
-/-- UNSIGNED stub (S1.5). Part 1. The content of cell `p` in the distributed
+/-- Stub (S1.5), under signed statements. Part 1. The content of cell `p` in the distributed
 state. -/
 noncomputable opaque DistState.cell : DistState → Addr → MemCell := fun _ _ => MemCell.real 0
 
-/-- UNSIGNED stub (S1.5). Part 1. `σ.setBlock r pid b` writes the upstream
+/-- Stub (S1.5), under signed statements. Part 1. `σ.setBlock r pid b` writes the upstream
 state `b` back as the state of the CTA with program ids `pid` on rank `r`: the
 memory that this CTA can reach and its registers. It is the inverse direction
 of `DistState.block`. -/
 opaque DistState.setBlock : DistState → Rank → List Nat → BlockState → DistState :=
   fun σ _ _ _ => σ
 
-/-- UNSIGNED stub (S1.6). Part 1. The upstream state that a group or a thread
+/-- Stub (S1.6), under signed statements. Part 1. The upstream state that a group or a thread
 `a` executes on: the memory that `a` can reach and the registers that are its
 own. A `local` cell is reached by its thread alone; a `shared` cell by every
 agent of the CTA.
@@ -167,31 +174,31 @@ the other have separate registers, also two thread agents that differ in the
 group only. -/
 opaque DistState.subView : DistState → Agent → BlockState
 
-/-- UNSIGNED stub (S1.6). Part 1. Writes the upstream state `b` back as the
+/-- Stub (S1.6), under signed statements. Part 1. Writes the upstream state `b` back as the
 state of the group or thread `a`. The inverse direction of
 `DistState.subView`. -/
 opaque DistState.setSubView : DistState → Agent → BlockState → DistState := fun σ _ _ => σ
 
-/-- UNSIGNED. Part 1. The upstream state that agent `a` executes on. For a CTA
+/-- Signed. Part 1. The upstream state that agent `a` executes on. For a CTA
 it is `DistState.block`. A whole rank runs no segment. -/
 noncomputable def DistState.view (σ : DistState) : Agent → BlockState
   | .rank _ => default
   | .cta c => σ.block c.rank c.pid
   | a => σ.subView a
 
-/-- UNSIGNED. Part 1. Writes the upstream state `b` back as the state of
+/-- Signed. Part 1. Writes the upstream state `b` back as the state of
 agent `a`. For a CTA it is `DistState.setBlock`. -/
 def DistState.setView (σ : DistState) : Agent → BlockState → DistState
   | .rank _, _ => σ
   | .cta c, b => σ.setBlock c.rank c.pid b
   | a, b => σ.setSubView a b
 
-/-- UNSIGNED. Part 1. The two states hold the same content in every cell of
+/-- Signed. Part 1. The two states hold the same content in every cell of
 `P`. -/
 def DistState.AgreesOn (P : Set Addr) (σ₁ σ₂ : DistState) : Prop :=
   ∀ p ∈ P, σ₁.cell p = σ₂.cell p
 
-/-- UNSIGNED. Part 1. The two states give agent `a` the same local state: the
+/-- Signed. Part 1. The two states give agent `a` the same local state: the
 same registers, program ids, grid dimensions and unspecified values. Memory is
 not compared, also not the `local` cells of a thread: cells are compared by
 `DistState.AgreesOn`. -/
@@ -200,7 +207,7 @@ def DistState.SameLocal (a : Agent) (σ₁ σ₂ : DistState) : Prop :=
 
 /-! ## Segments and footprint soundness (S3.2) -/
 
-/-- UNSIGNED. Part 1. Owner: S3.2. Sequential code between two synchronization
+/-- Signed. Part 1. Owner: S3.2. Sequential code between two synchronization
 or communication points. `agent` is the agent that runs it: a CTA, or a group
 or a thread of a CTA. `run` is its effect on the distributed state; `none` is
 a failed execution. `reads σ` and `writes σ` are the cells it may read and may
@@ -211,7 +218,7 @@ structure Segment where
   reads : DistState → Set Addr
   writes : DistState → Set Addr
 
-/-- UNSIGNED. Part 1. Owner: S3.2. The footprints of a segment are sound.
+/-- Signed. Part 1. Owner: S3.2. The footprints of a segment are sound.
 
 `frame`: a run changes no cell outside the write footprint.
 
@@ -237,7 +244,7 @@ structure Segment.FootprintSound (seg : Segment) : Prop where
           ∃ σ₂', seg.run σ₂ = some σ₂' ∧ DistState.AgreesOn (seg.writes σ₁) σ₁' σ₂' ∧
             DistState.SameLocal seg.agent σ₁' σ₂'
 
-/-- UNSIGNED. Part 1. Proved by S3.2. The frame lemma: a segment with sound
+/-- Signed. Part 1. Proved by S3.2. The frame lemma: a segment with sound
 footprints leaves every cell outside its write footprint as it was. -/
 theorem Segment.frame {seg : Segment} (h : seg.FootprintSound) {σ σ' : DistState}
     (hrun : seg.run σ = some σ') {p : Addr} (hp : p ∉ seg.writes σ) :
@@ -245,18 +252,18 @@ theorem Segment.frame {seg : Segment} (h : seg.FootprintSound) {σ σ' : DistSta
 
 /-! ## Segments of upstream statements (S3.3) -/
 
-/-- UNSIGNED stub (S3.3). Part 1. The segment that runs the upstream
+/-- Stub (S3.3), under signed statements. Part 1. The segment that runs the upstream
 statements `code` as agent `a`, with the footprints computed from the
 statements. -/
 opaque Segment.ofStmts (a : Agent) (code : List Stmt) : Segment :=
   ⟨a, fun _ => none, fun _ => ∅, fun _ => ∅⟩
 
-/-- UNSIGNED. Part 1. Proved by S3.3. A segment made from statements is run by
+/-- Signed. Part 1. Proved by S3.3. A segment made from statements is run by
 the agent it was made for. -/
 theorem Segment.ofStmts_agent (a : Agent) (code : List Stmt) :
     (Segment.ofStmts a code).agent = a := sorry
 
-/-- UNSIGNED. Part 1. Proved by S3.3. The bridge for one segment of a CTA:
+/-- Signed. Part 1. Proved by S3.3. The bridge for one segment of a CTA:
 running it on the distributed state is running the upstream `stepStmts` of its
 statements on the block state of the CTA and writing the result back. It fails
 exactly when the upstream execution fails. -/
@@ -264,7 +271,7 @@ theorem Segment.ofStmts_run (c : Cta) (code : List Stmt) (σ : DistState) :
     (Segment.ofStmts (.cta c) code).run σ =
       (stepStmts code (σ.block c.rank c.pid)).map (σ.setBlock c.rank c.pid) := sorry
 
-/-- UNSIGNED. Part 1. Proved by S3.3. The same equation for every agent, on
+/-- Signed. Part 1. Proved by S3.3. The same equation for every agent, on
 the projection of the agent. For a group or a thread it is what running
 upstream statements as that agent means, and it says nothing before S1.6
 defines the projection. Not claimed: that the runs of the threads of a CTA
@@ -272,7 +279,7 @@ compose to the upstream execution on the block state of the CTA. -/
 theorem Segment.ofStmts_run_view (a : Agent) (code : List Stmt) (σ : DistState) :
     (Segment.ofStmts a code).run σ = (stepStmts code (σ.view a)).map (σ.setView a) := sorry
 
-/-- UNSIGNED. Part 1. Proved by S3.3. The footprints computed from the
+/-- Signed. Part 1. Proved by S3.3. The footprints computed from the
 statements of a CTA are sound. Nothing is claimed here for a group or a
 thread: it needs the laws that S1.6 gives the projection. -/
 theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
