@@ -507,6 +507,10 @@ globs = [
   "tests.lean.WelfordCallMetadata",
   "tests.lean.WelfordSourceContexts",
   "tests.lean.InterpReflectSmoke",
+  "tests.lean.InterpEvalSmoke",
+  "tests.lean.InterpBridgeInvariant",
+  "tests.lean.dist.SwizzleSource",
+  "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtParsing",
   "tests.lean.dist.SourceHelperSyntax",
 ]

@@ -34,15 +34,16 @@ Each claim carries one of three marks:
    branch (`deepep-v2-intranode`) ports EPv2. No Triton-distributed kernel is a
    port of version 1: its expert-parallel kernels solve the same problem with a
    different layout and protocol.
-3. **Recommended source.** The TileScale port at `9ba8a605` for the proof, with
+3. **Selected proof source (decision of 2026-11-21, #477).** The Triton-distributed
+   DeepEP-like kernels in section 4.4 are retained for inventory only. Use the TileScale port at `9ba8a605` for the proof, with
    DeepEP at `b57e5e21` as the reference it was written and tested against
    (section 6).
 4. **GPU run.** The recommended source cannot run in the `tilescale`
    environment, built from `main` at `71e71457`, where two names the port
    needs do not exist. The GPU side built the environment `tilescale-deepep`
    from `9ba8a605` on 2026-11-12; it reports `tilelang` version
-   `0.1.7.post1+cuda.git9ba8a605`. The first request,
-   `deepep-v1-intranode-001`, is written (K-D.17) and has not run. Section 7
+   `0.1.7.post1+cuda.git9ba8a605`. The coordinator judged
+   the H800 run of the version 1 port a pass in #457. Section 7
    says how it meets each need and what only a run can settle.
 5. **Specification.** The frozen MoE declarations hold for version 1 normal
    mode as far as they go, but they leave out or weaken six things that
@@ -537,6 +538,9 @@ tutorial 04 the launch shape was not collected.
 | 375 | `_dequant_kernel` | `triton.jit` | `tl.arange`, `tl.cast`, `tl.load`, `tl.pointer_type`, `tl.program_id`, `tl.reshape`, `tl.static_range`, `tl.store` |
 
 ## 6. Recommendation and pins
+
+By the 2026-11-21 decision (#477), the Triton-distributed DeepEP-like files
+in section 4.4 are inventory only. Tutorial 04 stays in the K-T proof targets.
 
 **Source for the proof:** TileScale, commit
 `9ba8a605d347f600a95d0275e2639cb00122c084` (branch `wt/deepep-internode`),
