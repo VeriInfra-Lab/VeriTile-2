@@ -509,6 +509,7 @@ globs = [
   "tests.lean.InterpReflectSmoke",
   "tests.lean.InterpEvalSmoke",
   "tests.lean.InterpBridgeInvariant",
+  "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.TritonExtConstexpr",
 ]
