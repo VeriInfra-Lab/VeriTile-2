@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import sys
 import tempfile
 import unittest
@@ -74,6 +75,18 @@ class Batches(unittest.TestCase):
                 self.assertTrue(callable(getattr(harness, function)))
                 for spec in test['inputs']:
                     self.assertEqual(gen_inputs.generate(spec['dtype'], spec['shape'], spec['gen']).sha256(), spec['sha256'])
+
+    def test_barrier_reports_for_original_and_replacement_batches(self):
+        for name in (RS06, RS06_2X2, RS06_NVSHMEM):
+            test = TESTS[name][0]
+            ranks = test['ranks']
+            spec = dict(test['inputs'][0], shape=[ranks, ranks, 1])
+            barrier_output, = [out for out in test['outputs'] if out['name'] == 'barrier']
+            for rank, outputs in judge.references(dict(test, inputs=[spec], outputs=[barrier_output])).items():
+                with self.subTest(batch=name, rank=rank):
+                    expected = (-1, -1, 2) if name == RS06_NVSHMEM else (rank, ranks, 1)
+                    self.assertEqual(struct.unpack('<iii', outputs['barrier'].data), expected)
+        self.assertEqual(run.load_batch(judge.BATCHES / RS06_NVSHMEM)['supersedes'], RS06_2X2)
 
     def test_every_logical_node_test_has_its_control(self):
         for name, tests in TESTS.items():
@@ -390,7 +403,7 @@ class Loaders(unittest.TestCase):
 class Harness(unittest.TestCase):
     """Every line of the harnesses runs here against stand-ins; what the pinned code does with the calls is not tested."""
 
-    def call(self, function, launch, inputs, tutorial, rank=1, ranks=2, local=1):
+    def call(self, function, launch, inputs, tutorial, rank=1, ranks=2, local=1, actual_barrier=None):
         """As rank `rank` of `ranks` on logical nodes of `local` ranks; by default rank 1 of two nodes of one."""
         torch, utils, common_ops = mock.MagicMock(), mock.MagicMock(), mock.MagicMock()
         group = utils.initialize_distributed.return_value
@@ -411,7 +424,7 @@ class Harness(unittest.TestCase):
         common_ops.BarrierAllContext.side_effect = make_barrier
         def make_context(**fields):
             context = tutorial.ReduceScatter2DContext.return_value
-            context.barrier = fields['barrier']
+            context.barrier = actual_barrier if actual_barrier is not None else fields['barrier']
             return context
         tutorial.ReduceScatter2DContext.side_effect = make_context
         outputs = mock.MagicMock()
@@ -518,6 +531,18 @@ class Harness(unittest.TestCase):
                 common_ops.BarrierAllContext.assert_called_once_with(False)
                 utils.supports_p2p_native_atomic.assert_not_called()
                 self.assertIn(mock.call([-1, -1, 2], dtype=torch.int32), torch.tensor.call_args_list)
+
+    def test_report_uses_the_constructed_context_even_if_it_differs_from_launch(self):
+        actual = mock.Mock(is_intra_node=True, local_rank=5, num_local_ranks=8)
+        _, _, torch, utils, _ = self.reduce_scatter(TESTS[RS06_NVSHMEM][0]['launch'], actual_barrier=actual)
+        utils.supports_p2p_native_atomic.assert_called_once_with()
+        self.assertIn(mock.call([5, 8, 1], dtype=torch.int32), torch.tensor.call_args_list)
+
+    def test_invalid_barrier_settings_are_rejected_before_launch(self):
+        for launch, error in [({'context': 'harness', 'barrier': 'unknown'}, 'unknown barrier'),
+                              ({'context': 'tutorial', 'barrier': 'nvshmem'}, 'tutorial context')]:
+            with self.subTest(launch=launch), self.assertRaisesRegex(ValueError, error):
+                harness.reduce_scatter(0, 4, {}, {}, launch)
 
     def test_reduce_scatter_as_a_rank_of_two_nodes_of_two(self):
         tutorial, x, torch, utils, _ = self.reduce_scatter(TESTS[RS06_2X2][1]['launch'], shape=(1024, 128),
