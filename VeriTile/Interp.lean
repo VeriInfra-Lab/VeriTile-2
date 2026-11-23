@@ -13,6 +13,7 @@ import VeriTile.Interp.Adequacy.State
 import VeriTile.Interp.Algebra
 import VeriTile.Interp.Bridge.EvalOp
 import VeriTile.Interp.Bridge.Exec
+import VeriTile.Interp.Bridge.Invariant
 import VeriTile.Interp.Bridge.RealAlgebra
 import VeriTile.Interp.Enum
 import VeriTile.Interp.EvalOp

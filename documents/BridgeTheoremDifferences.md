@@ -543,9 +543,32 @@ state `s`, a user shows three things.
      then `LoopPre idx i n body t`", with an invariant `I` on the state that
      the body preserves.
 
-The positive example at the end of `Exec.lean` goes through steps 2 and 3 for
-a store followed by a load.
+Alternatively, for a kernel built from assignments, unmasked region stores
+and counted compute loops, use the sufficient condition in
+[`FiniteBridge`](../VeriTile/Interp/Bridge/Invariant.lean).
 
-Not done (unchecked): no bench kernel has been discharged. There is no lemma
-yet that derives `StmtsPre` from a condition on the initial state; each user
-proves the invariant of step 3 for the kernel at hand.
+1. Choose a `Layout` for the kernel's read regions and dtypes. Establish
+   `Invariant L s` once on the initial state. It requires every offset in
+   each declared read region to contain a finite value tagged with its
+   declared dtype, all bound registers to have finite lanes, and the
+   undefined-value tables to agree (D8). For a declared byte input, each
+   in-range int8 value must decode to a finite E5 value (D5).
+2. Prove `Code L body` by following the transcribed syntax. Its site rules
+   check nested operations and restrict E5 decode operands to direct loads
+   from declared byte inputs. Right-hand sides must preserve finiteness.
+   A store must respect the declared read dtype and may not write to a byte
+   input. Check a counted loop's body once, even for a symbolic bound.
+3. Apply `FiniteBridge.bridgePre` to the certificate and the initial
+   invariant. `Code.preserves` gives the invariant after any successful
+   structural run and `Code.stmtsPre` discharges the execution-ordered
+   precondition. The projection in step 1 above is still required when
+   applying the bridge equality.
+
+[The regression module](../tests/lean/InterpBridgeInvariant.lean) applies
+this route to the actual VectorAdd kernel with arbitrary block size and
+to the actual online Welford kernel with arbitrary iteration count and
+stride. VectorAdd's output can alias an input. Welford's bf16 outputs must
+each be distinct from its real input region. The same module proves that
+storing negative infinity and loading it back fails the certificate and
+that the two executions then disagree on the loaded register. For statements
+outside this sufficient fragment, the direct path above remains available.

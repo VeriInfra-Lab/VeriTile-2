@@ -10,7 +10,8 @@ The result is JSON-serialisable: `batch_id`, `passed` and `rows`. A test whose
 status is `ok` gets one row per output and reference it is compared with:
 `reference`, and `torch` when the bundle holds `ref/<name>.tensor`. Any other
 status gives a single non-passing row with `output: None`, even with no
-declared outputs. A missing tensor or no reference gives a non-passing output
+declared outputs. An ok test without declared outputs also gets a non-passing row.
+A missing tensor or no reference gives a non-passing output
 row. Nothing from the bundle is taken as a verdict. `render` turns the result
 into Markdown.
 """
@@ -45,6 +46,10 @@ def build(request_dir, bundle_dir, references):
         status = manifest['tests'].get(test['id'], 'not_run')
         if status != 'ok':
             rows.append({'test': test['id'], 'output': None, 'status': status, 'against': None, 'passed': False})
+            continue
+        if not test.get('outputs'):
+            rows.append({'test': test['id'], 'output': None, 'status': status, 'against': None,
+                         'passed': False, 'error': 'no output declared'})
             continue
         for spec in test['outputs']:
             file = spec['name'] + '.tensor'

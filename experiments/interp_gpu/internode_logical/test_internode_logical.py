@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-test of the logical-node tutorial requests: the judge, the four batches and the harness's calls. No GPU, torch or triton_dist needed.
+"""Self-test of the logical-node tutorial requests: the judge, the batches and the harness's calls. No GPU, torch or triton_dist needed.
 
     python3 -B -m unittest discover -s experiments/interp_gpu/internode_logical -p 'test_*.py'
 """
@@ -25,7 +25,8 @@ from interp.tensorfile import Tensor
 
 AG03, RS06 = 'internode-logical-ag03-001', 'internode-logical-rs06-001'
 AG03_2X2, RS06_2X2 = 'internode-logical-ag03-2x2-001', 'internode-logical-rs06-2x2-001'  # 2 logical nodes of 2 ranks
-RANKS = {AG03: 2, RS06: 2, AG03_2X2: 4, RS06_2X2: 4}
+RS06_NVSHMEM = 'internode-logical-rs06-2x2-002'
+RANKS = {AG03: 2, RS06: 2, AG03_2X2: 4, RS06_2X2: 4, RS06_NVSHMEM: 4}
 TESTS = {name: json.loads((judge.BATCHES / name / 'batch.json').read_text())['tests'] for name in RANKS}
 ONE_NODE = {'ranks': 2, 'launcher': 'triton-dist'}
 TWO_NODES = {'ranks': 2, 'launcher': judge.LOGICAL, 'logical_nodes': 2}
@@ -91,7 +92,7 @@ class Batches(unittest.TestCase):
         for test in TESTS[AG03] + TESTS[AG03_2X2]:
             (given,), gathered = test['inputs'], test['outputs'][1]
             self.assertEqual((given['shape'], given['shape'][0] % test['ranks']), (gathered['shape'], 0))
-        for test in TESTS[RS06] + TESTS[RS06_2X2]:
+        for test in TESTS[RS06] + TESTS[RS06_2X2] + TESTS[RS06_NVSHMEM]:
             (given,), reduced = test['inputs'], test['outputs'][2]
             ranks, M, N = given['shape']
             self.assertEqual((ranks, reduced['shape']), (test['ranks'], [M // ranks, N]))
@@ -106,7 +107,7 @@ class Batches(unittest.TestCase):
         def h800(count):
             return {'gpus': [{'name': 'H800', 'sm': 90}] * count, 'versions': {'triton_dist': '3.7.1+git7908e4ea'}}
         with mock.patch.object(dist, 'launch_script', return_value=Path('/td/scripts/launch.sh')):
-            for name in (AG03_2X2, RS06_2X2):
+            for name in (AG03_2X2, RS06_2X2, RS06_NVSHMEM):
                 batch = run.load_batch(judge.BATCHES / name)
                 with mock.patch.dict(os.environ, {'CUDA_VISIBLE_DEVICES': '2,3,4,5'}):  # pair, pair
                     self.assertEqual(environment.mismatches(batch['requires'], h800(4)), [])
@@ -192,8 +193,17 @@ class Judge(unittest.TestCase):
         """The outputs of a test that differ, with their differences."""
         return {key: found for key, found in self.judged(batch)[test]['outputs'].items() if found}
 
+    def test_nvshmem_batch_rejects_a_rank_reporting_the_cas_barrier(self):
+        name = 'logical_nodes/harness_context'
+        self.assertEqual(self.verdicts(RS06_NVSHMEM)[name], 'equal')
+        self.plant(RS06_NVSHMEM, name, 'rank3/barrier',
+                   lambda _: b''.join(judge.encode('int32', n) for n in (3, 4, 1)))
+        result = self.judged(RS06_NVSHMEM)[name]
+        self.assertEqual(result['verdict'], 'different')
+        self.assertEqual({key for key, diff in result['outputs'].items() if diff}, {'rank3/barrier'})
+
     def test_reference_bundles_are_equal_and_the_predicted_failure_is_seen(self):
-        for name in (AG03, AG03_2X2, RS06_2X2):
+        for name in (AG03, AG03_2X2, RS06_2X2, RS06_NVSHMEM):
             self.assertEqual(self.verdicts(name), {test['id']: 'equal' for test in TESTS[name]})
         self.assertEqual(sorted(self.judged(RS06_2X2)['logical_nodes/harness_context']['outputs']),
                          sorted(f'rank{rank}/{name}' for rank in range(4) for name in ('topology', 'barrier', 'reduced')))
@@ -392,6 +402,18 @@ class Harness(unittest.TestCase):
         modules = {'torch': torch, 'triton_dist': mock.MagicMock(), 'triton_dist.utils': utils,
                    'triton_dist.kernels': mock.MagicMock(), 'triton_dist.kernels.nvidia': mock.MagicMock(),
                    'triton_dist.kernels.nvidia.common_ops': common_ops}
+        def make_barrier(is_intra_node):
+            barrier = mock.Mock(spec=['is_intra_node', 'finalize'] +
+                                (['local_rank', 'num_local_ranks'] if is_intra_node else []))
+            barrier.is_intra_node = is_intra_node
+            common_ops.BarrierAllContext.return_value = barrier
+            return barrier
+        common_ops.BarrierAllContext.side_effect = make_barrier
+        def make_context(**fields):
+            context = tutorial.ReduceScatter2DContext.return_value
+            context.barrier = fields['barrier']
+            return context
+        tutorial.ReduceScatter2DContext.side_effect = make_context
         outputs = mock.MagicMock()
         variables = {'RANK': str(rank), 'WORLD_SIZE': str(ranks), 'LOCAL_WORLD_SIZE': str(local),
                      'LOCAL_RANK': str(rank % local)}
@@ -487,6 +509,15 @@ class Harness(unittest.TestCase):
         context.barrier.finalize.assert_called_once_with()
         utils.cudart.cudaDeviceGetP2PAttribute.assert_not_called()  # one visible device has no pair to ask about
         self.assertIn('rank 1: native atomics between visible devices: one device\n', self.printed.getvalue())
+
+    def test_nvshmem_launch_constructs_a_global_barrier_without_node_team_fields(self):
+        for test in TESTS[RS06_NVSHMEM]:
+            with self.subTest(test=test['id']):
+                _, _, torch, utils, common_ops = self.reduce_scatter(
+                    test['launch'], shape=(1024, 128), rank=3, ranks=4, local=4 // test.get('logical_nodes', 1))
+                common_ops.BarrierAllContext.assert_called_once_with(False)
+                utils.supports_p2p_native_atomic.assert_not_called()
+                self.assertIn(mock.call([-1, -1, 2], dtype=torch.int32), torch.tensor.call_args_list)
 
     def test_reduce_scatter_as_a_rank_of_two_nodes_of_two(self):
         tutorial, x, torch, utils, _ = self.reduce_scatter(TESTS[RS06_2X2][1]['launch'], shape=(1024, 128),
