@@ -1,3 +1,4 @@
+import VeriTile.Triton.DSL.SourceProcedures
 import VeriTile.Triton.DSL.PythonFullConstructors
 
 /-!
@@ -32,6 +33,10 @@ Integer aliases from these calls have block scope, including inside a runtime
 `if`. The condition and runtime statements remain in the kernel.
 Float and torch-derived constants belong in the transcription's existing
 explicit bindings. Stored source procedures use their own entry point.
+
+Import the scoped extensions after the upstream frontend modules used in a
+file. In a `tl.swizzle2d` argument, write `tl.cast(tl.constexpr(n), tl.int64)`
+so the integer type is preserved if Swizzle elaborates first.
 -/
 namespace VeriTile.Dist.Frontend.TritonExt.Constexpr
 open Lean Elab Term Meta
