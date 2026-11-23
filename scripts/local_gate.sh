@@ -41,6 +41,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpEvalSmoke"
              "lake build tests.lean.InterpSymbolic"
+             "lake env lean tests/lean/InterpSymbolic.lean"
              "lake build tests.lean.InterpBridgeInvariant"
              "lake build tests.lean.dist.SwizzleSource")
 fi
