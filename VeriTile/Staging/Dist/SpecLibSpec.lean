@@ -4,7 +4,17 @@ VeriTile.Staging.Dist.SpecLibSpec
 Interface and statements of the specification library, frozen by ticket S7.1.
 Signed: `allGather_apply` and `allReduce_eq_of_leaves_perm` (2026-11-11) and
 `moeCombine_of_moeDispatch` (2026-11-12), each with the definitions under it.
-Everything else is UNSIGNED.
+Signed on 2026-11-23 (user decisions of that day, recorded on #66; the agent
+recorded the signature on the user's delegation): coverage of a reduction tree
+in the subset form (`ReduceOrder.CoversOn`, `ReduceOrder.Covers`) with
+`ReduceOrder.eval_eq_sum_of_coversOn`, `ReduceOrder.eval_eq_sum_of_covers` and
+`allReduce_eq_sum_of_covers`, and the statements of S7.2:
+`reduceScatter_eq_sum_of_covers`, `gemmReduceScatter_eq_sum_of_covers`,
+`reduceScatter_twoRanks`, `gemm_apply`, `allGatherGemm_eq`,
+`allGatherGemm_apply`, `gemmReduceScatter_apply`, which freeze `reduceScatter`,
+`gemm`, `allGatherGemm` and `gemmReduceScatter`. Everything else is UNSIGNED:
+`ReduceOrder.ofList` and the helper lemmas of coverage, all-to-all (S7.4) and
+the attention merge (S7.5).
 
 The library states what a collective computes, as a mathematical function or
 relation over one tensor per rank. It is independent of any front end and of
@@ -93,7 +103,7 @@ open scoped BigOperators
 def ReduceOrder.ofList {ι : Type} (operands : List ι) : ReduceOrder ι :=
   operands.foldl (fun order i => .add order (.input i)) .zero
 
-/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+/-- Signed (#66). Owner: S7.2 (`RankTensor.lean`).
 Each member of `operands` occurs exactly once, and every leaf is a member. -/
 def ReduceOrder.CoversOn {ι : Type} (order : ReduceOrder ι)
     (operands : Finset ι) : Prop :=
@@ -111,7 +121,7 @@ instance ReduceOrder.CoversOn.decidable {ι : Type} [DecidableEq ι]
     (order : ReduceOrder ι) (operands : Finset ι) : Decidable (order.CoversOn operands) :=
   decidable_of_iff _ (order.coversOn_iff_toFinset operands).symm
 
-/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+/-- Signed (#66). Owner: S7.2 (`RankTensor.lean`).
 Full coverage means coverage of the universal finite set. -/
 def ReduceOrder.Covers {ι : Type} [Fintype ι] (order : ReduceOrder ι) : Prop :=
   order.CoversOn Finset.univ
@@ -162,7 +172,7 @@ theorem ReduceOrder.ofList_finset_coversOn {ι : Type} (operands : Finset ι) :
     (ReduceOrder.ofList operands.toList).CoversOn operands :=
   ReduceOrder.ofList_coversOn (Finset.nodup_toList operands) (fun _ => Finset.mem_toList)
 
-/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+/-- Signed (#66). Owner: S7.2 (`RankTensor.lean`).
 A tree covering a finite set evaluates to the sum over that set. -/
 theorem ReduceOrder.eval_eq_sum_of_coversOn {ι α : Type} [AddCommMonoid α]
     {order : ReduceOrder ι} {operands : Finset ι} (f : ι → α) (h : order.CoversOn operands) :
@@ -171,14 +181,14 @@ theorem ReduceOrder.eval_eq_sum_of_coversOn {ι α : Type} [AddCommMonoid α]
   obtain ⟨hn, hs⟩ := (order.coversOn_iff_toFinset operands).mp h
   rw [order.eval_eq_sum_leaves, ← hs, List.sum_toFinset f hn]
 
-/-- UNSIGNED (#66). Owner: S7.2 (`RankTensor.lean`).
+/-- Signed (#66). Owner: S7.2 (`RankTensor.lean`).
 The subset sum theorem specializes to the sum over a finite index type. -/
 theorem ReduceOrder.eval_eq_sum_of_covers {ι α : Type} [Fintype ι] [AddCommMonoid α]
     {order : ReduceOrder ι} (f : ι → α) (h : order.Covers) :
     order.eval f = ∑ q, f q :=
   ReduceOrder.eval_eq_sum_of_coversOn f (show order.CoversOn Finset.univ from h)
 
-/-- UNSIGNED (#66). Owner: S7.3 (`AllReduce.lean`).
+/-- Signed (#66). Owner: S7.3 (`AllReduce.lean`).
 A covered output cell contains the sum over all ranks. -/
 theorem allReduce_eq_sum_of_covers {numRanks : Nat} {ι : Type}
     (order : Fin numRanks → ι → ReduceOrder (Fin numRanks)) (x : RankTensor numRanks ι)
@@ -223,7 +233,7 @@ example : allReduce (numRanks := 2) (ι := Unit) (fun _ _ => .add (.input 0) (.i
 
 /-! ## Allgather and reduce-scatter (S7.2) -/
 
-/-- UNSIGNED. Owner: S7.2. Each rank holds a full tensor of `numRanks * n`
+/-- Signed (#66). Owner: S7.2. Each rank holds a full tensor of `numRanks * n`
 rows. Afterwards rank `r` holds chunk `r` of the sum over ranks; the element at
 index `i` of that chunk is added in the order `order r i`. -/
 noncomputable def reduceScatter {numRanks n : Nat} {ι : Type}
@@ -232,7 +242,7 @@ noncomputable def reduceScatter {numRanks n : Nat} {ι : Type}
     RankTensor numRanks (Fin n × ι) :=
   fun r i => (order r i).eval fun q => x q (finProdFinEquiv (r, i.1), i.2)
 
-/-- UNSIGNED (#66). Owner: S7.2 (`ReduceScatter.lean`).
+/-- Signed (#66). Owner: S7.2 (`ReduceScatter.lean`).
 With coverage, destination `r` receives its row chunk
 of the sum across all source ranks. -/
 theorem reduceScatter_eq_sum_of_covers {numRanks n : Nat} {ι : Type}
@@ -242,7 +252,7 @@ theorem reduceScatter_eq_sum_of_covers {numRanks n : Nat} {ι : Type}
     reduceScatter order x r (i, j) = ∑ q, x q (finProdFinEquiv (r, i), j) :=
   ReduceOrder.eval_eq_sum_of_covers (fun q => x q (finProdFinEquiv (r, i), j)) h
 
-/-- S7.2 sanity check for the unsigned specification: rank `r` gets chunk
+/-- Signed (#66). Owner: S7.2. What the specification says: rank `r` gets chunk
 `r` of the sum, with rank 0 added before rank 1. -/
 theorem reduceScatter_twoRanks {n : Nat} {ι : Type}
     (x : RankTensor 2 (Fin (2 * n) × ι)) (r : Fin 2) (i : Fin n) (j : ι) :
@@ -262,7 +272,7 @@ example :
       (fun _ _ => .zero) (fun _ _ => 1) 0 (0, ()) ≠ (1 : ℝ) + 1 := by
   norm_num [reduceScatter, ReduceOrder.eval]
 
-/-- UNSIGNED. Owner: S7.2. The matrix product of the upstream matmul
+/-- Signed (#66). Owner: S7.2. The matrix product of the upstream matmul
 specification `gemmSum`, on tensors: entry `(i, j)` is `∑ k, A i k * B k j`. -/
 noncomputable def gemm {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileIndex [K, N] → ℝ) :
     TileIndex [M, N] → ℝ :=
@@ -270,7 +280,7 @@ noncomputable def gemm {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileInd
     gemmSum (fun k => if h : k < K then A (i.1, ⟨k, h⟩, PUnit.unit) else 0)
       (fun k => if h : k < K then B (⟨k, h⟩, i.2.1, PUnit.unit) else 0) K
 
-/-- S7.2 sanity check for the unsigned specification: the Nat-indexed zero
+/-- Signed (#66). Owner: S7.2. What the specification says: the Nat-indexed zero
 padding is never read by `gemmSum`, whose sum stops at `K`. -/
 theorem gemm_apply {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileIndex [K, N] → ℝ)
     (i : Fin M) (j : Fin N) :
@@ -280,14 +290,14 @@ theorem gemm_apply {M K N : Nat} (A : TileIndex [M, K] → ℝ) (B : TileIndex [
   rw [Finset.sum_range]
   simp
 
-/-- UNSIGNED. Owner: S7.2. Allgather followed by a matrix product: rank `r`
+/-- Signed (#66). Owner: S7.2. Allgather followed by a matrix product: rank `r`
 holds the product of the gathered `A` with its own `B r`. -/
 noncomputable def allGatherGemm {numRanks m K N : Nat}
     (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N])) :
     RankTensor numRanks (TileIndex [numRanks * m, N]) :=
   fun r => gemm (allGather A r) (B r)
 
-/-- S7.2 sanity check for the unsigned composition: the right operand is
+/-- Signed (#66). Owner: S7.2. What the composition says: the right operand is
 local to the destination rank. -/
 theorem allGatherGemm_eq {numRanks m K N : Nat}
     (A : RankTensor numRanks (TileIndex [m, K])) (B : RankTensor numRanks (TileIndex [K, N]))
@@ -302,7 +312,7 @@ theorem allGatherGemm_apply {numRanks m K N : Nat}
   rw [allGatherGemm_eq, gemm_apply]
   simp only [allGather_apply]
 
-/-- UNSIGNED. Owner: S7.2. A matrix product followed by reduce-scatter: rank
+/-- Signed (#66). Owner: S7.2. A matrix product followed by reduce-scatter: rank
 `r` holds chunk `r` of the sum over ranks `q` of the products `A q * B q`. -/
 noncomputable def gemmReduceScatter {numRanks m K N : Nat}
     (order : Fin numRanks → TileIndex [m, N] → ReduceOrder (Fin numRanks))
@@ -311,7 +321,7 @@ noncomputable def gemmReduceScatter {numRanks m K N : Nat}
     RankTensor numRanks (TileIndex [m, N]) :=
   reduceScatter order fun q => gemm (A q) (B q)
 
-/-- S7.2 sanity check for the unsigned composition: destination `r` takes
+/-- Signed (#66). Owner: S7.2. What the composition says: destination `r` takes
 its own row chunk, and the supplied tree keeps the cross-rank sum order. -/
 theorem gemmReduceScatter_apply {numRanks m K N : Nat}
     (order : Fin numRanks → TileIndex [m, N] → ReduceOrder (Fin numRanks))
@@ -327,7 +337,7 @@ theorem gemmReduceScatter_apply {numRanks m K N : Nat}
   funext q
   exact gemm_apply (A q) (B q) (finProdFinEquiv (r, i)) j
 
-/-- UNSIGNED (#66). Owner: S7.2 (`ReduceScatter.lean`).
+/-- Signed (#66). Owner: S7.2 (`ReduceScatter.lean`).
 With coverage, a destination cell sums the corresponding
 local matrix product cell from every source rank. -/
 theorem gemmReduceScatter_eq_sum_of_covers {numRanks m K N : Nat}
