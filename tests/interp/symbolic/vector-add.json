@@ -1,0 +1,10 @@
+{"version":1,"outputs":[
+  ["binary",["fp32","real","add"],[
+    ["fp32Load",[],[["literal",[null,"real",1,3],[]]]],
+    ["fp32Load",[],[["literal",[null,"real",1,7],[]]]]
+  ]],
+  ["binary",["fp32","real","add"],[
+    ["fp32Load",[],[["literal",[null,"real",2,3],[]]]],
+    ["fp32Load",[],[["literal",[null,"real",1,7],[]]]]
+  ]]
+]}
