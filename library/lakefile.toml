@@ -487,6 +487,8 @@ globs = [
   "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtProfiler",
   "tests.lean.InterpReflectBench",
+  "tests.lean.dist.TensorDescriptorSource",
+  "tests.lean.dist.SourceHelperSyntax",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
