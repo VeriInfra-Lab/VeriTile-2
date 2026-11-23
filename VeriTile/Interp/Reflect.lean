@@ -2,11 +2,12 @@
 VeriTile.Interp.Reflect
 
 `reflect_kernel k` reads the definition of a kernel `k : … → ComputeKernel`
-and adds, for the same parameters,
+and adds, with each real parameter replaced by a rational parameter,
 
 * `k.mirror : … → QKernel`, the kernel with every real literal replaced by a
   rational one, and
-* `k.toReal_mirror : ∀ …, (k.mirror …).toReal = k …`.
+* `k.toReal_mirror`: for example, for `k (n : Nat) (r : ℝ)`, its type is
+  `∀ (n : Nat) (q : ℚ), (k.mirror n q).toReal = k n (q : ℝ)`.
 
 The body of `k` is unfolded until only constructors of the kernel AST remain;
 a `let` is replaced by its value. Each constructor is then renamed to its
@@ -17,7 +18,7 @@ scientific literals, a cast of a rational, `-`, `+`, `*` and `/`.
 The command fails with
 
 * `reflect_kernel: non-rational literal r`, at the first literal that has
-  another form (`√2`, `π`, a real parameter of the kernel), and
+  another form (`√2`, `π`), and
 * `reflect_kernel: unsupported constructor c`, at the first constant `c` that
   yields or consumes kernel AST and has no definition to unfold (a recursor,
   an opaque constant), which includes kernels computed by a `match` on AST.
@@ -72,12 +73,24 @@ private partial def toRat (lit r : Expr) : MetaM Expr := do
       else nonRational
   | _, _ => nonRational
 
+/-- Introduce the mirror parameters and specialize the original kernel at their real casts.
+Instantiate each binder before visiting the next so later parameter types stay well-typed. -/
+private partial def withMirrorParams (type : Expr) (xs args : Array Expr)
+    (k : Array Expr → Array Expr → Expr → TermElabM Unit) : TermElabM Unit := do
+  match type with
+  | .forallE name dom body bi =>
+    let real := dom.isConstOf ``Real
+    withLocalDecl name bi (if real then mkConst ``Rat else dom) fun x => do
+      let arg ← if real then mkAppOptM ``Rat.cast #[dom, none, x] else pure x
+      withMirrorParams (body.instantiate1 arg) (xs.push x) (args.push arg) k
+  | _ => k xs args type
+
 /-- `reflect_kernel k` adds the rational mirror `k.mirror` of the kernel `k` and the theorem
 `k.toReal_mirror : ∀ …, (k.mirror …).toReal = k …`. -/
 elab "reflect_kernel " k:ident : command => liftTermElabM do
   let kName ← realizeGlobalConstNoOverloadWithInfo k
   let info ← getConstInfo kName
-  forallTelescope info.type fun xs type => do
+  withMirrorParams info.type #[] #[] fun xs args type => do
   unless type.isConstOf ``ComputeKernel && info.levelParams.isEmpty do
     throwError "reflect_kernel: {kName} is not a function into ComputeKernel"
   let env ← getEnv
@@ -93,7 +106,7 @@ elab "reflect_kernel " k:ident : command => liftTermElabM do
     literals.modify (·.push (x, ← toRat r r, r))
     return .done (mkApp e.appFn! x)
   -- The kernel as a term of AST constructors, with a variable in place of each literal.
-  let body ← Core.transform (mkAppN (mkConst kName) xs) (pre := fun e => do
+  let body ← Core.transform (mkAppN (mkConst kName) args) (pre := fun e => do
     if let .letE _ _ v b _ := e then return .visit (b.instantiate1 v)
     let .const c _ := e.getAppFn | return .continue
     if e.isAppOfArity ``Op.const 1 || e.isAppOfArity ``Op.constFloat 2 then return ← literal e
@@ -123,7 +136,7 @@ elab "reflect_kernel " k:ident : command => liftTermElabM do
     Term.synthesizeSyntheticMVarsNoPostponing
     proof ← mkCongr proof (← instantiateMVars h)
   let statement ← mkEq (← mkAppM ``QKernel.toReal #[mkAppN (mkConst mirrorName) xs])
-    (mkAppN (mkConst kName) xs)
+    (mkAppN (mkConst kName) args)
   addDecl <| .thmDecl {
     name := kName ++ `toReal_mirror, levelParams := [], type := ← mkForallFVars xs statement,
     value := ← mkLambdaFVars xs proof }
