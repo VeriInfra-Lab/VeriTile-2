@@ -1,20 +1,25 @@
 /-
 VeriTile.Staging.Dist.SpecLibSpec
 
-Interface and statements of the specification library, frozen by ticket S7.1.
-Signed: `allGather_apply` and `allReduce_eq_of_leaves_perm` (2026-11-11) and
-`moeCombine_of_moeDispatch` (2026-11-12), each with the definitions under it.
-Signed on 2026-11-23 (user decisions of that day, recorded on #66; the agent
-recorded the signature on the user's delegation): coverage of a reduction tree
-in the subset form (`ReduceOrder.CoversOn`, `ReduceOrder.Covers`) with
-`ReduceOrder.eval_eq_sum_of_coversOn`, `ReduceOrder.eval_eq_sum_of_covers` and
-`allReduce_eq_sum_of_covers`, and the statements of S7.2:
-`reduceScatter_eq_sum_of_covers`, `gemmReduceScatter_eq_sum_of_covers`,
-`reduceScatter_twoRanks`, `gemm_apply`, `allGatherGemm_eq`,
-`allGatherGemm_apply`, `gemmReduceScatter_apply`, which freeze `reduceScatter`,
-`gemm`, `allGatherGemm` and `gemmReduceScatter`. Everything else is UNSIGNED:
-`ReduceOrder.ofList` and the helper lemmas of coverage, all-to-all (S7.4) and
-the attention merge (S7.5).
+S7.1 records the signatures for the collective specification library.
+`moeCombine_of_moeDispatch`, signed on 2026-11-12 with its dependencies,
+remains here. All-to-all (S7.4) and the attention merge (S7.5) remain unsigned
+here.
+
+The 2026-11-11 statements `allGather_apply` and `allReduce_eq_of_leaves_perm`
+now live in `VeriTile/Dist/Spec/AllGather.lean` and
+`VeriTile/Dist/Spec/AllReduce.lean`, respectively.
+
+The declarations signed on 2026-11-23 (#66) moved to `VeriTile/Dist/Spec/` in #500.
+- `RankTensor.lean` contains `ReduceOrder.CoversOn`, `ReduceOrder.Covers`,
+  `ReduceOrder.eval_eq_sum_of_coversOn` and `ReduceOrder.eval_eq_sum_of_covers`.
+  `ReduceOrder.ofList` and the coverage helpers also live there and remain unsigned.
+- `AllReduce.lean` contains `allReduce_eq_sum_of_covers`.
+- `ReduceScatter.lean` contains `reduceScatter_eq_sum_of_covers`,
+  `gemmReduceScatter_eq_sum_of_covers`, `reduceScatter_twoRanks`, `gemm_apply`,
+  `allGatherGemm_eq`, `allGatherGemm_apply` and `gemmReduceScatter_apply`, with
+  their frozen definitions `reduceScatter`, `gemm`, `allGatherGemm` and
+  `gemmReduceScatter`.
 
 The library states what a collective computes, as a mathematical function or
 relation over one tensor per rank. It is independent of any front end and of
