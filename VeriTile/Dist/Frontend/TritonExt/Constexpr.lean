@@ -273,6 +273,17 @@ private partial def evaluate (ctx : Bindings) (e : SourceExpr) : TermElabM (Opti
     staticName ctx id
   | _ => return none
 
+/-- Resolve a Boolean with the same immutable source bindings as `tl.constexpr`. -/
+def resolveBool (profile : Option Syntax) (stmts : Array (TSyntax `tritonStmt))
+    (expression : TSyntax `tritonExpr) : TermElabM (Option Bool) := do
+  let ctx ← match profile with
+    | some signature => signatureBindings signature stmts
+    | none => pure (bareBindings stmts)
+  let aliases := stmts.toList.flatMap (aliasDeclarations ·.raw)
+  let some (.boolean value) ← evaluate { ctx with aliasNames := aliases.map Prod.fst } expression
+    | return none
+  return some value
+
 mutual
 
 private partial def lower (ctx : Bindings) (aliases : List Name) (raw : Syntax) :
