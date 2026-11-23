@@ -481,9 +481,11 @@ globs = [
   "tests.lean.InterpReflectSmoke",
   "tests.lean.InterpEvalSmoke",
   "tests.lean.InterpSymbolic",
+  "tests.lean.InterpArraySmoke",
   "tests.lean.InterpBridgeInvariant",
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.TritonExtConstexpr",
+  "tests.lean.dist.TritonExtProfiler",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
