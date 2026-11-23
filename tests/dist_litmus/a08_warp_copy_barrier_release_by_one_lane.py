@@ -1,6 +1,9 @@
+# Source: tile-ai/tilescale@9ba8a605d347f600a95d0275e2639cb00122c084 examples/distributed/deepseek_deepep/intranode/dispatch.py:363-478
+# Licence: MIT
+# Changes: rewritten as a minimal example; A warp copies to the peer, the block synchronizes, and a lane of another warp publishes the tail; the receiver mirrors it
 # LIT-a08. A warp copies to the peer, the block synchronizes, and a lane of
 # another warp publishes the tail; the receiver mirrors it.
-# Source: examples/distributed/deepseek_deepep/intranode/dispatch.py:363-418
+# Context: examples/distributed/deepseek_deepep/intranode/dispatch.py:363-418
 # and 451-478 at TileScale 9ba8a605 (the form of the sender and receiver
 # loops); deepep.md:190 ("Queue semantics");
 # docs/programming_guides/instructions.md:191 (T.sync_threads).

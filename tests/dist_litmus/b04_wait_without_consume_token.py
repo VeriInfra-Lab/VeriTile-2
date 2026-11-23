@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a docs/python-api/triton-dist.semantics.rst:155-180
+# Licence: MIT
+# Changes: rewritten as a minimal example; A load after a wait whose token is not consumed
 # LIT-b04. A load after a wait whose token is not consumed.
-# Source: docs/python-api/triton-dist.semantics.rst, "Token-Based Data
+# Context: docs/python-api/triton-dist.semantics.rst, "Token-Based Data
 # Dependency" (TD-SEM).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

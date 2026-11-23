@@ -1,6 +1,9 @@
+# Source: tile-ai/tilescale@71e71457d40ed6e6a2dad297936bfdbff21d104b tilelang/language/copy_op.py:258-269; tile-ai/tilescale@71e71457d40ed6e6a2dad297936bfdbff21d104b tilelang/language/builtin.py:382-388
+# Licence: MIT
+# Changes: rewritten as a minimal example; A TMA store to the peer, the store wait, then a release store of a flag; the peer waits on the flag and reads
 # LIT-c09. A TMA store to the peer, the store wait, then a release store of a
 # flag; the peer waits on the flag and reads.
-# Source: docstring of tma_copy, tilelang/language/copy_op.py:258-269
+# Context: docstring of tma_copy, tilelang/language/copy_op.py:258-269
 # (TS-COPY); docstring of tma_store_wait, tilelang/language/builtin.py:382-388;
 # docs/distributed_api_reference.md, "Peer Memory Operations" (TS-API).
 # Table: documents/dist/LitmusTable.md. Front end: TileScale 71e7145.
