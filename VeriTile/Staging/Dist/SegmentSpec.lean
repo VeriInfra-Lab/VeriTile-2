@@ -289,6 +289,20 @@ theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
 
 /-! ## Programs and steps (S3.3) -/
 
+/-! S4.1 unsigned alternative, 2026-11-23. Keep the legacy flat singleton
+form; a source cut can also name the performing agent of each event and group
+events that must fire without an intervening schedule step. -/
+
+inductive AccessValue where
+  | noValue
+  | store (value : MemCell)
+  | update (apply : MemCell → MemCell)
+
+structure Emission where
+  actor : Agent
+  event : Event
+  data : AccessValue := .noValue
+
 /-- UNSIGNED. Part 2. Owner: S3.3. What follows the segment of a step, for an
 agent whose program states have type `P`. `finish`: the agent has ended.
 `emit e k`: the agent performs the event `e`, which may block, and continues
@@ -298,6 +312,7 @@ nothing. -/
 inductive Next (P : Type) where
   | finish
   | emit (e : Event) (k : Option MemCell → P)
+  | emitGroup (head : Emission) (tail : List Emission) (k : List (Option MemCell) → P)
 
 /-- UNSIGNED. Part 2. Owner: S3.3. The program of one agent, cut at its
 events. `segment p` is the code from program state `p` up to the next event,
@@ -328,6 +343,30 @@ inductive AgentProgram.Steps {P : Type} (prog : AgentProgram P) :
   | emit {p : P} {σ : DistState} {e : Event} {k : Option MemCell → P} {v : Option MemCell}
       {l : List (Segment ⊕ Event)} (h : prog.next p σ = .emit e k) (rest : prog.Steps (k v) l) :
       prog.Steps p (Sum.inl (prog.segment p) :: Sum.inr e :: l)
+
+  | emitGroup {p : P} {σ : DistState} {e : Emission} {es : List Emission}
+      {k : List (Option MemCell) → P} {vs : List (Option MemCell)} {l : List (Segment ⊕ Event)}
+      (h : prog.next p σ = .emitGroup e es k) (arity : vs.length = es.length + 1)
+      (rest : prog.Steps (k vs) l) :
+      prog.Steps p (.inl (prog.segment p) :: ((e :: es).map (fun x => .inr x.event) ++ l))
+
+/-- N6. The event, actor, payload and continuation are determined by the
+segment's declared reads and its local state. Required of launch programs. -/
+def AgentProgram.NextLocal {P : Type} (p : AgentProgram P) : Prop :=
+  ∀ pc σ τ, DistState.AgreesOn ((p.segment pc).reads σ) σ τ →
+    DistState.SameLocal (p.segment pc).agent σ τ → p.next pc σ = p.next pc τ
+
+/-- N7. A cut can compute its events from the state in which the preceding
+segment starts. This includes K6's loaded lengths; ofBody retains fixed events. -/
+structure EventCut where
+  code : Segment
+  issue : DistState → Emission × List Emission
+
+def AgentProgram.ofCuts (owner : Agent) : AgentProgram (List EventCut) where
+  segment cuts := cuts.head?.map EventCut.code |>.getD (Segment.ofStmts owner [])
+  next cuts σ := match cuts with
+    | [] => .finish
+    | c :: rest => let (e, es) := c.issue σ; .emitGroup e es fun _ => rest
 
 /-- UNSIGNED. Part 2. Proved by S3.3. The segment part of a step is
 deterministic: a program state and a state fix the state reached, the event
