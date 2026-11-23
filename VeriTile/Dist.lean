@@ -14,3 +14,5 @@ import VeriTile.Dist.Access
 import VeriTile.Dist.SymmHeap
 import VeriTile.Dist.Spec.AllReduce
 import VeriTile.Dist.Spec.AllGather
+import VeriTile.Dist.State
+import VeriTile.Dist.ThreadGuard

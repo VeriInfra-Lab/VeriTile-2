@@ -137,7 +137,7 @@ The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, signed
 on 2026-11-13; it is no longer a parameter.
 -/
 import VeriTile.Triton.Semantics.Step
-import VeriTile.Dist.Agent
+import VeriTile.Dist.State
 import VeriTile.Staging.Dist.LocationSpec
 import VeriTile.Staging.Dist.EventSpec
 
@@ -147,37 +147,7 @@ open VeriTile.Triton (BlockState MemCell Stmt Kernel stepStmts exec)
 
 /-! # Part 1: segments, footprint soundness, the bridge for one segment -/
 
-/-! ## State access that the statements need (stubs for S1.5 and S1.6) -/
-
-/-- Stub (S1.5), under signed statements. Part 1. The content of cell `p` in the distributed
-state. -/
-noncomputable opaque DistState.cell : DistState → Addr → MemCell := fun _ _ => MemCell.real 0
-
-/-- Stub (S1.5), under signed statements. Part 1. `σ.setBlock r pid b` writes the upstream
-state `b` back as the state of the CTA with program ids `pid` on rank `r`: the
-memory that this CTA can reach and its registers. It is the inverse direction
-of `DistState.block`. -/
-opaque DistState.setBlock : DistState → Rank → List Nat → BlockState → DistState :=
-  fun σ _ _ _ => σ
-
-/-- Stub (S1.6), under signed statements. Part 1. The upstream state that a group or a thread
-`a` executes on: the memory that `a` can reach and the registers that are its
-own. A `local` cell is reached by its thread alone; a `shared` cell by every
-agent of the CTA.
-
-Laws that S1.6 owes, with `view` and `setView` below: reading back what was
-written and writing back what was read; how `cell` relates to the memory of a
-view; that the program ids are those of the CTA; that `setView a` changes only
-cells that `a` can reach, the registers of `a` and of the agents inside `a`,
-and no synchronization object; that two agents neither of which lies within
-the other have separate registers, also two thread agents that differ in the
-group only. -/
-opaque DistState.subView : DistState → Agent → BlockState
-
-/-- Stub (S1.6), under signed statements. Part 1. Writes the upstream state `b` back as the
-state of the group or thread `a`. The inverse direction of
-`DistState.subView`. -/
-opaque DistState.setSubView : DistState → Agent → BlockState → DistState := fun σ _ _ => σ
+/-! ## Agent views -/
 
 /-- Signed. Part 1. The upstream state that agent `a` executes on. For a CTA
 it is `DistState.block`. A whole rank runs no segment. -/
