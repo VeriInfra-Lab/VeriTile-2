@@ -508,10 +508,13 @@ globs = [
   "tests.lean.WelfordSourceContexts",
   "tests.lean.InterpReflectSmoke",
   "tests.lean.InterpEvalSmoke",
+  "tests.lean.InterpSymbolic",
+  "tests.lean.InterpArraySmoke",
   "tests.lean.InterpBridgeInvariant",
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtProfiler",
+  "tests.lean.InterpReflectBench",
   "tests.lean.dist.TensorDescriptorSource",
   "tests.lean.dist.SourceHelperSyntax",
 ]
