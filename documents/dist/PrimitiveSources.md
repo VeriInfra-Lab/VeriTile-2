@@ -1531,6 +1531,14 @@ item 11 answers an older open item.
     The row of section 5.8 moves from weakest to named assumption, and the
     open item on the grid-barrier docstrings is closed.
 
+### Decisions of 2026-11-23
+
+1. **Tutorial 07.** The original kernel waits with CUDA-family `dl.wait(..., "gpu", "acquire")` on a word written by an NVSHMEM put-with-signal. D5 and E-NV12 give a conflict and undefined behaviour. The proof target is a repaired variant whose signal write and wait belong to one family. The original defect is a finding for upstream near project end. Section 10 items 2 and 6 retain the evidence. [Decision on #489](https://github.com/VeriInfra-Lab/VeriTile-2/issues/489)
+2. **Whole-block barriers.** The three `T.sync_threads()` calls in the DeepEP port stay under A5. A10 keeps its current scope.
+3. **Warp barriers.** `T.sync_warp` remains under A5 at both TileScale commits until a target at `71e7145` depends on it.
+4. **Grid-barrier coverage.** A9 covers the wrapper only. When writing the K-M launch contract, trace the direct calls at `moe_utils.py:258,291`. Extend A9 only if a K-M target reaches one.
+5. **Cooperative launch.** Launch as a cooperative grid is a precondition of the K-M launch contract. A kernel theorem can use that contract. [Four decisions on #467](https://github.com/VeriInfra-Lab/VeriTile-2/issues/467)
+
 ## 10. Still open
 
 These points came up while the decisions were applied. No decision covers
@@ -1543,10 +1551,9 @@ report and one as a point to revisit.
    data race between ranks under A7. The port as written has this defect. The
    proof target is the variant with `scope="sys"` on those four loads. To
    report upstream at the end of the project; nobody has been contacted.
-2. **Tutorial 07 and the host signals.** `common_ops.set_signal` has the
+2. **Tutorial 07 and the host signals (decided 2026-11-23).** `common_ops.set_signal` has the
    weakest semantics, so it races with the `dl.wait` of the kernel (I6).
-   Tutorial 07 as written needs a further decision on the host signal; no
-   named assumption is introduced here. In addition, the calls in tutorials 06
+   The original is recorded as unprovable; the repaired variant must also provide matching host and device signal operations. No new guarantee is given to the host helper. In addition, the calls in tutorials 06
    and 07 do not match the definitions at the pin (E-TD17); this was read, not
    run.
 3. **Contract versus implementation.** The frozen manual now directly
@@ -1578,15 +1585,12 @@ report and one as a point to revisit.
    `tl.atomic_add` is the same at both (E-TR1). If further base Triton rows
    are added, the commit to cite has to be chosen.
 
-6. **`dl.wait` on a word that an NVSHMEM signal writes.** The kernel of
+6. **`dl.wait` on a word that an NVSHMEM signal writes (decided 2026-11-23).** The kernel of
    tutorial 07 waits with `dl.wait(..., "gpu", "acquire")` on words that
    `putmem_signal_block` writes (E-TD17). D5 reads the wait as loads of the
    CUDA C++ model; the signal write is an NVSHMEM signal operation, and E-NV12
    makes a concurrent access by anything else undefined. In the signed event
-   interface the two are of different families and conflict (LIT-b07), and no
-   assumption can remove that conflict; one could only change which event
-   `dl.wait` is on such a word. The user left this open on 2026-11-13. No
-   assumption is introduced. (The former item 6, cross-GPU atomic support, was
+   interface the two are of different families and conflict (LIT-b07), and no assumption removes it. The user selected the repaired single-family proof target in section 9. The original remains a finding to report upstream near project end. (The former item 6, cross-GPU atomic support, was
    decided on 2026-11-13: A8.)
 
 7. **K15 under A8, to revisit** (I10; decided on 2026-11-21). K15 is kept as

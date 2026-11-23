@@ -115,7 +115,7 @@ Still open (comment of 2026-11-13 on #37):
 - Whether the docstring of the grid barrier counts as a documented rendezvous.
 
 What each pattern has to carry (read from `documents/census/MinimalSyntax.md`,
-kernels 106–119, from `PrimitiveSources.md` and from
+kernels 65–78, from `PrimitiveSources.md` and from
 `documents/dist/DeepEPInventory.md`, section 4.2; no kernel source was read
 for this file):
 
