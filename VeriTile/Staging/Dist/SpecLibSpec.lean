@@ -3,8 +3,17 @@ VeriTile.Staging.Dist.SpecLibSpec
 
 S7.1 records the signatures for the collective specification library.
 `moeCombine_of_moeDispatch`, signed on 2026-11-12 with its dependencies,
-remains here. All-to-all (S7.4) and the attention merge (S7.5) remain unsigned
-here.
+remains here. The attention merge (S7.5) remains unsigned here.
+
+Signed on 2026-11-24 (user decision of that day, recorded on #66 and #69; the
+agent recorded the signature on the user's delegation): step 1 of all-to-all
+(S7.4), that is `allToAll_apply`, `allToAll_involutive`,
+`AllToAllLayout.receives_iff`, `allToAllV_recv_eq_of_receives`,
+`allToAllV_exists_of_wellFormed`, `AllToAllLayout.fixedSize_wellFormed` and
+`allToAllV_fixedSize_iff`, which freeze `allToAll`, `AllToAllLayout`,
+`AllToAllLayout.Receives`, `AllToAllLayout.WellFormed`, `AllToAllV` and
+`AllToAllLayout.fixedSize`. The converse of `allToAllV_exists_of_wellFormed`
+and the round-trip lemmas come with step 2 and are not signed.
 
 The 2026-11-11 statements `allGather_apply` and `allReduce_eq_of_leaves_perm`
 now live in `VeriTile/Dist/Spec/AllGather.lean` and
@@ -103,14 +112,14 @@ open scoped BigOperators
 
 /-! ## All-to-all (S7.4) -/
 
-/-- UNSIGNED. Owner: S7.4. Fixed-size all-to-all. The buffer of each rank has
+/-- Signed (#66). Owner: S7.4. Fixed-size all-to-all. The buffer of each rank has
 one chunk of `n` rows per peer. Afterwards chunk `s` of rank `d` is what chunk
 `d` of rank `s` was. -/
 def allToAll {numRanks n : Nat} {ι : Type} (x : RankTensor numRanks (Fin (numRanks * n) × ι)) :
     RankTensor numRanks (Fin (numRanks * n) × ι) :=
   fun d i => x i.1.divNat (finProdFinEquiv (d, i.1.modNat), i.2)
 
-/-- UNSIGNED. Owner: S7.4. Destination `d` receives source `s`'s chunk for `d`. -/
+/-- Signed (#66). Owner: S7.4. Destination `d` receives source `s`'s chunk for `d`. -/
 theorem allToAll_apply {numRanks n : Nat} {ι : Type}
     (x : RankTensor numRanks (Fin (numRanks * n) × ι))
     (d s : Fin numRanks) (i : Fin n) (j : ι) :
@@ -118,7 +127,7 @@ theorem allToAll_apply {numRanks n : Nat} {ι : Type}
   congrArg (fun p : Fin numRanks × Fin n => x p.1 (finProdFinEquiv (d, p.2), j))
     (finProdFinEquiv.symm_apply_apply (s, i))
 
-/-- UNSIGNED. Owner: S7.4. Swapping source and destination chunks twice restores the input. -/
+/-- Signed (#66). Owner: S7.4. Swapping source and destination chunks twice restores the input. -/
 theorem allToAll_involutive {numRanks n : Nat} {ι : Type}
     (x : RankTensor numRanks (Fin (numRanks * n) × ι)) : allToAll (allToAll x) = x := by
   funext d index
@@ -126,7 +135,7 @@ theorem allToAll_involutive {numRanks n : Nat} {ι : Type}
   obtain ⟨⟨s, i⟩, rfl⟩ := finProdFinEquiv.surjective row
   rw [allToAll_apply, allToAll_apply]
 
-/-- UNSIGNED. Owner: S7.4. The tables of a variable-length all-to-all.
+/-- Signed (#66). Owner: S7.4. The tables of a variable-length all-to-all.
 `count s d` is the number of rows that rank `s` sends to rank `d`;
 `sendOffset s d` is the first of these rows in the send buffer of `s`;
 `recvOffset d s` is the first row in the receive buffer of `d` that they
@@ -136,18 +145,18 @@ structure AllToAllLayout (numRanks : Nat) where
   sendOffset : Fin numRanks → Fin numRanks → Nat
   recvOffset : Fin numRanks → Fin numRanks → Nat
 
-/-- UNSIGNED. Owner: S7.4. Row `p` of the receive buffer of rank `d` is filled
+/-- Signed (#66). Owner: S7.4. Row `p` of the receive buffer of rank `d` is filled
 from rank `s`. -/
 def AllToAllLayout.Receives {numRanks : Nat} (L : AllToAllLayout numRanks)
     (d s : Fin numRanks) (p : Nat) : Prop :=
   L.recvOffset d s ≤ p ∧ p < L.recvOffset d s + L.count s d
 
-/-- UNSIGNED. Owner: S7.4. The precondition of a variable-length all-to-all:
+/-- Signed (#66). Owner: S7.4. The precondition of a variable-length all-to-all:
 no row of a receive buffer is filled from two sources. -/
 def AllToAllLayout.WellFormed {numRanks : Nat} (L : AllToAllLayout numRanks) : Prop :=
   ∀ d s₁ s₂ p, L.Receives d s₁ p → L.Receives d s₂ p → s₁ = s₂
 
-/-- UNSIGNED. Owner: S7.4. Variable-length all-to-all. Row `i` of the rows
+/-- Signed (#66). Owner: S7.4. Variable-length all-to-all. Row `i` of the rows
 that rank `s` sends to rank `d` arrives at row `recvOffset d s + i` of the
 receive buffer of `d`. Rows that no source fills are not constrained. -/
 def AllToAllV {numRanks : Nat} {ι : Type} (L : AllToAllLayout numRanks)
@@ -155,7 +164,7 @@ def AllToAllV {numRanks : Nat} {ι : Type} (L : AllToAllLayout numRanks)
   ∀ s d i, i < L.count s d → ∀ j,
     recv d (L.recvOffset d s + i, j) = send s (L.sendOffset s d + i, j)
 
-/-- UNSIGNED. Owner: S7.4. The received row has an offset within the source's payload. -/
+/-- Signed (#66). Owner: S7.4. The received row has an offset within the source's payload. -/
 theorem AllToAllLayout.receives_iff {numRanks : Nat} (L : AllToAllLayout numRanks)
     (d s : Fin numRanks) (p : Nat) :
     L.Receives d s p ↔ ∃ i < L.count s d, p = L.recvOffset d s + i := by
@@ -166,7 +175,7 @@ theorem AllToAllLayout.receives_iff {numRanks : Nat} (L : AllToAllLayout numRank
   · rintro ⟨i, hi, rfl⟩
     constructor <;> omega
 
-/-- UNSIGNED. Owner: S7.4. If both receive buffers satisfy the relation,
+/-- Signed (#66). Owner: S7.4. If both receive buffers satisfy the relation,
 they agree on every row that some source fills. -/
 theorem allToAllV_recv_eq_of_receives {numRanks : Nat} {ι : Type}
     {L : AllToAllLayout numRanks} {send recv₁ recv₂ : RankTensor numRanks (Nat × ι)}
@@ -176,7 +185,7 @@ theorem allToAllV_recv_eq_of_receives {numRanks : Nat} {ι : Type}
   obtain ⟨i, hi, rfl⟩ := (L.receives_iff d s p).mp hrow
   exact (h₁ s d i hi j).trans (h₂ s d i hi j).symm
 
-/-- UNSIGNED. Owner: S7.4. Disjoint receive intervals admit a receive buffer
+/-- Signed (#66). Owner: S7.4. Disjoint receive intervals admit a receive buffer
 for every send buffer. -/
 theorem allToAllV_exists_of_wellFormed {numRanks : Nat} {ι : Type}
     {L : AllToAllLayout numRanks} (hL : L.WellFormed)
@@ -193,7 +202,7 @@ theorem allToAllV_exists_of_wellFormed {numRanks : Nat} {ι : Type}
   rw [dif_pos h, hL d h.choose s _ h.choose_spec hrow]
   simp
 
-/-- UNSIGNED. Owner: S7.4. Equal-size chunks in rank order on both sides. -/
+/-- Signed (#66). Owner: S7.4. Equal-size chunks in rank order on both sides. -/
 def AllToAllLayout.fixedSize (numRanks n : Nat) : AllToAllLayout numRanks where
   count := fun _ _ => n
   sendOffset := fun _ d => d.val * n
@@ -204,7 +213,7 @@ private theorem allToAllRow_val {numRanks n : Nat} (s : Fin numRanks) (i : Fin n
   change i.val + n * s.val = s.val * n + i.val
   ac_rfl
 
-/-- UNSIGNED. Owner: S7.4. Fixed-size chunks have disjoint receive intervals. -/
+/-- Signed (#66). Owner: S7.4. Fixed-size chunks have disjoint receive intervals. -/
 theorem AllToAllLayout.fixedSize_wellFormed (numRanks n : Nat) :
     (fixedSize numRanks n).WellFormed := by
   intro d s₁ s₂ p h₁ h₂
@@ -217,7 +226,7 @@ theorem AllToAllLayout.fixedSize_wellFormed (numRanks n : Nat) :
     exact e₁.symm.trans e₂
   exact congrArg Prod.fst (finProdFinEquiv.injective he)
 
-/-- UNSIGNED. Owner: S7.4. Restricting the equal-size relation to its
+/-- Signed (#66). Owner: S7.4. Restricting the equal-size relation to its
 `numRanks * n` rows gives the fixed-size function. -/
 theorem allToAllV_fixedSize_iff {numRanks n : Nat} {ι : Type}
     (send recv : RankTensor numRanks (Nat × ι)) :
