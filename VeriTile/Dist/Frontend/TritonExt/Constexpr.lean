@@ -46,6 +46,9 @@ pointer dtypes by `tl.region`. Pasted call bodies use signature constexpr
 names, source constants and fixed pointer types. Runtime arguments are never
 compile-time bindings. The adapter evaluates only Lean data and leaves
 unrelated expressions and source instructions to the existing frontend.
+An integer folded into a register assignment is materialized with its
+Triton integer dtype. Static dimensions and inline operands retain literal
+syntax so the consuming constructor can select the type.
 Integer aliases from these calls have block scope, including inside a runtime
 `if`. The condition and runtime statements remain in the kernel.
 Stored source procedures use their own entry point.
@@ -81,6 +84,16 @@ private def literal : Value → MacroM SourceExpr
   | .string s =>
     let lit : TSyntax `str := ⟨Syntax.mkStrLit s⟩
     `(tritonExpr| $lit:str)
+
+private def integerRegister (n : Int) : MacroM SourceExpr := do
+  let dtype ←
+    if -(2^31 : Int) ≤ n && n < 2^31 then `(tritonDType| tl.int32)
+    else if 0 ≤ n && n < 2^32 then `(tritonDType| tl.uint32)
+    else if -(2^63 : Int) ≤ n && n < 2^63 then `(tritonDType| tl.int64)
+    else if 0 ≤ n && n < 2^64 then `(tritonDType| tl.uint64)
+    else Macro.throwError "folded constexpr register exceeds Triton's integer range"
+  let value ← literal (.integer n)
+  `(tritonExpr| tl.cast($value:tritonExpr, $dtype:tritonDType))
 
 -- SourceDType supplies canonical names. Use the source precision rather than
 -- the interpreter carrier (for example uint8 and uint64 both use Nat).
@@ -307,6 +320,11 @@ private partial def lower (ctx : Bindings) (aliases : List Name) (raw : Syntax) 
     TermElabM Syntax := do
   if raw.getKind == choiceKind && containsCall raw then return ← lower ctx aliases raw[0]!
   match raw with
+  | `(tritonStmt| $id:ident = $value:tritonExpr) =>
+    if containsCall value.raw || (identifiers value.raw).any aliases.contains then
+      if let some (.integer n) ← evaluate ctx value then
+        let value ← liftMacroM (integerRegister n)
+        return (← liftMacroM `(tritonStmt| $id:ident = $value)).raw
   | `(tritonStmt| if $c:tritonExpr { $yes:tritonStmt* } else { $no:tritonStmt* })
   | `(tritonStmt| tl.if $c:tritonExpr { $yes:tritonStmt* } else { $no:tritonStmt* }) =>
     let condition : SourceExpr := ⟨← lower ctx aliases c.raw⟩
