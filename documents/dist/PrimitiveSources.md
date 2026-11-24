@@ -1134,9 +1134,11 @@ were open in the first form of this block; the user decided each on
   data race (E-CU2), as in I3. The `T.wait_ne` before each load is defined
   under A6, at system scope with `acquire`, but it returns no value and finds
   no release to pair with. Where a rank sends to itself both accesses are in
-  one device. LIT-b12 writes its load without a scope too, so its outcome
-  stays undefined, because of the scope and no longer because of the word
-  `volatile`. Decision of 2026-11-21: A7 stays as decided. The port as
+  one device. At the front-end pin `71e7145`, LIT-b12’s volatile load is
+  plain under W1 and races with the remote relaxed store (undefined, mark N).
+  At the port pin `9ba8a605`, A7 makes the load device-scope relaxed; it still
+  races across ranks. Giving the load system scope yields 7 under A6, A7,
+  A8 and A10 (section 9). Decision of 2026-11-21: A7 stays as decided. The port as
   written has this defect, a data race between ranks in the offset handshake
   of K25 and K26. The proof target is the variant of the port with
   `scope="sys"` on those four loads and no other change. The defect is a
