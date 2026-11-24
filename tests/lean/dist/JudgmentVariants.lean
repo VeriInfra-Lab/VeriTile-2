@@ -192,6 +192,17 @@ example (w : CellWrites) (s : Machine) (p : Addr) (init : Counter → Nat) :
     ({s with mem := w.put s.mem p (.of .nat 7)} : Machine).count? init (.word p) = some 7 := by
   simp [Machine.count?, w.read_same]
 
+-- Synchronizing on the flag orders the observed data cell, including across
+-- programs. The signed scope edge alone does not identify the source write.
+example (l : Launch P) (a b : Agent) (flag dataCell : Addr) :
+    HB l [.issued a ⟨a,.bump ⟨.word flag,.set,1,.atomic .sys .release⟩,.noValue⟩,
+          .issued b ⟨b,.wait (.word flag) .eq 1 (.atomic .sys .acquire),.noValue⟩]
+      dataCell 0 1 := by
+  apply SyncEdge.hb_of_readsFrom (c := .word flag) (m := .atomic .sys .release)
+    (atRel := rfl) (atAcq := rfl) (released := rfl)
+  · exact ⟨_, _, _, rfl, rfl, rfl, rfl, trivial, trivial⟩
+  · exact ⟨by decide, fun k _ lo hi _ => by omega⟩
+
 -- A plain segment write between the release and acquire cuts off the old
 -- release as a source, even though it does not appear in the event trace.
 example (a b : Agent) (p : Addr) :

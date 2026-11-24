@@ -258,6 +258,21 @@ def DirectHB (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
 /-- S4.3/#49. Scope visibility is indexed by the cell throughout the chain. -/
 def HB (l : Launch P) (h : History) (p : Addr) := Relation.TransGen (DirectHB l h p)
 
+/-- S5.1/S1: the scope checker supplies a synchronization pair for the
+observed cell `p`. At its two history positions, the acquire must read from
+this release on the same synchronization counter. -/
+theorem SyncEdge.hb_of_readsFrom {l : Launch P} {h : History} {p : Addr} {i j : Nat}
+    {rel acq : Agent × Event} {c : Counter} {m : Mode}
+    (edge : SyncEdge l.reach p rel acq)
+    (atRel : (h[i]? >>= Occurrence.event?) = some rel)
+    (atAcq : (h[j]? >>= Occurrence.event?) = some acq)
+    (released : rel.2.releaseOf? = some (c,m)) (source : ReadsFrom h i j c) :
+    HB l h p i j := by
+  obtain ⟨x, hx, ex⟩ := Option.bind_eq_some_iff.mp atRel
+  obtain ⟨y, hy, ey⟩ := Option.bind_eq_some_iff.mp atAcq
+  exact .single ⟨x, y, hx, hy, source.1,
+    Or.inr (Or.inr (Or.inr ⟨rel, acq, c, m, ex, ey, released, source, edge⟩))⟩
+
 def DataRace (l : Launch P) (h : History) : Prop :=
   ∃ i j x y p k k' m m', i < j ∧ h[i]? = some x ∧ h[j]? = some y ∧
     x.access p k m ∧ y.access p k' m' ∧ (k.writes = true ∨ k'.writes = true) ∧
