@@ -14,6 +14,7 @@
     "Uses FOUR GPUs, by the user's decision of 2026-11-13 (documents/GpuExchangeProtocol.md, section 9): make two NVLink pairs visible, the two GPUs of one pair first, then the two of the other (CUDA_VISIBLE_DEVICES=a,b,c,d with a-b one pair and c-d another), all four idle. Ranks 0 and 1 then run on the first pair and ranks 2 and 3 on the second, under both launchers; under logical_nodes/* each logical node holds one pair.",
     "Expected if the run completes, judged on the development side only (experiments/interp_gpu/internode_logical/judge.py): both tests ok, every rank returning its 256 rows of the sum of the four inputs.",
     "The harness passes is_intra_node=False to BarrierAllContext. The tutorial then uses NVSHMEM's global stream barrier, avoiding compare-and-swap between NVLink pairs over PCIe. With this context a successful rank reports barrier [-1, -1, 2].",
+    "A hang, a timeout or a wrong value under either launcher is the result of the test. Report it as it is; do not retry or change the visible order.",
     "Every rank prints which pairs of its visible devices report native atomic operations (a line `native atomics between visible devices`), so that the result says whether the two pairs were visible in the order pair, pair."
   ],
   "tests": [

@@ -4,9 +4,12 @@ unchanged from SpecLibSpec. Reordering uses the laws of real addition and
 makes no claim about floating-point addition.
 -/
 import VeriTile.Dist.Spec.RankTensor
+import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Tactic.NormNum
 
 namespace VeriTile.Dist
+
+open scoped BigOperators
 
 /-- Owner: S7.3. Every rank holds a tensor. Afterwards rank `r`
 holds the sum over ranks; its element at index `i` is added in the order
@@ -26,6 +29,14 @@ theorem allReduce_eq_of_leaves_perm {numRanks : Nat} {ι : Type}
   change (order₁ r i).eval (fun q => x q i) = (order₂ r i).eval (fun q => x q i)
   rw [ReduceOrder.eval_eq_sum_leaves, ReduceOrder.eval_eq_sum_leaves]
   exact ((h r i).map (fun q => x q i)).sum_eq
+
+/-- Signed (#66). Owner: S7.3 (`AllReduce.lean`).
+A covered output cell contains the sum over all ranks. -/
+theorem allReduce_eq_sum_of_covers {numRanks : Nat} {ι : Type}
+    (order : Fin numRanks → ι → ReduceOrder (Fin numRanks)) (x : RankTensor numRanks ι)
+    (r : Fin numRanks) (i : ι) (h : (order r i).Covers) :
+    allReduce order x r i = ∑ q, x q i :=
+  ReduceOrder.eval_eq_sum_of_covers (fun q => x q i) h
 
 namespace AllReduceExamples
 
@@ -66,6 +77,18 @@ example :
   intro h
   have hcell := congrFun (congrFun h 0) ()
   norm_num [allReduce, leftOrder, droppedOrder, droppedTensor, ReduceOrder.eval] at hcell
+
+/-- Omitting rank 1 changes the sum on two inputs of 1. -/
+example : allReduce (numRanks := 2) (ι := Unit) (fun _ _ => .input 0) (fun _ _ => 1) 0 () ≠
+    ∑ _q : Fin 2, (1 : ℝ) := by
+  rw [Fin.sum_univ_two]
+  norm_num [allReduce, ReduceOrder.eval]
+
+/-- Repeating rank 0 changes the sum even when the tree has two leaves. -/
+example : allReduce (numRanks := 2) (ι := Unit) (fun _ _ => .add (.input 0) (.input 0))
+    (fun q _ => if q = 0 then 1 else 0) 0 () ≠ ∑ q : Fin 2, (if q = 0 then (1 : ℝ) else 0) := by
+  rw [Fin.sum_univ_two]
+  norm_num [allReduce, ReduceOrder.eval]
 
 end AllReduceExamples
 end VeriTile.Dist

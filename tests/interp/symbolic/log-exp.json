@@ -1,0 +1,9 @@
+{"version":1,"outputs":[
+  ["cast",["fp32","real","real"],[
+    ["unary",["fp32","libdeviceLog"],[
+      ["unary",["fp32","libdeviceExp"],[
+        ["fp32Load",[],[["literal",[null,"real",1,3],[]]]]
+      ]]
+    ]]
+  ]]
+]}
