@@ -29,6 +29,37 @@ example : bareWidth = triton {
   splits_elem_size = 4
 } := rfl
 
+-- allreduce.py:642,669. The element width is the divisor in both calls.
+def allreduceVectorWidths : ComputeKernel :=
+  with_triton_signature ({pointers := [("symm_in_ptr", .bf16), ("symm_ptr", .i32)]}
+      : CallSignature) in triton {
+    input_vec_size = 128 // tl.constexpr(symm_in_ptr.dtype.element_ty.primitive_bitwidth)
+    symm_vec_size = 128 // tl.constexpr(symm_ptr.dtype.element_ty.primitive_bitwidth)
+  }
+
+example : allreduceVectorWidths =
+    with_triton_signature ({pointers := [("symm_in_ptr", .bf16), ("symm_ptr", .i32)]}
+        : CallSignature) in triton {
+      input_vec_size = 8
+      symm_vec_size = 4
+    } := rfl
+
+-- reduce_scatter.py:404. A pointer dtype has no primitive-width property.
+/-- error: tl.constexpr requires a statically known value -/
+#guard_msgs in
+def pointerWidth : ComputeKernel :=
+  with_triton_signature ({pointers := [("symm_input_ptr", .i32)]} : CallSignature) in triton {
+    ITEM_SIZE = tl.constexpr(symm_input_ptr.dtype.primitive_bitwidth) // 8
+  }
+
+-- tutorials/04-deepseek-infer-all2all.py:344. The reference kernel's float
+-- constant needs an explicit transcription binding.
+/-- error: tl.constexpr requires a statically known value -/
+#guard_msgs in
+def floatConstexpr : ComputeKernel := triton {
+  FP8_MAX_INV = tl.constexpr(1 / 448.)
+}
+
 -- common_ops.py:83,102–103,132. Test the source constants independently
 -- of the consuming NVSHMEM helper and the environment register query.
 def bareIdentity : ComputeKernel := triton {
