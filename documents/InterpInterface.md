@@ -43,7 +43,7 @@ does. Looping over the program ids of a grid belongs to the runner (I7.2).
 
 ## 2. Frozen statements
 
-Adequacy (`VeriTile/Staging/Interp/Adequacy.lean`, proved by I3.3):
+Adequacy (`VeriTile/Interp/Adequacy/Exec.lean`, proved by I3.3):
 
 ```lean
 theorem interp_eq_structural_exec {α : Type} [Inhabited α]
@@ -170,9 +170,13 @@ integer output states a sentinel outside the kernel's result range.
 
 - How inputs are generated from a seed: owned by `scripts/interp/gen_inputs.py` (I8.1), which must produce identical bytes on every machine.
 - The directory layout of requests and results: `documents/GpuExchangeProtocol.md`.
-- The export format of the symbolic carrier (I6.3).
 
 ## 4. Expression tree format, version 1
+
+This section specifies the export format and is outside the statement fingerprints.
+A version 1 reader rejects any other version with a diagnostic. Adding a node kind
+or reordering metadata fields requires a new version. Trees have no sharing:
+each occurrence of a subtree is written in full.
 
 `VeriTile.Interp.Symbolic.writeTrees` writes one UTF-8 JSON object with an integer
 `version` of 1 and an `outputs` array. Each entry is one output element in caller

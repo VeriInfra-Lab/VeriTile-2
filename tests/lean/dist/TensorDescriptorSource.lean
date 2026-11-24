@@ -80,6 +80,24 @@ def tutorialCalls (a_ptr b_ptr c_ptr : RegionName) (EPILOGUE_SUBTILE : Bool) : C
     c_desc.store([offs_am, offs_bn], c)
   }
 
+private def conditionalBlock (x : RegionName) (FLAG : Bool) : ComputeKernel :=
+  with_triton_signature ({ pointers := [("x", .fp32)] } : CallSignature) in triton {
+    d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 4 if not FLAG else 2])
+    v = d.load([0, 0])
+  }
+
+example (x : RegionName) : conditionalBlock x Bool.false =
+    with_triton_signature ({ pointers := [("x", .fp32)] } : CallSignature) in triton {
+      d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 4])
+      v = d.load([0, 0])
+    } := rfl
+
+example (x : RegionName) : conditionalBlock x Bool.true =
+    with_triton_signature ({ pointers := [("x", .fp32)] } : CallSignature) in triton {
+      d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 2])
+      v = d.load([0, 0])
+    } := rfl
+
 /-- The descriptor methods preserve the corresponding block-pointer program. -/
 def methods (x : Region .fp32) : ComputeKernel := triton {
   d = tl.make_tensor_descriptor(x, shape=[8, 8], strides=[8, 1], block_shape=[2, 4])
@@ -317,7 +335,7 @@ example (x : RegionName) : ComputeKernel := with_triton_signature ({} : CallSign
   d = tl.tensor_descriptor(x)
 }
 
--- Tutorial 07:186 / allgather_gemm.py:279 at the pinned revision; #451 owns this boundary.
+-- Tutorial 07:186 / allgather_gemm.py:279 at the pinned revision; #79 owns dl.consume_token.
 /-- error: tensor descriptor: descriptor names cannot be rebound to other values -/
 #guard_msgs in
 example (x : RegionName) : ComputeKernel := with_triton_signature ({} : CallSignature) in triton {

@@ -7,7 +7,9 @@ It owns mandatory operations outside the selected format, including
 transcendentals and reductions. No default result for those fields is inferred.
 Same-format casts and fp32 loads preserve every bit, including NaN payloads.
 A bf16 backend requires explicit bf16 operations; an erased fp32 compute
-expression remains fp32. -/
+expression remains fp32. Typed bf16 FMA rounds the exact product plus addend
+once to bf16. Hardware that computes an fp32 FMA and then converts to bf16
+rounds twice and can give a different result. -/
 namespace VeriTile.Interp.FPValue
 open VeriTile.Triton VeriTile.Triton.FP
 

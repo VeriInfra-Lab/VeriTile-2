@@ -60,6 +60,15 @@ private def bf16Compute : QKernel := .mk [] ["out"]
   return x.map FP.Value.raw == some 0xb2800000 && nan.map FP.Value.raw == some 0x7fa12345 &&
     (m.fma .fp64).isNone
 
+-- These inexact positive results round up under the default nearest-even profile.
+#guard ((FPValue.partialAlgebra .bf16).literal none .bf16 (1/3)).map FP.Value.raw == some 0x3eab
+#guard ((FPValue.partialAlgebra .fp32).literal none .fp32 (1/10)).map FP.Value.raw == some 0x3dcccccd
+#guard Id.run do
+  let m := FPValue.partialAlgebra .bf16
+  let one := m.literal none .bf16 1
+  let three := m.literal none .bf16 3
+  return (m.binary none .bf16 .div one three).map FP.Value.raw == some 0x3eab
+
 -- Every source bit must survive a same-format cast, including a signaling NaN.
 #guard Id.run do
   let f := FPValue.partialAlgebra .bf16
