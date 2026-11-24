@@ -1,0 +1,104 @@
+{
+  "distinct": {
+    "rank0/barrier": {
+      "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba": 2
+    },
+    "rank0/reduced": {
+      "8a3d0fe34e4eb6041998af02bc136f233ed925479f1a94f7a5b99c8ea6ed8d16": 2
+    },
+    "rank0/topology": {
+      "4f6af14358145da003747a6869779928b20e9abf9a882d2e36762900090c6397": 2
+    },
+    "rank1/barrier": {
+      "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba": 2
+    },
+    "rank1/reduced": {
+      "a27a9fe329f6efdc09b66175af9ca55eaef62d2bca0c7a435f0bfbd2bc2949a1": 2
+    },
+    "rank1/topology": {
+      "f0dc486911c410a7b8617bee853a734ebbf5ad135acf6209b57e97fc40968269": 2
+    },
+    "rank2/barrier": {
+      "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba": 2
+    },
+    "rank2/reduced": {
+      "8f71a61a4c9b4fc19db7e0b93821fb0b90d0be3e92544e3575aa6cee4389eddf": 2
+    },
+    "rank2/topology": {
+      "2f607e9bc8440a44002949b47e51f325d43cee5830d459221a40a880a629aa7c": 2
+    },
+    "rank3/barrier": {
+      "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba": 2
+    },
+    "rank3/reduced": {
+      "2377709536ddb5806013a283fe589e4b81cb68c268eb01cac98278966e2d5e67": 2
+    },
+    "rank3/topology": {
+      "b842ed64e15a304a648000db434d2665e7b0ed4a3770104c1e7bf91532a4fb07": 2
+    }
+  },
+  "inputs": {
+    "x": {
+      "expected_sha256": "e8cb75b75fad6c0ba3cdf972955d6c7a2886554b22b4b08495dd295389a4a7d5",
+      "match": true,
+      "sha256": "e8cb75b75fad6c0ba3cdf972955d6c7a2886554b22b4b08495dd295389a4a7d5"
+    }
+  },
+  "launcher": "triton-dist",
+  "ranks": 4,
+  "repeats": 2,
+  "runs": [
+    {
+      "exit_code": 0,
+      "outputs": {
+        "rank0/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank0/reduced": "8a3d0fe34e4eb6041998af02bc136f233ed925479f1a94f7a5b99c8ea6ed8d16",
+        "rank0/topology": "4f6af14358145da003747a6869779928b20e9abf9a882d2e36762900090c6397",
+        "rank1/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank1/reduced": "a27a9fe329f6efdc09b66175af9ca55eaef62d2bca0c7a435f0bfbd2bc2949a1",
+        "rank1/topology": "f0dc486911c410a7b8617bee853a734ebbf5ad135acf6209b57e97fc40968269",
+        "rank2/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank2/reduced": "8f71a61a4c9b4fc19db7e0b93821fb0b90d0be3e92544e3575aa6cee4389eddf",
+        "rank2/topology": "2f607e9bc8440a44002949b47e51f325d43cee5830d459221a40a880a629aa7c",
+        "rank3/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank3/reduced": "2377709536ddb5806013a283fe589e4b81cb68c268eb01cac98278966e2d5e67",
+        "rank3/topology": "b842ed64e15a304a648000db434d2665e7b0ed4a3770104c1e7bf91532a4fb07"
+      },
+      "rank_status": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ],
+      "status": "ok",
+      "wall_time_s": 23.813
+    },
+    {
+      "exit_code": 0,
+      "outputs": {
+        "rank0/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank0/reduced": "8a3d0fe34e4eb6041998af02bc136f233ed925479f1a94f7a5b99c8ea6ed8d16",
+        "rank0/topology": "4f6af14358145da003747a6869779928b20e9abf9a882d2e36762900090c6397",
+        "rank1/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank1/reduced": "a27a9fe329f6efdc09b66175af9ca55eaef62d2bca0c7a435f0bfbd2bc2949a1",
+        "rank1/topology": "f0dc486911c410a7b8617bee853a734ebbf5ad135acf6209b57e97fc40968269",
+        "rank2/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank2/reduced": "8f71a61a4c9b4fc19db7e0b93821fb0b90d0be3e92544e3575aa6cee4389eddf",
+        "rank2/topology": "2f607e9bc8440a44002949b47e51f325d43cee5830d459221a40a880a629aa7c",
+        "rank3/barrier": "81d0ed8a02e6ba8871581063ea1f58274beb00da06a524a67ce014374a53afba",
+        "rank3/reduced": "2377709536ddb5806013a283fe589e4b81cb68c268eb01cac98278966e2d5e67",
+        "rank3/topology": "b842ed64e15a304a648000db434d2665e7b0ed4a3770104c1e7bf91532a4fb07"
+      },
+      "rank_status": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ],
+      "status": "ok",
+      "wall_time_s": 21.758
+    }
+  ],
+  "status": "ok",
+  "wall_time_s": 45.571
+}
