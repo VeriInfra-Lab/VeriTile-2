@@ -1,6 +1,6 @@
 # Third-party notices
 
-The tables use litmus filename prefixes and full paths for other files. Each identifier occurs once. We checked the pinned source paths against upstream Git trees on 2026-11-24. The offline gate checks each file against its row. The first three comments record source, licence and changes. Frozen fixtures and generated JSON carry the same three fields in adjacent `.attribution` files to preserve their byte bindings or file format.
+The tables use litmus filename prefixes and full paths for other files. Each identifier occurs once, under the SPDX expression in its subsection heading. We checked the pinned source paths against upstream Git trees on 2026-11-24. The offline gate checks each file against its row. The first three comments record source, licence and changes. Frozen fixtures and generated JSON carry the same three fields in adjacent `.attribution` files to preserve their byte bindings or file format.
 
 The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://github.com/spdx/license-list-data/blob/v3.26.0/text/MIT.txt). This repository also distributes [Apache-2.0](licenses/Apache-2.0.txt), [Apache-2.0 with LLVM exception](licenses/Apache-2.0-WITH-LLVM-exception.txt), and the BSD-3-Clause texts for [TorchAO](licenses/BSD-3-Clause-TorchAO.txt), [FlashAttention](licenses/BSD-3-Clause-FlashAttention.txt) [Random123](licenses/BSD-3-Clause-Random123.txt) and [SageAttention](licenses/BSD-3-Clause-SageAttention.txt). Each source retains its applicable copyright notice.
 
@@ -33,15 +33,17 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
 */
 ```
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `a05` | `MIT` | [08-overlapping-gemm-reduce-scatter.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/08-overlapping-gemm-reduce-scatter.py) |
-| `a06` | `MIT` | [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) |
-| `b01`, `b04` | `MIT` | [triton-dist.semantics.rst](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/docs/python-api/triton-dist.semantics.rst) |
-| `b02`, `b03`, `b13` | `MIT` | [01-distributed-notify-wait.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/01-distributed-notify-wait.py) |
-| `b07`, `b08` | `MIT` | [07-overlapping-allgather-gemm.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/07-overlapping-allgather-gemm.py) |
-| `b10`, `c01` | `MIT` | [03-inter-node-allgather.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py) |
-| `c05` | `MIT` | [04-deepseek-infer-all2all.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py) |
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `a05` | [08-overlapping-gemm-reduce-scatter.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/08-overlapping-gemm-reduce-scatter.py) |
+| `a06` | [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) |
+| `b01`, `b04` | [triton-dist.semantics.rst](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/docs/python-api/triton-dist.semantics.rst) |
+| `b02`, `b03`, `b13` | [01-distributed-notify-wait.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/01-distributed-notify-wait.py) |
+| `b07`, `b08` | [07-overlapping-allgather-gemm.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/07-overlapping-allgather-gemm.py) |
+| `b10`, `c01` | [03-inter-node-allgather.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py) |
+| `c05` | [04-deepseek-infer-all2all.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py) |
 
 ## TileScale
 
@@ -73,13 +75,15 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
     SOFTWARE
 ```
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `a07` | `MIT` | [deepep.md](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/deepep.md) |
-| `a08`, `b12` | `MIT` | [dispatch.py](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/dispatch.py) |
-| `a09` | `MIT` | [comm.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/comm.py) |
-| `b09` | `MIT` | [example_allgather_gemm_overlapped.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py) |
-| `b11` | `MIT` | [sync.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/sync.py) |
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `a07` | [deepep.md](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/deepep.md) |
+| `a08`, `b12` | [dispatch.py](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/dispatch.py) |
+| `a09` | [comm.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/comm.py) |
+| `b09` | [example_allgather_gemm_overlapped.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py) |
+| `b11` | [sync.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/sync.py) |
 
 ## TileLang
 
@@ -141,10 +145,12 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
 */
 ```
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `README.md`, `bench/examples/VectorAdd/Kernels.lean`, `bench/examples/VectorAdd/VectorAdd.py`, `experiments/interp_gpu/smoke/kernels.py` | `MIT` | [01-vector-add.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/01-vector-add.py) |
-| `VeriTile/Dist/Frontend/TritonExt/Swizzle.lean`, `tests/lean/dist/SwizzleSource.lean` | `MIT` | [standard.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/standard.py) |
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `README.md`, `bench/examples/VectorAdd/Kernels.lean`, `bench/examples/VectorAdd/VectorAdd.py`, `experiments/interp_gpu/smoke/kernels.py` | [01-vector-add.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/01-vector-add.py) |
+| `VeriTile/Dist/Frontend/TritonExt/Swizzle.lean`, `tests/lean/dist/SwizzleSource.lean` | [standard.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/standard.py) |
 
 ## DeepEP
 
@@ -178,36 +184,54 @@ SOFTWARE.
 
 NVIDIA Corporation is identified as the documentation copyright holder. The `docs/` tree at this pin has no separate grant for that tree. For the libcu++ examples we infer `Apache-2.0 WITH LLVM-exception` from the libcu++ entry in the root `LICENSE` and the component text. [Root licence, lines 1–4](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/LICENSE#L1-L4) · [libcu++ licence](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/libcudacxx/LICENSE.TXT) · [Component licence overview](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/contributors/license.rst) · [Documentation copyright](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/conf.py#L25).
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `a01`, `a02` | `Apache-2.0 WITH LLVM-exception` | [memory_model.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/memory_model.rst) |
+### Sources under `Apache-2.0 WITH LLVM-exception`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `a01`, `a02` | [memory_model.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/memory_model.rst) |
 
 ## Locally authored litmus designs
 
 These files implement the project’s original litmus specifications at [the S8.1 revision](https://github.com/VeriInfra-Lab/VeriTile-2/blob/51419efee8944c00d6d6a8296bf708ad2956b1d7/documents/dist/LitmusTable.md). Their MIT identifier applies to the project implementation. The NVIDIA NVSHMEM 3.6.5 manual supplies the API requirements cited in the table.
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `b05`, `b06`, `c02`, `c03`, `c04`, `c06`, `c07`, `c08` | `MIT` | [LitmusTable.md](https://github.com/VeriInfra-Lab/VeriTile-2/blob/51419efee8944c00d6d6a8296bf708ad2956b1d7/documents/dist/LitmusTable.md) |
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `b05`, `b06`, `c02`, `c03`, `c04`, `c06`, `c07`, `c08` | [LitmusTable.md](https://github.com/VeriInfra-Lab/VeriTile-2/blob/51419efee8944c00d6d6a8296bf708ad2956b1d7/documents/dist/LitmusTable.md) |
 
 ## Jointly attributed litmus sources
 
 These files combine the libcu++ examples and MIT material from the separately named repositories. Their expressions preserve the order in the existing mixed-source headers.
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `a03` | `(Apache-2.0 WITH LLVM-exception) AND MIT` | [memory_model.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/memory_model.rst) · [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) |
-| `a04` | `MIT AND (Apache-2.0 WITH LLVM-exception)` | [triton-dist.semantics.rst](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/docs/python-api/triton-dist.semantics.rst) · [memory_model.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/memory_model.rst) |
-| `a10` | `(Apache-2.0 WITH LLVM-exception) AND MIT` | [atomic_thread_fence.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/synchronization_primitives/atomic/atomic_thread_fence.rst) · [builtin.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/builtin.py) |
-| `c09` | `MIT` | [copy_op.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/copy_op.py) · [builtin.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/builtin.py) |
+### Sources under `(Apache-2.0 WITH LLVM-exception) AND MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `a03` | [memory_model.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/memory_model.rst) · [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) |
+| `a10` | [atomic_thread_fence.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/synchronization_primitives/atomic/atomic_thread_fence.rst) · [builtin.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/builtin.py) |
+
+### Sources under `MIT AND (Apache-2.0 WITH LLVM-exception)`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `a04` | [triton-dist.semantics.rst](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/docs/python-api/triton-dist.semantics.rst) · [memory_model.rst](https://github.com/NVIDIA/cccl/blob/5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5/docs/libcudacxx/extended_api/memory_model.rst) |
+
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `c09` | [copy_op.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/copy_op.py) · [builtin.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/builtin.py) |
 
 ## TritonBench-G and TorchAO
 
 The redistributed FP4 snapshot comes from the [Apache-2.0 TritonBench corpus](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/LICENSE). Its [task metadata](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1.json) identifies `pytorch/ao`. The original TorchAO file says “Copyright (c) Meta Platforms, Inc. and affiliates.” Its [BSD-3-Clause licence](https://github.com/pytorch/ao/blob/52b6f4d9f9e8dbd5c2e96582f0b39354bfc823b6/LICENSE) says “Copyright 2023 Meta”. Both notices accompany the fixtures. The table records the matched historical source revision; the corpus does not pin its TorchAO revision.
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `experiments/floating_point/value_validation/fp4_unscaled/reference/original.py`, `experiments/floating_point/value_validation/fp4_unscaled/reference/original_jit.py` | `Apache-2.0 AND BSD-3-Clause` | [fp4_to_bf16.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/fp4_to_bf16.py) · [custom_cast.py](https://github.com/pytorch/ao/blob/52b6f4d9f9e8dbd5c2e96582f0b39354bfc823b6/torchao/prototype/mx_formats/custom_cast.py) |
+### Sources under `Apache-2.0 AND BSD-3-Clause`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `experiments/floating_point/value_validation/fp4_unscaled/reference/original.py`, `experiments/floating_point/value_validation/fp4_unscaled/reference/original_jit.py` | [fp4_to_bf16.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/fp4_to_bf16.py) · [custom_cast.py](https://github.com/pytorch/ao/blob/52b6f4d9f9e8dbd5c2e96582f0b39354bfc823b6/torchao/prototype/mx_formats/custom_cast.py) |
 
 ## Historical kernel fixtures and derived code
 
@@ -220,19 +244,46 @@ The three intact Python test fixtures match TritonBench Git blobs at its pinned 
 
 - The attention quotation copies the [MIT-licensed historical Lean port](https://github.com/VeriInfra-Lab/VeriTile-2/blob/f71dffb1dc5bcf20f6680f318a83d852dd1e921f/LICENSE), Copyright (c) 2026 Zenan Li. The Python corpus file preserves the two JIT functions from the pinned historical SageAttention source. That revision uses its [BSD-3-Clause licence](licenses/BSD-3-Clause-SageAttention.txt), Copyright (c) 2024, Jintao Zhang. The local closed-form proof applies to this quoted surface kernel.
 
-| File identifiers | SPDX expression | Pinned source files |
-| --- | --- | --- |
-| `VeriTile/Examples/AttentionForwardClosedForm.lean` | `Apache-2.0 AND BSD-3-Clause AND MIT` | [data/TritonBench_G_v1/attention_forward_triton.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/attention_forward_triton.py) · [sageattention/attn_qk_int8_per_block_h96.py](https://github.com/thu-ml/SageAttention/blob/1d8f5314f0a6ec6d5f9a63bf0e60a0b55da80dac/sageattention/attn_qk_int8_per_block_h96.py) · [bench/tritonbench_g/attention_forward_triton/AttentionForwardTriton.lean](https://github.com/VeriInfra-Lab/VeriTile-2/blob/f71dffb1dc5bcf20f6680f318a83d852dd1e921f/bench/tritonbench_g/attention_forward_triton/AttentionForwardTriton.lean) |
-| `scripts/fixtures/source_materializations/seeded_dropout.py.txt` | `Apache-2.0 AND MIT` | [data/TritonBench_G_v1/seeded_dropout.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/seeded_dropout.py) · [python/tutorials/04-low-memory-dropout.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/04-low-memory-dropout.py) |
-| `scripts/fixtures/source_materializations/Kernels.lean.txt` | `Apache-2.0 AND MIT` | [data/TritonBench_G_v1/seeded_dropout.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/seeded_dropout.py) · [python/tutorials/04-low-memory-dropout.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/04-low-memory-dropout.py) |
-| `scripts/fixtures/source_control_materializations/layer_norm_fwd.py.txt` | `Apache-2.0 AND MIT AND BSD-3-Clause` | [data/TritonBench_G_v1/layer_norm_fwd.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/layer_norm_fwd.py) · [tests/python/layernorm/baselines/layer_norm_triton.py](https://github.com/HazyResearch/ThunderKittens/blob/cdfce886b2660a0345a20bc5c7d52efd0db95fc0/tests/python/layernorm/baselines/layer_norm_triton.py) · [flash_attn/ops/triton/layer_norm.py](https://github.com/Dao-AILab/flash-attention/blob/0dfb28174333d9eefb7c1dd4292690a8458d1e89/flash_attn/ops/triton/layer_norm.py) · [python/tutorials/05-layer-norm.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/05-layer-norm.py) |
-| `scripts/fixtures/source_control_materializations/Kernels.lean.txt` | `Apache-2.0 AND MIT AND BSD-3-Clause` | [data/TritonBench_G_v1/layer_norm_fwd.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/layer_norm_fwd.py) · [tests/python/layernorm/baselines/layer_norm_triton.py](https://github.com/HazyResearch/ThunderKittens/blob/cdfce886b2660a0345a20bc5c7d52efd0db95fc0/tests/python/layernorm/baselines/layer_norm_triton.py) · [flash_attn/ops/triton/layer_norm.py](https://github.com/Dao-AILab/flash-attention/blob/0dfb28174333d9eefb7c1dd4292690a8458d1e89/flash_attn/ops/triton/layer_norm.py) · [python/tutorials/05-layer-norm.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/05-layer-norm.py) |
-| `scripts/fixtures/source_uniform_materializations/uniform_sampling.py.txt` | `Apache-2.0 AND MIT` | [data/TritonBench_G_v1/uniform_sampling.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/uniform_sampling.py) · [src/flag_gems/ops/uniform.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/ops/uniform.py) · [src/flag_gems/utils/random_utils.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/utils/random_utils.py) · [python/triton/language/random.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/random.py) |
-| `scripts/fixtures/source_uniform_materializations/Kernels.lean.txt` | `Apache-2.0` | [data/TritonBench_G_v1/uniform_sampling.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/uniform_sampling.py) · [src/flag_gems/ops/uniform.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/ops/uniform.py) |
-| `VeriTile/Triton/DSL/UniformJitFunctions.lean` | `Apache-2.0 AND MIT` | [data/TritonBench_G_v1/uniform_sampling.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/uniform_sampling.py) · [src/flag_gems/utils/random_utils.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/utils/random_utils.py) · [python/triton/language/random.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/random.py) |
-| `VeriTile/Triton/Random/Philox.lean` | `MIT` | [python/triton/language/random.py](https://github.com/triton-lang/triton/blob/f797708c0626e5f9840ca5b0a98790e2c7cb09ad/python/triton/language/random.py) |
-| `tests/lean/PhiloxRandom.lean` | `BSD-3-Clause` | [tests/kat_vectors](https://github.com/DEShawResearch/random123/blob/726a093cd9a73f3ec3c8d7a70ff10ed8efec8d13/tests/kat_vectors) |
-| `site/src/lib/vector-add-record.json` | `MIT` | [python/tutorials/01-vector-add.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/01-vector-add.py) |
+### Sources under `Apache-2.0 AND BSD-3-Clause AND MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `VeriTile/Examples/AttentionForwardClosedForm.lean` | [data/TritonBench_G_v1/attention_forward_triton.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/attention_forward_triton.py) · [sageattention/attn_qk_int8_per_block_h96.py](https://github.com/thu-ml/SageAttention/blob/1d8f5314f0a6ec6d5f9a63bf0e60a0b55da80dac/sageattention/attn_qk_int8_per_block_h96.py) · [bench/tritonbench_g/attention_forward_triton/AttentionForwardTriton.lean](https://github.com/VeriInfra-Lab/VeriTile-2/blob/f71dffb1dc5bcf20f6680f318a83d852dd1e921f/bench/tritonbench_g/attention_forward_triton/AttentionForwardTriton.lean) |
+
+### Sources under `Apache-2.0 AND MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `scripts/fixtures/source_materializations/seeded_dropout.py.txt` | [data/TritonBench_G_v1/seeded_dropout.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/seeded_dropout.py) · [python/tutorials/04-low-memory-dropout.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/04-low-memory-dropout.py) |
+| `scripts/fixtures/source_materializations/Kernels.lean.txt` | [data/TritonBench_G_v1/seeded_dropout.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/seeded_dropout.py) · [python/tutorials/04-low-memory-dropout.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/04-low-memory-dropout.py) |
+| `scripts/fixtures/source_uniform_materializations/uniform_sampling.py.txt` | [data/TritonBench_G_v1/uniform_sampling.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/uniform_sampling.py) · [src/flag_gems/ops/uniform.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/ops/uniform.py) · [src/flag_gems/utils/random_utils.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/utils/random_utils.py) · [python/triton/language/random.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/random.py) |
+| `VeriTile/Triton/DSL/UniformJitFunctions.lean` | [data/TritonBench_G_v1/uniform_sampling.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/uniform_sampling.py) · [src/flag_gems/utils/random_utils.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/utils/random_utils.py) · [python/triton/language/random.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/random.py) |
+
+### Sources under `Apache-2.0 AND MIT AND BSD-3-Clause`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `scripts/fixtures/source_control_materializations/layer_norm_fwd.py.txt` | [data/TritonBench_G_v1/layer_norm_fwd.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/layer_norm_fwd.py) · [tests/python/layernorm/baselines/layer_norm_triton.py](https://github.com/HazyResearch/ThunderKittens/blob/cdfce886b2660a0345a20bc5c7d52efd0db95fc0/tests/python/layernorm/baselines/layer_norm_triton.py) · [flash_attn/ops/triton/layer_norm.py](https://github.com/Dao-AILab/flash-attention/blob/0dfb28174333d9eefb7c1dd4292690a8458d1e89/flash_attn/ops/triton/layer_norm.py) · [python/tutorials/05-layer-norm.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/05-layer-norm.py) |
+| `scripts/fixtures/source_control_materializations/Kernels.lean.txt` | [data/TritonBench_G_v1/layer_norm_fwd.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/layer_norm_fwd.py) · [tests/python/layernorm/baselines/layer_norm_triton.py](https://github.com/HazyResearch/ThunderKittens/blob/cdfce886b2660a0345a20bc5c7d52efd0db95fc0/tests/python/layernorm/baselines/layer_norm_triton.py) · [flash_attn/ops/triton/layer_norm.py](https://github.com/Dao-AILab/flash-attention/blob/0dfb28174333d9eefb7c1dd4292690a8458d1e89/flash_attn/ops/triton/layer_norm.py) · [python/tutorials/05-layer-norm.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/05-layer-norm.py) |
+
+### Sources under `Apache-2.0`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `scripts/fixtures/source_uniform_materializations/Kernels.lean.txt` | [data/TritonBench_G_v1/uniform_sampling.py](https://github.com/thunlp/TritonBench/blob/603e28a5050e8c268f6883a69709d477a272d49a/data/TritonBench_G_v1/uniform_sampling.py) · [src/flag_gems/ops/uniform.py](https://github.com/FlagOpen/FlagGems/blob/72331cfb52c0f9e4fc12146803843b5a13b41c81/src/flag_gems/ops/uniform.py) |
+
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `VeriTile/Triton/Random/Philox.lean` | [python/triton/language/random.py](https://github.com/triton-lang/triton/blob/f797708c0626e5f9840ca5b0a98790e2c7cb09ad/python/triton/language/random.py) |
+| `site/src/lib/vector-add-record.json` | [python/tutorials/01-vector-add.py](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/tutorials/01-vector-add.py) |
+
+### Sources under `BSD-3-Clause`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `tests/lean/PhiloxRandom.lean` | [tests/kat_vectors](https://github.com/DEShawResearch/random123/blob/726a093cd9a73f3ec3c8d7a70ff10ed8efec8d13/tests/kat_vectors) |
 
 ## Inventory outside the litmus suite
 

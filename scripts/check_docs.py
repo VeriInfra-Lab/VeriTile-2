@@ -69,7 +69,8 @@ DERIVED_SOURCES = {
 }
 FROZEN_FP4 = Path('experiments/floating_point/value_validation/fp4_unscaled/reference')
 SOURCE_SITE = re.compile(r'([\w.-]+/[\w.-]+)@([0-9a-f]{40}) ([^\s:;]+):\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*')
-NOTICE_TABLE = '| File identifiers | SPDX expression | Pinned source files |'
+NOTICE_TABLE = '| File identifiers | Pinned source files |'
+LICENCE_HEADING = re.compile(r'### Sources under `([^`]+)`')
 PINNED_BLOB = re.compile(r'https://github\.com/([\w.-]+/[\w.-]+)/blob/([0-9a-f]{40})/([^\s)#]+)')
 CHANGES = re.compile(r'(?:transcribed to Lean|rewritten as a minimal example|unmodified copy)(?:[;,] .+)?')
 
@@ -78,10 +79,17 @@ def attribution_records(notices, errors):
     records = {}
     table = False
     section = ''
+    licence = ''
     for line in notices.splitlines():
         if line.startswith('## '):
             section = line.removeprefix('## ')
+            licence = ''
+        elif line.startswith('### '):
+            heading = LICENCE_HEADING.fullmatch(line)
+            licence = heading[1] if heading else ''
         if line == NOTICE_TABLE:
+            if not licence:
+                errors.append(f'THIRD_PARTY_NOTICES.md: missing SPDX subsection above table in {section}')
             table = True
             continue
         if not line.startswith('|'):
@@ -89,17 +97,17 @@ def attribution_records(notices, errors):
         if not table or line.startswith('| ---'):
             continue
         columns = [cell.strip() for cell in line.strip('|').split('|')]
-        if len(columns) != 3 or not re.fullmatch(r'`[^`]+`', columns[1]):
+        if len(columns) != 2:
             errors.append(f'THIRD_PARTY_NOTICES.md: malformed attribution row in {section}')
             continue
         identifiers = re.findall(r'`([^`]+)`', columns[0])
-        sites = set(PINNED_BLOB.findall(columns[2]))
+        sites = set(PINNED_BLOB.findall(columns[1]))
         if not identifiers or not sites:
             errors.append(f'THIRD_PARTY_NOTICES.md: missing identifiers or pinned source in {section}')
         for identifier in identifiers:
             if identifier in records:
                 errors.append(f'{identifier}: appears more than once in the notices ({records[identifier][0]}, {section})')
-            records[identifier] = section, columns[1][1:-1], sites
+            records[identifier] = section, licence, sites
     return records
 
 

@@ -74,6 +74,12 @@ class Attribution(unittest.TestCase):
                 self.file.write_text(text.replace(old, new))
                 self.assertIn(diagnostic, '\n'.join(check_attribution(self.root)))
 
+    def test_file_in_wrong_licence_subsection(self):
+        text = self.notices.read_text()
+        self.notices.write_text(text.replace('### Sources under `Apache-2.0 WITH LLVM-exception`',
+                                             '### Sources under `MIT`'))
+        self.assertIn('expected Licence: MIT from NVIDIA CCCL', '\n'.join(check_attribution(self.root)))
+
     def test_frozen_fixture_requires_adjacent_notice(self):
         path = self.root / 'scripts/fixtures/source_materializations/seeded_dropout.py.txt.attribution'
         path.unlink()
