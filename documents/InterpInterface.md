@@ -43,7 +43,7 @@ does. Looping over the program ids of a grid belongs to the runner (I7.2).
 
 ## 2. Frozen statements
 
-Adequacy (`VeriTile/Staging/Interp/Adequacy.lean`, proved by I3.3):
+Adequacy (`VeriTile/Interp/Adequacy/Exec.lean`, proved by I3.3):
 
 ```lean
 theorem interp_eq_structural_exec {α : Type} [Inhabited α]

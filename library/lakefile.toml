@@ -484,6 +484,7 @@ globs = [
   "tests.lean.InterpSymbolic",
   "tests.lean.InterpArraySmoke",
   "tests.lean.InterpBridgeInvariant",
+  "tests.lean.InterpAdequacyNeg",
   "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.TritonExtConstexpr",
