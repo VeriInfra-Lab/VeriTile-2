@@ -27,6 +27,7 @@ import VeriTile.Interp.State
 import VeriTile.Interp.Step
 import VeriTile.Interp.Run.TensorIO
 import VeriTile.Interp.Run.Grid
+import VeriTile.Interp.Run.GridOrder
 import VeriTile.Interp.Run.Main
 import VeriTile.Interp.Carrier.FPValue
 import VeriTile.Interp.Carrier.Float
