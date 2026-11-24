@@ -150,6 +150,11 @@ def all_gather(rank, ranks, inputs, outputs, launch):
 
 
 def reduce_scatter(rank, ranks, inputs, outputs, launch):
+    if 'barrier' in launch and launch['context'] == 'tutorial':
+        raise ValueError('the tutorial context owns its barrier')
+    barrier = launch.get('barrier', 'intra_node')
+    if barrier not in ('intra_node', 'nvshmem'):
+        raise ValueError(f'unknown barrier {barrier!r}')
     import torch
     from triton_dist.kernels.nvidia.common_ops import BarrierAllContext
     from triton_dist.utils import (CUDA_CHECK, NVSHMEM_SIGNAL_DTYPE, cudart, finalize_distributed,
@@ -172,7 +177,7 @@ def reduce_scatter(rank, ranks, inputs, outputs, launch):
         context = tutorial.ReduceScatter2DContext(
             max_M=M, N=N, rank=rank, world_size=world, local_world_size=local, dtype=x.dtype, overlap_with_gemm=False,
             symm_scatter_bufs=scatter, symm_rs_per_node_bufs=per_node, symm_p2p_bufs=p2p, symm_signal_bufs=signal,
-            barrier=BarrierAllContext({'intra_node': True, 'nvshmem': False}[launch.get('barrier', 'intra_node')]),
+            barrier=BarrierAllContext(barrier == 'intra_node'),
             reduction_stream=torch.cuda.Stream(priority=-1),
             p2p_stream=torch.cuda.Stream(priority=-1), num_sync_sms=0, num_p2p_sms=1, num_reduction_sms=15)
     # The tutorial's barrier asks NVSHMEM, not the launcher, which ranks share its node.
