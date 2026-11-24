@@ -17,4 +17,6 @@ import VeriTile.Dist.Event.Access
 import VeriTile.Dist.Event.Counter
 import VeriTile.Dist.Spec.AllReduce
 import VeriTile.Dist.Spec.AllGather
+import VeriTile.Dist.State
+import VeriTile.Dist.ThreadGuard
 import VeriTile.Dist.Spec.ReduceScatter

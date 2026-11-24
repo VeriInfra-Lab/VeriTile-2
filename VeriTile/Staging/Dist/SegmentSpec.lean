@@ -137,7 +137,7 @@ The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, signed
 on 2026-11-13; it is no longer a parameter.
 -/
 import VeriTile.Triton.Semantics.Step
-import VeriTile.Dist.Agent
+import VeriTile.Dist.State
 import VeriTile.Staging.Dist.LocationSpec
 import VeriTile.Staging.Dist.EventSpec
 
@@ -147,37 +147,7 @@ open VeriTile.Triton (BlockState MemCell Stmt Kernel stepStmts exec)
 
 /-! # Part 1: segments, footprint soundness, the bridge for one segment -/
 
-/-! ## State access that the statements need (stubs for S1.5 and S1.6) -/
-
-/-- Stub (S1.5), under signed statements. Part 1. The content of cell `p` in the distributed
-state. -/
-noncomputable opaque DistState.cell : DistState → Addr → MemCell := fun _ _ => MemCell.real 0
-
-/-- Stub (S1.5), under signed statements. Part 1. `σ.setBlock r pid b` writes the upstream
-state `b` back as the state of the CTA with program ids `pid` on rank `r`: the
-memory that this CTA can reach and its registers. It is the inverse direction
-of `DistState.block`. -/
-opaque DistState.setBlock : DistState → Rank → List Nat → BlockState → DistState :=
-  fun σ _ _ _ => σ
-
-/-- Stub (S1.6), under signed statements. Part 1. The upstream state that a group or a thread
-`a` executes on: the memory that `a` can reach and the registers that are its
-own. A `local` cell is reached by its thread alone; a `shared` cell by every
-agent of the CTA.
-
-Laws that S1.6 owes, with `view` and `setView` below: reading back what was
-written and writing back what was read; how `cell` relates to the memory of a
-view; that the program ids are those of the CTA; that `setView a` changes only
-cells that `a` can reach, the registers of `a` and of the agents inside `a`,
-and no synchronization object; that two agents neither of which lies within
-the other have separate registers, also two thread agents that differ in the
-group only. -/
-opaque DistState.subView : DistState → Agent → BlockState
-
-/-- Stub (S1.6), under signed statements. Part 1. Writes the upstream state `b` back as the
-state of the group or thread `a`. The inverse direction of
-`DistState.subView`. -/
-opaque DistState.setSubView : DistState → Agent → BlockState → DistState := fun σ _ _ => σ
+/-! ## Agent views -/
 
 /-- Signed. Part 1. The upstream state that agent `a` executes on. For a CTA
 it is `DistState.block`. A whole rank runs no segment. -/
@@ -408,3 +378,61 @@ theorem exec_noSync_eq_exec (c : Cta) (k : Kernel) (body : List (Stmt ⊕ Event)
         n = .finish := sorry
 
 end VeriTile.Dist
+
+namespace VeriTile.Dist.DistState
+
+open VeriTile.Triton (BlockState)
+
+theorem view_eq_subView (σ : DistState) (a : Agent) : σ.view a = σ.subView a := by
+  cases a <;> rfl
+
+theorem setView_eq_setSubView (σ : DistState) (a : Agent) (b : BlockState) :
+    σ.setView a b = σ.setSubView a b := by cases a <;> rfl
+
+theorem setView_view (σ : DistState) (a : Agent) : σ.setView a (σ.view a) = σ := by
+  simpa [setView_eq_setSubView, view_eq_subView] using σ.setSubView_subView a
+
+theorem view_setView {a : Agent} {c : Cta} (ha : a.cta? = some c) (σ : DistState) (b : BlockState)
+    (hp : b.pids = DistState.programIds c.pid) (hu : b.undef = (σ.context a).undef)
+    (hg : b.numPids = (σ.context a).numPids) : (σ.setView a b).view a = b := by
+  rw [setView_eq_setSubView, view_eq_subView, DistState.subView_setSubView _ ha]
+  rw [← hp, ← hu, ← hg]
+
+/-- A write leaves another agent's local part unchanged, including child
+and enclosing agents when the caller and reader differ. -/
+theorem sameLocal_setView_ne (σ : DistState) {w r : Agent} (hne : r ≠ w) (b : BlockState) :
+    DistState.SameLocal r σ (σ.setView w b) := by
+  rw [setView_eq_setSubView]
+  unfold DistState.SameLocal
+  simp only [view_eq_subView]
+  cases r with
+  | rank => rfl
+  | _ =>
+    apply BlockState.ext
+    · intros; rfl
+    · intros; change (σ.context _).regs _ _ _ = ((σ.setSubView w b).context _).regs _ _ _
+      rw [DistState.context_setSubView_ne _ hne]
+    · intros; rfl
+    · intros; change (σ.context _).undef _ _ = ((σ.setSubView w b).context _).undef _ _
+      rw [DistState.context_setSubView_ne _ hne]
+    · intros; change (σ.context _).numPids _ = ((σ.setSubView w b).context _).numPids _
+      rw [DistState.context_setSubView_ne _ hne]
+
+theorem sameLocal_putCell (σ : DistState) (p : Addr) (v : VeriTile.Triton.MemCell) (a : Agent) :
+    SameLocal a σ (σ.putCell p v) := by cases a <;> rfl
+
+/-- A real upstream segment result automatically meets the metadata conditions of
+view readback, for a CTA, group or thread. -/
+theorem view_setView_after_stepStmts {a : Agent} {c : Cta} (ha : a.cta? = some c)
+    (σ : DistState) (code : List VeriTile.Triton.Stmt) {b : BlockState}
+    (hrun : VeriTile.Triton.stepStmts code (σ.view a) = some b) : (σ.setView a b).view a = b := by
+  have hm := stepStmts_metadata code hrun
+  rw [view_eq_subView] at hm
+  have he : metadata (σ.subView a) = (programIds c.pid,(σ.context a).undef,(σ.context a).numPids) := by
+    cases a <;> simp_all [Agent.cta?,subView,metadata]
+    all_goals exact ⟨rfl,rfl,rfl⟩
+  obtain ⟨hp,hrest⟩ := Prod.mk.inj (hm.trans he)
+  obtain ⟨hu,hg⟩ := Prod.mk.inj hrest
+  exact view_setView ha σ b hp hu hg
+
+end VeriTile.Dist.DistState
