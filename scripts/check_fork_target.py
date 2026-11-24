@@ -7,10 +7,15 @@ target only has to build. `--replay` also runs the official comparator and
 the statement-audit trust gates on every file of a main target.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+import contextlib
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+
+import check_comparator
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = {
@@ -71,6 +76,42 @@ def audit(files):
             if not (row.startswith('AXIOM\t') and row.split('\t', 1)[1] in whitelist)]
 
 
+def replay(library, files, jobs=None):
+    """Replay every file with the comparator: one parallel Lake build, then parallel comparator runs.
+
+    local_gate.sh shares one judge snapshot across targets through VERITILE_REPLAY_WORKSPACE.
+    """
+    shared = os.environ.get('VERITILE_REPLAY_WORKSPACE')
+    workers = jobs or int(os.environ.get('VERITILE_REPLAY_JOBS', '8'))
+    with (contextlib.nullcontext(shared) if shared
+          else tempfile.TemporaryDirectory(prefix='veritile-fork-replay-')) as workspace:
+        staged = [check_comparator.stage(Path(workspace).resolve(), f, trust=True) for f in files]
+        judge, logs = staged[0]['judge'], Path(staged[0]['state']['logs'])
+        # Phase 1: Lake builds all wrappers in parallel. A failure here is reported per file below.
+        with (logs / f'{library}-build.log').open('w') as output:
+            subprocess.run(['lake', 'build', *[job['module'] for job in staged]], cwd=judge,
+                           stdout=output, stderr=subprocess.STDOUT)
+        # Phase 2, serial: replay each stored log into its build.log, or fail on that file.
+        failures, built = {}, []
+        for job in staged:
+            try:
+                check_comparator.build(job)
+                built.append(job)
+            except ValueError as error:
+                failures[job['label']] = error
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            runs = [(job, pool.submit(check_comparator.finish, job)) for job in built]
+        for job, run in runs:
+            try:
+                print('\n'.join(check_comparator.report_lines(job, run.result())))
+            except Exception as error:  # report every file, never stop at the first
+                failures[job['label']] = error
+    if failures:
+        ordered = [job['label'] for job in staged if job['label'] in failures]
+        raise ValueError(f'{library}: {len(ordered)} file(s) failed the replay:\n'
+                         + '\n'.join(f'- {failures[label]}' for label in ordered))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('library', choices=sorted(TARGETS))
@@ -93,11 +134,7 @@ def main():
                          + '\n'.join(violations))
     print(f'[ok] {library}: {len(files)} module(s), no sorry, no staging import, no new axiom')
     if args.replay:
-        with tempfile.TemporaryDirectory(prefix='veritile-fork-replay-') as workspace:
-            for f in files:
-                subprocess.run([sys.executable, str(ROOT / 'scripts/check_comparator.py'),
-                                '--file', str(f), '--trust', '--workspace', workspace],
-                               cwd=ROOT, check=True)
+        replay(library, files)
         print(f'[ok] {library}: comparator and trust gates accept {len(files)} file(s)')
 
 
