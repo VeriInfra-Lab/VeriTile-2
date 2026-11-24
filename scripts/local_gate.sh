@@ -58,6 +58,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.SwizzleSource"
              "lake build tests.lean.dist.TritonExtConstexpr"
              "lake build tests.lean.dist.TritonExtProfiler"
+             "lake build tests.lean.dist.TritonDistSyntax"
              "lake build tests.lean.dist.StateViews")
 fi
 

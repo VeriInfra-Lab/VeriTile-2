@@ -74,7 +74,7 @@ def callDisabled : ComputeKernel :=
 example : callDisabled = (
   let profiling : Bool := Bool.false
   with_triton_call signature call_args [] in triton {
-    data_elem_size = 2
+    data_elem_size = tl.cast(2, tl.int32)
     x = tl.cast(13, tl.int64)
   }) := rfl
 

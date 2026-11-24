@@ -88,22 +88,23 @@ private partial def withMirrorParams (type : Expr) (xs args : Array Expr)
   | _ => k xs args type
 
 /-- Matchers in imported definitions have no declaration range of their own.
-Locate a uniquely matching dispatch line within its enclosing declaration. -/
+Prefer a unique dispatch line and fall back to the enclosing declaration. -/
 private def dispatchLocation (matcher : Meta.MatcherApp) : MetaM String := do
   let owner := matcher.matcherName.getPrefix
   let names ← matcher.discrs.mapM fun d => return toString (← ppExpr d)
   let head := "match " ++ String.intercalate ", " names.toList ++ " with"
   let some ranges ← findDeclarationRanges? owner | return head
   let some mod ← findModuleOf? owner | return head
+  let fallback := s!"{mod}:{ranges.range.pos.line}: {head}"
   let roots := System.FilePath.mk "." :: (← getSrcSearchPath)
-  let some path ← Lean.SearchPath.findModuleWithExt roots "lean" mod | return head
+  let some path ← Lean.SearchPath.findModuleWithExt roots "lean" mod | return fallback
   let lines := (← IO.FS.readFile path).splitOn "\n" |>.toArray
   let compact (s : String) := s.toList.filter (!·.isWhitespace)
   let start := ranges.range.pos.line - 1
   let hits := (lines.extract start ranges.range.endPos.line).toList.zipIdx.filter fun (s, _) =>
     compact s == compact head
   if let [(s, i)] := hits then return s!"{mod}:{start + i + 1}: {s.trimAscii}"
-  return head
+  return fallback
 
 /-- `reflect_kernel k` adds the rational mirror `k.mirror` of the kernel `k` and the theorem
 `k.toReal_mirror : ∀ …, (k.mirror …).toReal = k …`. -/

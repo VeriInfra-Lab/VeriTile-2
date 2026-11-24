@@ -550,7 +550,7 @@ certificate. Its statements and expressions are as follows.
 | Certificate | Accepted syntax and obligations |
 | --- | --- |
 | Statements | Assignment, region or pointer store, region atomic add, counted compute loop, compute `ifThen` and `ifThenElse`. Both branches and the loop body certify under the same invariant. Stores and atomics accept an absent mask, a mask, or a mask with an ignored fallback. |
-| Finite algorithm expressions | Any natural, integer or Boolean result, real constants, tracked register references, scalar broadcast and fill, `natToReal`, `withPrecision .real`, every floating cast, real add/subtract/multiply/divide, real sum and maximum reductions, real `max2`, real-typed maximum and minimum, lane-wise `where`, `exp`, `log`, libdevice exp/log, sigmoid, square root, real negation, dimension insertion, matrix transpose and rank-two real dot with either dot backend. Finiteness of `log` and `sqrt` uses the real model: `WithBot.realLog 0` is finite, whereas floating hardware computes negative infinity for the logarithm of zero. The operands required to be finite certify recursively; nested operations in every evaluated expression must also satisfy the site rules. |
+| Finite algorithm expressions | Any natural, integer or Boolean result, real constants, tracked register references, scalar broadcast and fill, `natToReal`, `withPrecision .real`, every floating cast, real add/subtract/multiply/divide, real sum and maximum reductions, real `max2`, real-typed maximum and minimum, lane-wise `where`, `exp`, `log`, libdevice exp/log, sigmoid, square root, real negation, dimension insertion, matrix transpose and rank-two real dot with either dot backend. Finiteness of `log` and `sqrt` uses the real model: `WithBot.realLog 0` is finite, whereas floating hardware computes negative infinity for the logarithm of zero. Both exponentials accept an operand that evaluates to `⊥`: `WithBot.realExp ⊥ = 0`. Other operands required to be finite certify recursively; nested operations in every evaluated expression must also satisfy the site rules. |
 | Finite reads and decoding | Masked real pointer loads from the declared pointer regions and direct region loads at a declared dtype, unmasked or masked with a finite explicit fallback; a masked real load may omit the fallback. A direct unmasked integer region load may feed an E5 decode to real. |
 | Compute expressions | Algorithm expressions, compute-tagged algorithm expressions, fills of a compute-tagged finite scalar and fp32 compute loads whose projected real load is finite. An untracked assignment may use any supported expression that meets the site rules, including a register-only negative infinity. |
 
@@ -571,7 +571,7 @@ undefined-value agreement of each declared read dtype is required at every
 offset of its region. Region addresses are always in bounds, and the layout
 can describe offsets symbolically. Undeclared region/dtype pairs and the
 out-of-bounds tables impose no obligation. The Welford witness has an
-undefined real value of one.
+undefined real value of one. For the `mul_step_kernel` and `swiglu_unfused` census layouts, `scratchLayoutSatisfiable` gives the scratch region `S` a finite bf16 cell at every offset and the other inputs real cells. Its empty register store works with every choice of tracked registers.
 
 Apply `FiniteBridge.bridgePre` to the body certificate and initial invariant,
 then `bridge_exec` with the successful projection. The [regression
@@ -597,9 +597,8 @@ products. Each of the two dimension dispatchers is checked on both branches.
 For the [online softmax](../bench/examples/OnlineSoftmax/Kernels.lean#L39),
 the initial `m` is negative infinity. The first iteration uses the old `m`
 both in `maximum(m, xi)` and in `exp(m - m_new)`. The census leaves `m` and
-`m_new` untracked. A libdevice exponential in the real model always produces
+`m_new` untracked. Both plain and libdevice exponentials in the real model always produce
 a finite value: `WithBot.realExp` maps bottom to zero and a finite real to
 its real exponential. This proves finiteness of the loop accumulator and
 the final quotient for every symbolic loop bound, including zero. All nested
-reads still need their site checks. The D1 tests reject a store of negative
-infinity even when the value reaches memory through an untracked register.
+reads still need their site checks. The D1 tests reject direct and register-mediated stores of negative infinity through both regions and pointers, for every layout.
