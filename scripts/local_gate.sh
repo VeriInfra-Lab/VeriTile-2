@@ -43,6 +43,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.InterpEvalSmoke"
              "lake build tests.lean.InterpAdequacyNeg"
              "lake build tests.lean.InterpFloatCarrier"
+             "lake build tests.lean.InterpFloatCensus"
              "lake build tests.lean.InterpSymbolic"
              "lake env lean tests/lean/InterpSymbolic.lean"
              "lake build tests.lean.InterpArraySmoke"
