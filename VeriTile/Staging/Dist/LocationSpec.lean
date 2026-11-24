@@ -21,7 +21,7 @@ Decisions recorded in the location freeze:
 - `cta` covers two agents only inside one CTA; a whole-rank agent is covered by `gpu` and `sys`.
 - `Accessible a (global r)` holds from every rank; `AccessibleAt` adds that a cell of another rank must be on the symmetric heap.
 - `symmAt` takes the set of symmetric regions as an argument and does not consult `numRanks`.
-- The original `DistState` stub deferred the synchronization-object representation to the event tickets; the design draft derives synchronization from the trace.
+- `DistState` is opaque, because its synchronization-object part is defined by the event tickets.
 - `DistState.block` takes a rank and program ids; `DistState.single` embeds an upstream state.
 - A thread guard is a condition on the thread id; the CTA's thread count is an argument of `Runs`.
 - Lemma names other than `covers_ne_rank_eq_sys`, `symmAt_self`, `symmAt_symmAt` are chosen here.

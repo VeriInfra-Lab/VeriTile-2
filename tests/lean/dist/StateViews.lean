@@ -1,47 +1,11 @@
 /- S1.5/S1.6 exercise the signed staging views on the concrete state. -/
 import VeriTile.Staging.Dist.SegmentSpec
-import Mathlib.Tactic.DeriveCountable
-import Mathlib.Logic.Denumerable
-import Mathlib.Data.Fintype.EquivFin
 
 namespace VeriTile.Dist.StateTests
 
 open VeriTile.Triton (BlockState MemCell Region RegionName)
 
-theorem view_eq_subView (σ : DistState) (a : Agent) : σ.view a = σ.subView a := by
-  cases a <;> rfl
-
-theorem setView_eq_setSubView (σ : DistState) (a : Agent) (b : BlockState) :
-    σ.setView a b = σ.setSubView a b := by cases a <;> rfl
-
-theorem setView_view (σ : DistState) (a : Agent) : σ.setView a (σ.view a) = σ := by
-  simpa [setView_eq_setSubView, view_eq_subView] using σ.setSubView_subView a
-
-theorem view_setView {a : Agent} {c : Cta} (ha : a.cta? = some c) (σ : DistState) (b : BlockState)
-    (hp : b.pids = DistState.programIds c.pid) (hu : b.undef = (σ.context a).undef)
-    (hg : b.numPids = (σ.context a).numPids) : (σ.setView a b).view a = b := by
-  rw [setView_eq_setSubView, view_eq_subView, DistState.subView_setSubView _ ha]
-  rw [← hp, ← hu, ← hg]
-
-/-- A write leaves another agent's local part unchanged, including child
-and enclosing agents when the caller and reader differ. -/
-theorem sameLocal_setView_ne (σ : DistState) {w r : Agent} (hne : r ≠ w) (b : BlockState) :
-    DistState.SameLocal r σ (σ.setView w b) := by
-  rw [setView_eq_setSubView]
-  unfold DistState.SameLocal
-  simp only [view_eq_subView]
-  cases r with
-  | rank => rfl
-  | _ =>
-    apply BlockState.ext
-    · intros; rfl
-    · intros; change (σ.context _).regs _ _ _ = ((σ.setSubView w b).context _).regs _ _ _
-      rw [DistState.context_setSubView_ne _ hne]
-    · intros; rfl
-    · intros; change (σ.context _).undef _ _ = ((σ.setSubView w b).context _).undef _ _
-      rw [DistState.context_setSubView_ne _ hne]
-    · intros; change (σ.context _).numPids _ = ((σ.setSubView w b).context _).numPids _
-      rw [DistState.context_setSubView_ne _ hne]
+open DistState
 
 /-- Running an empty CTA segment still projects the upstream block and writes
 it back. All three soundness obligations are discharged for this segment. -/
@@ -71,18 +35,6 @@ rather than the staging theorem whose proof belongs to S3.2. -/
 example (c : Cta) {s t : DistState} (h : (emptySegment c).run s = some t) (p : Addr) :
     t.cell p = s.cell p := (empty_sound c).frame _ _ h _ (by simp [emptySegment])
 
-/-- The two CTAs see one rank-global cell even when they use different aliases. -/
-example (σ : DistState) (r : Rank) (i j : List Nat) (n : RegionName) (k : Nat)
-    (ha : σ.layout.allocated (.global r) n) :
-    let p : Addr := ⟨.global r, n, k⟩
-    let c : Cta := ⟨r, i⟩
-    let d : Cta := ⟨r, j⟩
-    (σ.view (.cta c)).mem (σ.layout.name (.cta c) p ⟨ha, trivial, Or.inl rfl⟩) k =
-      (σ.view (.cta d)).mem (σ.layout.name (.cta d) p ⟨ha, trivial, Or.inl rfl⟩) k := by
-  dsimp only
-  simp only [view_eq_subView]
-  exact (σ.subView_mem_visible rfl _ _).trans (σ.subView_mem_visible rfl _ _).symm
-
 /-- Two CTAs of a rank and two threads distinguished only by group never
 share a register store. The stronger frame preserves all local metadata. -/
 example (σ : DistState) (b : BlockState) :
@@ -93,51 +45,41 @@ example (σ : DistState) (b : BlockState) :
     simp only [setView_eq_setSubView]
     constructor <;> apply DistState.context_setSubView_ne <;> decide
 
-/-- Build a total layout allocating every physical region, with a bijection
-for each upstream ABI. The witness uses abstract aliases; the cell and the
-two thread IDs in the actual write/read test below are concrete. -/
-private def allRegions (a : Agent) :=
-  {q : Space × RegionName // true = true ∧ AccessibleAt (fun _ => true) a ⟨q.1, q.2, 0⟩}
+private noncomputable def sharedState := DistState.single default
 
-private instance : Countable Char := Function.Injective.countable (f := Char.toNat) (by
-  intro a b h
-  exact Char.ext (UInt32.toNat_inj.mp h))
-
-private instance : Countable RegionName := Function.Injective.countable
-  (f := fun n : RegionName => n.name.toList) (fun x y h => by
-    cases x; cases y; exact congrArg Region.mk (String.toList_injective h))
-
-deriving instance Countable for Cta, Space
-
-private instance : Infinite RegionName :=
-  Infinite.of_injective (fun s : String => (⟨s⟩ : RegionName)) (fun _ _ h => congrArg Region.name h)
-
-private noncomputable def sharedState : DistState :=
-  { DistState.single default with
-    layout := {
-      symmetric := fun _ => true
-      allocated := fun _ _ => true
-      names := fun a => by
-        letI : Countable (allRegions a) := inferInstanceAs (Countable (Subtype _))
-        letI : Infinite (allRegions a) := Infinite.of_injective
-          (fun n : RegionName => (⟨(.global a.rankOf, n), rfl, trivial, Or.inl rfl⟩ : allRegions a))
-          (fun _ _ h => congrArg (fun q : allRegions a => q.val.2) h)
-        exact (nonempty_equiv_of_countable (α := RegionName) (β := allRegions a)).some } }
-
-/-- The first thread writes a real shared address. The second thread observes
-the new value before its own unguarded write. Data-race classification is S4. -/
+/-- Sibling threads see one shared cell. Distinct spaces and remote ranks have
+distinct canonical names, including when the region name itself starts in '@'. -/
 example (v : MemCell) :
-    let c : Cta := ⟨0, [0]⟩
+    let c : Cta := ⟨0,[0]⟩
     let w := Agent.thread c 0 0
     let r := Agent.thread c 0 1
-    let p : Addr := ⟨.shared c, "scratch", 0⟩
-    let b := (sharedState.view w).writeCell
-      (sharedState.layout.name w p ⟨rfl, rfl, trivial⟩) 0 v
-    ((sharedState.setView w b).view r).mem (sharedState.layout.name r p ⟨rfl, rfl, trivial⟩) 0 = v := by
+    let p : Addr := ⟨.shared c,"scratch",0⟩
+    let b := (sharedState.view w).writeCell (ViewName.ofSpace w p.space p.region) 0 v
+    ((sharedState.setView w b).view r).mem (ViewName.ofSpace r p.space p.region) 0 = v := by
   dsimp only
-  rw [setView_eq_setSubView, view_eq_subView, DistState.subView_mem_after_write _ rfl rfl _ _ _ _]
-  · simp [BlockState.writeCell]
-  · exact ⟨rfl, rfl, trivial⟩
+  rw [setView_eq_setSubView,view_eq_subView]
+  exact (DistState.subView_mem_after_write sharedState (w := .thread ⟨0,[0]⟩ 0 0)
+    (r := .thread ⟨0,[0]⟩ 0 1) rfl rfl _ ⟨.shared ⟨0,[0]⟩,"scratch",0⟩ rfl rfl).trans
+    (by simp [ViewName.name,BlockState.writeCell])
+
+example : ViewName.address (.cta ⟨2,[0]⟩) "buffer" 7 = ⟨.global 2,"buffer",7⟩ := rfl
+example (a : Agent) (r : Rank) (n : RegionName) (i : Nat) :
+    ViewName.address a (ViewName.ofSpace a (.global r) n) i = ⟨.global r,n,i⟩ :=
+  ViewName.address_name a _ (ViewName.visible_global a r n i)
+
+-- The reserved prefix is also valid in physical region names. An own-rank
+-- alias is precisely the canonical home spelling; it cannot shadow a peer.
+example :
+    let a := Agent.cta ⟨2,[0]⟩
+    ViewName.ofSpace a (.global 2) "@x" ≠ ViewName.ofSpace a (.global 3) "@x" := by
+  decide
+
+example (σ : DistState) (oracle) (P : Set Agent) (grid : Rank → List Nat)
+    (hv : σ.LaunchValid grid oracle P) (h : Agent.cta ⟨0,[0,0]⟩ ∈ P) :
+    (grid 0).length ≠ 1 := by
+  have hlen := (hv _ h _ rfl).2.1
+  change 2 = (grid 0).length at hlen
+  omega
 
 /-! A variable ABI contradicts the signed agreement premise. The same one-store
 program runs in states with the same cells and local fields, but two names are
@@ -150,17 +92,28 @@ private def c : Cta := ⟨0, [0]⟩
 private def x : Addr := ⟨.global 0, "x", 0⟩
 private noncomputable def left : DistState := DistState.single default
 private noncomputable def right : DistState :=
-  { left with layout := { left.layout with names := fun a =>
-      (Equiv.swap ("x" : RegionName) "y").trans (left.layout.names a) } }
+  { left with numRanks := 2 }
+
+/-- A rejected design: two states bind names differently although every physical
+cell and local field agrees. Using numRanks as the hidden selector exhibits
+the same defect as an additional per-state layout field. -/
+private def badName (s : DistState) : RegionName → RegionName :=
+  if s.numRanks = 1 then id else (Equiv.swap ("x" : RegionName) "y").toFun
+
+private def badBlock (s : DistState) : BlockState :=
+  { s.block 0 [0] with mem := fun n i => (s.block 0 [0]).mem (badName s n) i }
+
+private def badSetBlock (s : DistState) (b : BlockState) :=
+  s.setBlock 0 [0] { b with mem := fun n i => b.mem (badName s n) i }
 
 private def code : List Stmt :=
   [.store .nat [] (.region ⟨"x"⟩ (.constNat 0)) (.constNat 1) .none]
 
 private def result (s : DistState) : DistState :=
-  s.setBlock 0 [0] ((s.block 0 [0]).writeMemTyped .nat ⟨"x"⟩ 0 1)
+  badSetBlock s ((badBlock s).writeMemTyped .nat ⟨"x"⟩ 0 1)
 
 private theorem store_runs (s : DistState) :
-    (stepStmts code (s.block 0 [0])).map (s.setBlock 0 [0]) = some (result s) := by
+    (stepStmts code (badBlock s)).map (badSetBlock s) = some (result s) := by
   simp [code, stepStmts, VeriTile.Triton.stepStmt, Region.cast,
     VeriTile.Triton.TileShape.allIndices, result]
 
@@ -168,7 +121,7 @@ private theorem store_runs (s : DistState) :
 both hold for this candidate state design. This proof uses neither staging
 theorem and needs only two upstream names and one scalar store. -/
 theorem no_sound_segment (seg : Segment) (ha : seg.agent = .cta c)
-    (run : ∀ s, seg.run s = (stepStmts code (s.block 0 [0])).map (s.setBlock 0 [0])) :
+    (run : ∀ s, seg.run s = (stepStmts code (badBlock s)).map (badSetBlock s)) :
     ¬ seg.FootprintSound := by
   intro sound
   have lrun := (run left).trans (store_runs left)
