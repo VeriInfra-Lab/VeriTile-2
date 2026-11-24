@@ -157,7 +157,7 @@ inductive FiniteOp (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d 
   | maximum (bc : Broadcast a b sh) {x y} : FiniteOp L x → FiniteOp L y → FiniteOp L (.max2 bc x y)
   | minFloat (bc : Broadcast a b sh) {x y} : FiniteOp L x → FiniteOp L y → FiniteOp L (.minimumFloat .real bc x y)
   | maxFloat (bc : Broadcast a b sh) {x y} : FiniteOp L x → FiniteOp L y → FiniteOp L (.maximumFloat .real bc x y)
-  | exp {e : Op .real sh} : FiniteOp L e → FiniteOp L (.exp e)
+  | exp (e : Op .real sh) : FiniteOp L (.exp e)
   | log {e : Op .real sh} : FiniteOp L e → FiniteOp L (.log e)
   | libdeviceExp (e : Op .real sh) : FiniteOp L (.libdeviceExp e)
   | libdeviceLog {e : Op .real sh} : FiniteOp L e → FiniteOp L (.libdeviceLog e)
@@ -282,7 +282,7 @@ theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : Fi
         intro k
         exact ih p a ha _
     · contradiction
-  | libdeviceExp e =>
+  | exp e | libdeviceExp e =>
     rw [Structural.evalOp_unfold] at h
     obtain ⟨a, _, ht⟩ := Option.bind_eq_some_iff.mp h
     cases ht
@@ -290,7 +290,7 @@ theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : Fi
     cases a i with
     | none => exact ⟨0, rfl⟩
     | some x => exact ⟨Real.exp x, rfl⟩
-  | exp _ ih | log _ ih | libdeviceLog _ ih | sigmoid _ ih | sqrt _ ih =>
+  | log _ ih | libdeviceLog _ ih | sigmoid _ ih | sqrt _ ih =>
     rw [Structural.evalOp_unfold] at h
     obtain ⟨a, ha, ht⟩ := Option.bind_eq_some_iff.mp h
     cases ht
