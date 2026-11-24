@@ -26,10 +26,12 @@ private def usage (kernels : List (String × KernelEntry)) (carriers : List Stri
 private def writeOutput (path : System.FilePath) (tensor : Tensor) : IO Unit := do
   let bytes ← IO.ofExcept tensor.toBytes
   let temp := path.addExtension s!"tmp.{← IO.Process.getPID}.{← IO.monoNanosNow}"
-  let handle ← IO.FS.Handle.mk temp .writeNew
-  try
+  -- Open exclusively. The callback returns no handle, so it closes before rename or cleanup.
+  let written ← IO.FS.withFile temp .writeNew fun handle => EIO.toBaseIO do
     handle.write bytes
     handle.flush
+  try
+    EIO.ofExcept written
     IO.FS.rename temp path
   catch e =>
     IO.FS.removeFile temp

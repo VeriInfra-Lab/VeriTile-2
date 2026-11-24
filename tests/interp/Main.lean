@@ -75,6 +75,10 @@ private def programs (dims : List Nat) : Except String Nat := do
   unless x > 0 && dims.tail.all (· == 1) do throw "these kernels require a positive one-dimensional grid"
   return x
 
+private def gridProbeState : State (Option Float32) := {
+  init := fun _ _ => .mk .nat 0, pids := fun _ => 0, numPids := fun _ => 1
+  undef := fun d _ _ => FP.Structural.defaultValue d }
+
 -- Check the three-dimensional schedule against a noncommutative accumulation
 -- of the eight linearized program ids. A different order or lost predecessor memory fails.
 #guard Id.run do
@@ -83,10 +87,17 @@ private def programs (dims : List Nat) : Except String Nat := do
     (.add .nat .nil (.programId 1) (.mul .nat .nil (.numPrograms 1) (.programId 2))))
   let step : QOp .nat [] := .add .nat .nil (.mul .nat .nil (.load .nat addr .none) (.constNat 10)) digit
   let probe : QKernel := .mk [] [] [.store .nat [] addr (.alg step) .none]
-  let s : State (Option Float32) := {
-    init := fun _ _ => .mk .nat 0, pids := fun _ => 0, numPids := fun _ => 1
-    undef := fun d _ _ => FP.Structural.defaultValue d }
-  return (runGrid fp32 probe [2, 2, 2] s).map (fun t => (t.read "trace" 0).read .nat) == some 1234567
+  return (runGrid fp32 probe [2, 2, 2] gridProbeState).map
+    (fun t => (t.read "trace" 0).read .nat) == some 4261537
+
+-- Each program reads the initial register before overwriting it. The second
+-- program would store 9 if the first program's registers leaked through.
+#guard Id.run do
+  let probe : QKernel := .mk [] [] [
+    .store .nat [] (.region "seen" (.programId 0)) (.alg (.ref .nat [] "local")) .none,
+    .assign .nat [] "local" (.alg (.constNat 9))]
+  let initial := gridProbeState.setReg "local" .nat [] (fun _ => 7)
+  return (runGrid fp32 probe [2] initial).map (fun t => (t.read "seen" 1).read .nat) == some 7
 
 private def vectorAdd : KernelEntry where
   inputs := ["x", "y"]
