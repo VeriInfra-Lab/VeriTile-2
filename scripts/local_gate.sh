@@ -25,6 +25,7 @@ done
 profile_python=python3
 python3 -c 'import tomllib' 2>/dev/null || profile_python="uv run --no-project --python 3.11 python"
 commands=("python3 scripts/check_docs.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
