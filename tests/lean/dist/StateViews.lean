@@ -117,6 +117,18 @@ private theorem store_runs (s : DistState) :
   simp [code, stepStmts, VeriTile.Triton.stepStmt, Region.cast,
     VeriTile.Triton.TileShape.allIndices, result]
 
+-- With the fixed decoder the same store reaches physical x in both states.
+example (s : DistState) :
+    stepStmts code (s.block 0 [0]) = some ((s.block 0 [0]).writeMemTyped .nat ⟨"x"⟩ 0 1) := by
+  simp [code, stepStmts, VeriTile.Triton.stepStmt, Region.cast,
+    VeriTile.Triton.TileShape.allIndices]
+
+example : ((left.setBlock 0 [0] ((left.block 0 [0]).writeMemTyped .nat ⟨"x"⟩ 0 1)).cell x).1 =
+    .nat := rfl
+
+example : ((right.setBlock 0 [0] ((right.block 0 [0]).writeMemTyped .nat ⟨"x"⟩ 0 1)).cell x).1 =
+    .nat := rfl
+
 /-- The run equation and the signed soundness obligation for this CTA cannot
 both hold for this candidate state design. This proof uses neither staging
 theorem and needs only two upstream names and one scalar store. -/
