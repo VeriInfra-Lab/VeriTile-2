@@ -2,13 +2,13 @@
 
 # 跨节点程序在单机上的覆盖范围
 
-Issue：[#353](https://github.com/VeriInfra-Lab/VeriTile-2/issues/353)。检查日期：2026-11-10；逻辑节点 launcher 于 2026-11-12 加入；首个逻辑节点结果以及 tutorial 03 和 06 的请求于 2026-11-12 记录；它们的结果和两个使用四张 GPU 的请求于 2026-11-13 记录。状态：源码检查完成。在这一台主机上启动两个逻辑节点的 launcher 已在 GPU 端运行：`internode-logical-env-002` 于 2026-11-12 返回，判定为通过（两个逻辑节点能够启动，二者之间的一次 put 到达）。针对 tutorial 03 和 06 的请求 `internode-logical-ag03-001` 与 `internode-logical-rs06-001` 已于 2026-11-12 以两个逻辑节点、每节点一个 rank 的方式运行，并于 2026-11-13 判定为通过。Issue 允许的两种结果中，第一种不会成立（见下面的决定）。第二种，即“跨节点代码路径在这一台主机上运行”的检查记录，对启动、对一次 put、以及对 tutorial 03 和 06 中每个逻辑节点一个 rank 就能到达的 `nnodes > 1` 分支成立。每个逻辑节点两个 rank 时，tutorial 03 已通过（#466）。Tutorial 06 等待 NVSHMEM barrier 变体验证（#478）。
+Issue：[#353](https://github.com/VeriInfra-Lab/VeriTile-2/issues/353)。检查日期：2026-11-10；逻辑节点 launcher 于 2026-11-12 加入；首个逻辑节点结果以及 tutorial 03 和 06 的请求于 2026-11-12 记录；它们的结果和两个使用四张 GPU 的请求于 2026-11-13 记录。状态：源码检查完成。在这一台主机上启动两个逻辑节点的 launcher 已在 GPU 端运行：`internode-logical-env-002` 于 2026-11-12 返回，判定为通过（两个逻辑节点能够启动，二者之间的一次 put 到达）。针对 tutorial 03 和 06 的请求 `internode-logical-ag03-001` 与 `internode-logical-rs06-001` 已于 2026-11-12 以两个逻辑节点、每节点一个 rank 的方式运行，并于 2026-11-13 判定为通过。Issue 允许的两种结果中，第一种不会成立（见下面的决定）。第二种，即“跨节点代码路径在这一台主机上运行”的检查记录，对启动、对一次 put、以及对 tutorial 03 和 06 中每个逻辑节点一个 rank 就能到达的 `nnodes > 1` 分支成立。每个逻辑节点两个 rank 时，tutorial 03 已通过（#466）。Tutorial 06 于 2026-11-24 使用全局 NVSHMEM barrier 通过验证。[四 rank 判定](https://github.com/VeriInfra-Lab/VeriTile-2/issues/511#issuecomment-7124128151)。
 
 **决定（用户，2026-11-12）。** 不再安排第二个物理节点：合作者的集群已不可用。跨节点程序只以这一台主机上的逻辑节点方式测试。主机之间的传输（网卡、RDMA）不在项目范围内：模型里只有 rank 和 scope，没有节点或链路，证明不依赖它。如果逻辑节点无法运行，跨节点代码路径只做证明，并如实报告为未运行。
 
 ## 硬件与范围
 
-所检查的主机可见六张 H800 PCIe，计算能力均为 9.0。NVLink 卡对为 0–1、2–3、4–5。每个分布式请求计划只使用两张卡，只有一个例外：`internode-logical-ag03-2x2-001` 和 `internode-logical-rs06-2x2-002` 这两个请求使用四张，即两个 NVLink 卡对（用户决定，2026-11-13）。两个卡对之间只通过 PCIe 相连。本次环境检查使用当时空闲的 4–5 卡对。设备选择不代表资源预留，每次执行前都必须重新检查占用。
+所检查的主机可见六张 H800 PCIe，计算能力均为 9.0。NVLink 卡对为 0–1、2–3、4–5。每个分布式请求计划只使用两张卡，只有一个例外：`internode-logical-ag03-2x2-001` 和 `internode-logical-rs06-2x2-002` 这两个请求使用四张，即两个 NVLink 卡对（用户决定，2026-11-13）。两个卡对之间只通过 PCIe 相连。本次环境检查使用当时空闲的 4–5 卡对。设备选择不代表资源预留，每次执行前都必须重新检查占用。 用户于 2026-11-24 仅对此批次授权与其他负载共享设备 0、1、2、3，供 tutorial 06 的四 rank 运行使用。此次运行仅验证正确性。
 
 下述源码观察均针对 [Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`](https://github.com/ByteDance-Seed/Triton-distributed/tree/7908e4ea9010bb2238f9f05b28c904fd4b71c60a)。它们说明控制流和配置约束，不代表运行成功或数值正确。
 
@@ -32,7 +32,7 @@ Issue：[#353](https://github.com/VeriInfra-Lab/VeriTile-2/issues/353)。检查�
 
 ## 单机上的逻辑节点
 
-2026-11-12 加入。本节内容中，launcher 以及两个逻辑节点之间的一次 put 已在 GPU 上运行（`internode-logical-env-002`，见小节“首个请求及其结果”）；尚无教程 kernel 在该 launcher 下运行。launcher 还在没有 GPU 的开发机上用固定脚本的替身做了测试。凡涉及 torchrun、NVSHMEM 或 NCCL 的陈述，都是从所引源码读到的，或由其推断的，并逐条注明是哪一种；小节“只有 GPU 端运行才能确定的事项”说明其中哪些已被那次运行确认。
+2026-11-12 加入。本节内容中，launcher 以及两个逻辑节点之间的一次 put 已在 GPU 上运行（`internode-logical-env-002`，见小节“首个请求及其结果”）；后续教程运行的结果见下文。launcher 还在没有 GPU 的开发机上用固定脚本的替身做了测试。凡涉及 torchrun、NVSHMEM 或 NCCL 的陈述，都是从所引源码读到的，或由其推断的，并逐条注明是哪一种；小节“只有 GPU 端运行才能确定的事项”说明其中哪些已被那次运行确认。
 
 ### Launcher
 
@@ -121,11 +121,11 @@ GPU 端安装的版本，据 `internode-logical-env-002` 的 `env.json`：PyTorc
 9. Triton 的 JIT 能否从一个只含该文件各项定义的模块中编译 tutorial 03 的 kernel；harness 正是这样避免运行教程的程序。开发机上只测试到 `inspect.getsourcelines`（JIT 用它读取 kernel）返回该文件的文本为止。**已确定：**`internode-logical-ag03-001` 的四个测试都以这种方式编译了各自的 kernel。
 10. NVSHMEM 的节点 team 在逻辑节点下报告什么（按源码预期：这台主机上的全部 rank），以及使用它的 tutorial 06 节点内 barrier 能否跨两个逻辑节点完成。**已确定：**在两个 launcher 下，rank r 都报告自己是 2 个 rank 的节点 team 中的本地 rank r，原生原子操作为 1，barrier 完成。
 
-随四 rank 的请求（小节“两个逻辑节点、每节点两个 rank 的请求”）新增，均未确定：
+随四 rank 的请求（小节“两个逻辑节点、每节点两个 rank 的请求”）新增：
 
 11. NVSHMEM 能否到达另一个 NVLink 卡对上的 GPU 并映射其内存：该 GPU 可见时（`one_node`）通过 `cudaDeviceCanAccessPeer`，被隐藏时（`logical_nodes`）通过 NVML 对两个设备给出的状态。如果不能，两个请求的每个测试都会在初始化时以 `Peer GPU … is not accessible` 停止。
 12. NCCL 能否在四个 rank 上建立进程组，包括一个 launcher 组四个 rank 以及两个组各两个 rank 两种情况。
-13. 不同卡对的两张 GPU 对原生原子操作报告什么。硬件描述意味着是 0；这里读过的任何材料都没有这样写。`internode-logical-rs06-2x2-002` 的每个 rank 都会打印它可见设备中每一对的回答。
+13. **#511 实测。** 在 `one_node` 下，每个 rank 的原生原子操作报告均为 `0-1:1 0-2:0 0-3:0 1-2:0 1-3:0 2-3:1`。分属两个 NVLink 卡对的 GPU 均报告 0。在 `logical_nodes` 下，每个 rank 仅看到自己的卡对，报告 `0-1:1`。
 14. Tutorial 06 的 barrier 所用的 compare-and-swap kernel，在通过一条报告没有原生原子操作的链路到达的内存上会怎样：完成、挂起，或者 GPU 报错。这里读过的任何文档都没有说明是哪一种。
 15. 主机侧向另一卡对上某个 rank 的张量做的复制是否到达（tutorial 06 请求的 `one_node/harness_context`：每个 rank 向三个 rank 做 scatter，其中两个在另一卡对上）。
 16. Tutorial 03 的“先接收再转发”分支，以及 tutorial 06 的 scatter 接跨节点 put，是否返回预期张量。
@@ -278,16 +278,16 @@ GPU 端安装的版本，据 `internode-logical-env-002` 的 `env.json`：PyTorc
 
 推断：如果卡对之间可以通过 PCIe 访问对端，那么 tutorial 03 所做的一切，以及 tutorial 06 的每个 NVSHMEM 操作（其跨节点 kernel 的 put、NVSHMEM 的 barrier）都只需要 load 和 store，预期可以通过与卡对内部相同的映射在卡对之间工作，不经过网卡。唯一需要更多的操作是 tutorial 06 自己的 barrier kernel 中的 compare-and-swap，它不经过 NVSHMEM 的传输选择：它取得被映射的地址（`dl.symm_at`，`CO:161`），自己发出原子操作。
 
-**替代批次（用户于 2026-11-21 决定，#478）。** `internode-logical-rs06-2x2-002` 沿用 harness 构建的上下文，给 barrier 构造函数传入 `is_intra_node=False`。在固定版本中，这会跳过节点组字段和分配（CO:234–243），使 T06:344 通过 CO:254–255 调用 NVSHMEM 全局流 barrier。上文的 load/store 传输模式使用普通 store 发信号。成功时每个 rank 根据上下文返回 `[-1, -1, 2]`（无本地 rank 和组大小，使用全局 barrier）。CAS 对应代码 1，judge 会报告差异。本变体覆盖 T06:279、288–294 的同节点 peer scatter，以及两个逻辑节点的第一轮在 T06:364–374 执行的跨节点 put。它不验证教程的原子 barrier。全局 barrier、peer 复制和 put 能否完成，实际拓扑和链路报告，以及两种 launcher 下两次重复的精确归约行，都要由运行确定。测试使用一台物理主机。
+**替代批次（用户于 2026-11-21 决定，#478）。** `internode-logical-rs06-2x2-002` 沿用 harness 构建的上下文，给 barrier 构造函数传入 `is_intra_node=False`。在固定版本中，这会跳过节点组字段和分配（CO:234–243），使 T06:344 通过 CO:254–255 调用 NVSHMEM 全局流 barrier。上文的 load/store 传输模式使用普通 store 发信号。成功时每个 rank 根据上下文返回 `[-1, -1, 2]`（无本地 rank 和组大小，使用全局 barrier）。CAS 对应代码 1，judge 会报告差异。本变体覆盖 T06:279、288–294 的同节点 peer scatter，以及两个逻辑节点的第一轮在 T06:364–374 执行的跨节点 put。它不验证教程的原子 barrier。实际运行结果见下表。测试使用一台物理主机。
 
-**预期结果。**
+**预期与实测结果。**
 
-| 请求 | 预期 | 否则 |
+| 请求 | 预期 | 结果或诊断 |
 | --- | --- | --- |
 | `internode-logical-ag03-2x2-001` | 每个测试 `ok` 且 `equal`：每个 rank 返回 64 个输入字节。 | 每个测试都是 `runtime_error` 并带有 `Peer GPU … is not accessible`：NVSHMEM 无法跨卡对映射，两个请求都无法用四张 GPU 运行。某一个分段不同：上面的 program 表说明它是经哪条路线送达的。 |
-| `internode-logical-rs06-2x2-002` | 两个测试中每个 rank 都应返回精确的归约行和 barrier 报告 `[-1, -1, 2]`。 | barrier 报告不同、缺失输出、超时或 CUDA 错误时须检查。 |
+| `internode-logical-rs06-2x2-002` | 每个 rank 返回精确的归约行及全局 barrier 报告。 | 2026-11-24 运行并判定通过（#511）。两种 launcher 各重复两次，四个 rank 每次均返回各自精确的 256 个归约行及 `[-1, -1, 2]`。 |
 
-Tutorial 03 已在四个 rank 上通过（#466）。Tutorial 06 的 scatter、barrier 和归约仍待验证。
+Tutorial 03 已在四个 rank 上通过（#466）。在 #511 中，未经改动的 tutorial 06 在一台主机上以两个逻辑节点、每节点两个 rank 完成了 peer scatter、跨节点 P2P kernel 和环形归约。harness 选择了全局 NVSHMEM barrier。教程自身的原子 barrier，以及受 `has_fullmesh_nvlink()` 控制的 `putmem_on_stream` 路径仍待验证。[判定](https://github.com/VeriInfra-Lab/VeriTile-2/issues/511#issuecomment-7124128151) · [结果包](https://github.com/VeriInfra-Lab/VeriTile-2/tree/73a5723130934b1e59d93c5750b4d9d0e9cccd7d/results/internode-logical-rs06-2x2-002)。
 
 ## 受影响请求与完成门槛
 
@@ -306,8 +306,8 @@ Tutorial 03 已在四个 rank 上通过（#466）。Tutorial 06 的 scatter、ba
 | `internode-logical-rs06-001` | 在同一 launcher 下运行 tutorial 06：`kernel_inter_node_p2p_for_same_local_rank` 以及两个节点上的归约；并在 `triton-dist` 下以相同测试作为对照 | 已于 2026-11-12 运行（#435）；2026-11-13 判定为通过，`logical_nodes/tutorial_context` 按预测失败。只覆盖逻辑节点。 |
 | `internode-logical-ag03-2x2-001` | Tutorial 03，两个逻辑节点、每节点两个 rank：节点内转发之前的等待；并以一个节点、四个 rank 上的相同测试作为对照 | 已在 #466 判定通过。 |
 | `internode-logical-rs06-2x2-001` | Tutorial 06，两个逻辑节点、每节点两个 rank：向另一本地 rank 的 scatter，再接 P2P kernel；并以一个节点、四个 rank 上的相同测试作为对照 | 公告前已撤回。 |
-| `internode-logical-rs06-2x2-002` | 相同的测试与对照，使用全局 NVSHMEM barrier。 | 已准备，等待合并后由协调者公告。 |
+| `internode-logical-rs06-2x2-002` | 相同的测试与对照，使用全局 NVSHMEM barrier。 | 已于 2026-11-24 运行（#511），判定通过。 |
 
 协议 v1 下，要求两个物理节点的请求仍应返回 `skipped_env`。不能把逻辑节点运行报告为双物理节点结果；其 `meta.json` 带有标签 `"topology": "logical-nodes"`。
 
-Issue #353 等待 tutorial 06 四 rank 结果的判定。
+Tutorial 06 的四 rank 运行在 #511 判定通过，#353 要求的最后一次运行已有结果。
