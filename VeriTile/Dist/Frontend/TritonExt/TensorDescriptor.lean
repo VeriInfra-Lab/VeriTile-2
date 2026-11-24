@@ -14,9 +14,9 @@ source input preconditions are documented above and are not encoded in the term:
 
 Activate this adapter with `open VeriTile.Dist.Frontend.TritonExt.TensorDescriptor`.
 The unused free descriptor functions and `tl.tensor_descriptor` remain unsupported.
-Descriptor rebinding through `dl.consume_token` remains rejected; this adapter alone
-does not elaborate the complete tutorial-07 kernel (#451). Source procedures inherit their
-existing prohibition on Lean expressions, so conditional block dimensions are
+Issue #79 owns `dl.consume_token`. Descriptor rebinding through this primitive remains
+rejected, so this adapter alone does not elaborate the complete tutorial-07 kernel.
+Source procedures inherit their prohibition on Lean expressions, so conditional block dimensions are
 accepted through the ordinary/signature entrypoints, not stored procedures (#449).
 -/
 import VeriTile.Dist.Frontend.TritonExt.SourceHelperSyntax
