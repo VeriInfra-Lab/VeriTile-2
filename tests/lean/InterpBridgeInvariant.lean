@@ -67,7 +67,7 @@ private def witness : Structural.State (WithBot ℝ) where
   pids _ := 0
   numPids _ := 1
   undef d _ _ := match d with
-    | .real => (1 : ℝ)
+    | .real | .bf16 => (1 : ℝ)
     | d => Structural.defaultValue d
 
 theorem witnessInvariant (rs) : Invariant (inputs rs) witness := by
@@ -82,6 +82,51 @@ theorem witnessInvariant (rs) : Invariant (inputs rs) witness := by
     simp [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue, witness]
     rfl
   · simp [inputs]
+
+-- Both exponentials map an evaluated bottom lane to the finite real zero.
+theorem exponentialsCertifyBottom (L : Layout) :
+    FiniteOp L (.exp .negInf) ∧ FiniteOp L (.libdeviceExp .negInf) :=
+  ⟨.exp _, .libdeviceExp _⟩
+
+private def scratchState (scratch : RegionName) : Structural.State (WithBot ℝ) :=
+  { witness with
+    mem := fun r _ => if r = scratch then .mk .bf16 (1 : ℝ) else .mk .real (1 : ℝ) }
+
+/-- A bf16 scratch region and real inputs have a simultaneous witness, for any
+choice of tracked registers, including the register predicate used by the census. -/
+theorem scratchLayoutSatisfiable (rs : List RegionName) (scratch : RegionName)
+    (tracked : RegName → Prop := fun _ => True) :
+    ∃ s, Invariant { inputs rs (some scratch) with finiteReg := tracked } s := by
+  refine ⟨scratchState scratch, ?_⟩
+  constructor
+  · intro r d hr o
+    by_cases h : r = scratch
+    · subst r
+      have hd : d = .bf16 := by simpa [inputs] using hr
+      subst d
+      exact ⟨_, by simp [scratchState], 1, rfl⟩
+    · have hd : r ∈ rs ∧ d = .real := by simpa [inputs, Ne.symm h] using hr
+      rcases hd with ⟨_, rfl⟩
+      exact ⟨_, by simp [scratchState, h], 1, rfl⟩
+  · simp [scratchState, witness]
+  · intro r d hr o
+    by_cases h : r = scratch
+    · subst r
+      have hd : d = .bf16 := by simpa [inputs] using hr
+      subst d
+      have fl : ¬ (∀ f : FloatDType, f.toTileDType ≠ .bf16) := fun h => h .bf16 rfl
+      simp [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue, scratchState, witness]
+      rfl
+    · have hd : r ∈ rs ∧ d = .real := by simpa [inputs, Ne.symm h] using hr
+      rcases hd with ⟨_, rfl⟩
+      have fl : ¬ (∀ f : FloatDType, f.toTileDType ≠ .real) := fun h => h .real rfl
+      simp [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue, scratchState, witness]
+      rfl
+  · simp [inputs]
+
+theorem scratchInputsSatisfiable (rs : List RegionName) (r : RegionName) :
+    ∃ s, Invariant (inputs rs (some r)) s :=
+  scratchLayoutSatisfiable rs r
 
 -- A prebound pointer cannot manufacture provenance for a foreign region.
 example : ¬ Invariant (inputs ["x"])
@@ -206,6 +251,28 @@ theorem rejectsLaunderedBottom (L : Layout) : ¬ Code L [
     cases tail with
     | store _ _ _ hf _ _ =>
       exact untracked (FiniteExpr.refTracked hf)
+
+private def ptrX : MemAccess .real [] := .ptr (.ptrBase (⟨"x"⟩ : Region .real))
+
+/-- Direct pointer stores of bottom fail independently of every layout choice. -/
+theorem rejectsPointerBottom (L : Layout) : ¬ Code L [
+    .store .real [] ptrX (.alg .negInf) .none,
+    .assign .real [] "y" (.alg (.load .real (.region ⟨"x"⟩ (.constNat 0)) .none))] := by
+  intro code
+  cases code with
+  | storePtr _ _ hf _ _ => exact Bool.noConfusion (finiteExpr_not_bottom hf)
+
+/-- An untracked assignment cannot launder bottom through a pointer store. -/
+theorem rejectsLaunderedPointerBottom (L : Layout) : ¬ Code L [
+    .assign .real [] "m" (.alg .negInf),
+    .store .real [] ptrX (.alg (.ref .real [] "m")) .none,
+    .assign .real [] "y" (.alg (.load .real (.region ⟨"x"⟩ (.constNat 0)) .none))] := by
+  intro code
+  cases code with
+  | assign hf _ _ => exact Bool.noConfusion (finiteExpr_not_bottom hf)
+  | assignUntracked untracked _ _ tail =>
+    cases tail with
+    | storePtr _ _ hf _ _ => exact untracked (FiniteExpr.refTracked hf)
 
 example (s : Structural.State (WithBot ℝ)) :
     let ck := ComputeKernel.mk [] ["x"] negInfBody
