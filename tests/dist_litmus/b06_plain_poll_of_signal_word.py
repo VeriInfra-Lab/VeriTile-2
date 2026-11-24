@@ -4,7 +4,8 @@
 # LIT-b06. The receiver polls the flag with an ordinary load.
 # Context: NVSHMEM 3.6.5, "Troubleshooting And FAQs" ("Why is the receive
 # buffer not updated with remote data even after synchronization with a
-# flag?"); "Memory Model", "Atomicity Guarantees".
+# flag?"); "Memory Model", "Atomicity Guarantees";
+# the sender follows the example at the head of "Signaling Operations".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.
 # Launch: ranks 0 and 1, grid 1. buf has NBYTES symmetric bytes (rank 0 holds
