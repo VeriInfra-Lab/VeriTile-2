@@ -52,7 +52,8 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.InterpFPValue"
              "lake build tests.lean.dist.SwizzleSource"
              "lake build tests.lean.dist.TritonExtConstexpr"
-             "lake build tests.lean.dist.TritonExtProfiler")
+             "lake build tests.lean.dist.TritonExtProfiler"
+             "lake build tests.lean.dist.TrustAssumptions")
 fi
 
 log=$(mktemp -d)
