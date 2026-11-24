@@ -15,6 +15,8 @@ mirror (`VeriTile.Interp.Mirror`), and the argument of `Op.const` and
 `Op.constFloat` is rewritten over `ℚ`. A literal may be built from numerals,
 scientific literals, a cast of a rational, `-`, `+`, `*` and `/`.
 
+A match that selects the kernel from symbolic dimensions reports its blocking dispatch.
+
 The command fails with
 
 * `reflect_kernel: non-rational literal r`, at the first literal that has
@@ -85,6 +87,24 @@ private partial def withMirrorParams (type : Expr) (xs args : Array Expr)
       withMirrorParams (body.instantiate1 arg) (xs.push x) (args.push arg) k
   | _ => k xs args type
 
+/-- Matchers in imported definitions have no declaration range of their own.
+Locate a uniquely matching dispatch line within its enclosing declaration. -/
+private def dispatchLocation (matcher : Meta.MatcherApp) : MetaM String := do
+  let owner := matcher.matcherName.getPrefix
+  let names ← matcher.discrs.mapM fun d => return toString (← ppExpr d)
+  let head := "match " ++ String.intercalate ", " names.toList ++ " with"
+  let some ranges ← findDeclarationRanges? owner | return head
+  let some mod ← findModuleOf? owner | return head
+  let roots := System.FilePath.mk "." :: (← getSrcSearchPath)
+  let some path ← Lean.SearchPath.findModuleWithExt roots "lean" mod | return head
+  let lines := (← IO.FS.readFile path).splitOn "\n" |>.toArray
+  let compact (s : String) := s.toList.filter (!·.isWhitespace)
+  let start := ranges.range.pos.line - 1
+  let hits := (lines.extract start ranges.range.endPos.line).toList.zipIdx.filter fun (s, _) =>
+    compact s == compact head
+  if let [(s, i)] := hits then return s!"{mod}:{start + i + 1}: {s.trimAscii}"
+  return head
+
 /-- `reflect_kernel k` adds the rational mirror `k.mirror` of the kernel `k` and the theorem
 `k.toReal_mirror : ∀ …, (k.mirror …).toReal = k …`. -/
 elab "reflect_kernel " k:ident : command => liftTermElabM do
@@ -109,6 +129,13 @@ elab "reflect_kernel " k:ident : command => liftTermElabM do
   let body ← Core.transform (mkAppN (mkConst kName) args) (pre := fun e => do
     if let .letE _ _ v b _ := e then return .visit (b.instantiate1 v)
     let .const c _ := e.getAppFn | return .continue
+    if let some m ← matchMatcherApp? e then
+      if (m.motive.beta m.discrs).isConstOf ``ComputeKernel &&
+          (← m.discrs.anyM fun d => do
+            unless d.hasFVar && !d.hasLooseBVars do return false
+            return (← inferType d).isConstOf ``Nat) then
+        if let .stuck _ ← reduceMatcher? e then
+          throwError "reflect_kernel: symbolic dimension dispatch at {← dispatchLocation m}"
     if e.isAppOfArity ``Op.const 1 || e.isAppOfArity ``Op.constFloat 2 then return ← literal e
     if (mirrorName? env c).isSome && c != ``Op.const && c != ``Op.constFloat then
       return .continue

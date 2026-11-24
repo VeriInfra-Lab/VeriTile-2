@@ -3,7 +3,9 @@ import VeriTile.Dist.Frontend.TritonExt.Range
 namespace VeriTile.Tests.Dist.TritonExtParsing
 open VeriTile Triton
 
--- Importing the adapter must leave upstream tokens and identifiers unchanged.
+open VeriTile.Dist.Frontend.TritonExt
+
+-- Opening the parent namespace must leave upstream tokens and identifiers unchanged.
 run_cmd do
   let tokens := Lean.Parser.getTokenTable (← Lean.getEnv)
   for token in ["step=", "loop_unroll_factor=", "pass", "tl.range(", ".sum("] do
@@ -33,7 +35,7 @@ example : ComputeKernel := triton {
 private def pass : Nat := 1
 example : pass = 1 := rfl
 
-open VeriTile.Dist.Frontend.TritonExt
+open VeriTile.Dist.Frontend.TritonExt.Range
 
 def rangeTest : ComputeKernel := triton {
   for i in tl.range(1, 4, 1) {
@@ -71,6 +73,16 @@ example (N : Nat) : (with_triton_signature profile in triton {
 } : ComputeKernel) = with_triton_signature profile in triton {
   for i in range(0, N, 2):
     x = i
+} := rfl
+
+example (N : Nat) : (with_triton_signature profile in triton {
+  for i in range(0, N, step=2):
+    for j in range(1, N, step=3):
+      x = i + j
+} : ComputeKernel) = with_triton_signature profile in triton {
+  for i in range(0, N, 2):
+    for j in range(1, N, 3):
+      x = i + j
 } := rfl
 
 -- Pinned range documentation says factors below two disable unrolling;

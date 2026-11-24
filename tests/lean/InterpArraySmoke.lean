@@ -53,6 +53,24 @@ private def accumulate : QKernel := .mk [] [] [.forLoop "i" 2
 #guard ((Array.interp algebra accumulate (initial 0)).map fun s =>
   ((s.read "a" 1000000000).read .nat, s.memory.cells.size)) = some (6, 1)
 
+-- Four row-major lanes write one cell. Appending decimal digits makes each
+-- atomic update observable, including permutations that preserve the last lane.
+private def aliasedAddress : QMemAccess .real [2, 2] :=
+  .region "out" (.broadcast (.constNat 0) [2, 2])
+
+private def aliasedOutputs (st : QAlgStmt) : Option Nat × Option Nat :=
+  let s := ((initial 0).write ("out", 0) (.mk .real 0)).setReg "lanes" .real [2, 2]
+    (fun i => 2 * i.1.val + i.2.1.val + 1)
+  let m := { algebra with atomicAdd := fun _ => some (fun a b => a * 10 + b) }
+  let k := QKernel.mk [] [] [.alg st]
+  ((Array.interp m k s).map fun t => (t.read "out" 0).read .real,
+   (interp m k s.view).map fun t => (t.read "out" 0).read .real)
+
+#guard aliasedOutputs (.store .real [2, 2] aliasedAddress (.ref .real [2, 2] "lanes") .none)
+    = (some 4, some 4)
+#guard aliasedOutputs (.atomicAdd .real [2, 2] aliasedAddress (.ref .real [2, 2] "lanes") .none)
+    = (some 1234, some 1234)
+
 -- Checked block-pointer lanes skip out-of-bounds writes. A masked pointer
 -- store ignores its `other` branch and updates the previously written cell.
 private def pointers : QKernel := .mk [] []
