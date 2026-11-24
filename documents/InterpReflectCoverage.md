@@ -8,10 +8,10 @@ The following table is the output of `lake env lean tests/lean/InterpReflectBenc
 
 | Example source | Kernel | Elaboration result |
 | --- | --- | --- |
-| [AdamUpdateGridLaunch](../bench/examples/AdamUpdateGridLaunch/Kernels.lean#L107) | `originalKernel` | Reflected |
-| [AdamUpdateGridLaunch](../bench/examples/AdamUpdateGridLaunch/Kernels.lean#L110) | `optimizedKernel` | Reflected |
 | [AdamUpdateGridLaunch](../bench/examples/AdamUpdateGridLaunch/Kernels.lean#L19) | `update_fn_kernel` | Reflected |
 | [AdamUpdateGridLaunch](../bench/examples/AdamUpdateGridLaunch/Kernels.lean#L63) | `commuted_update_kernel` | Reflected |
+| [AdamUpdateGridLaunch](../bench/examples/AdamUpdateGridLaunch/Kernels.lean#L107) | `originalKernel` | Reflected |
+| [AdamUpdateGridLaunch](../bench/examples/AdamUpdateGridLaunch/Kernels.lean#L110) | `optimizedKernel` | Reflected |
 | [FlatVectorAdd](../bench/examples/FlatVectorAdd/Kernels.lean#L14) | `addMaskedKernel` | Reflected |
 | [FlatVectorAdd](../bench/examples/FlatVectorAdd/Kernels.lean#L25) | `commutedKernel` | Reflected |
 | [FlatVectorAdd](../bench/examples/FlatVectorAdd/Kernels.lean#L36) | `originalKernel` | Reflected |
@@ -22,7 +22,7 @@ The following table is the output of `lake env lean tests/lean/InterpReflectBenc
 | [FloatDTypeAdd](../bench/examples/FloatDTypeAdd/Kernels.lean#L45) | `optimizedKernel` | Reflected |
 | [FloatDTypeSoftmax](../bench/examples/FloatDTypeSoftmax/Kernels.lean#L15) | `floatStableSoftmaxKernel` | Reflected |
 | [FloatDTypeSoftmax](../bench/examples/FloatDTypeSoftmax/Kernels.lean#L28) | `floatSoftmaxRecipKernel` | Reflected |
-| [FloatDTypeSoftmax](../bench/examples/FloatDTypeSoftmax/Kernels.lean#L43) | `commonPrefix` | Prefix extraction projects the kernel body via `ComputeKernel.rec`. |
+| [FloatDTypeSoftmax](../bench/examples/FloatDTypeSoftmax/Kernels.lean#L43) | `commonPrefix` | reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec |
 | [FloatDTypeSoftmax](../bench/examples/FloatDTypeSoftmax/Kernels.lean#L47) | `originalKernel` | Reflected |
 | [FloatDTypeSoftmax](../bench/examples/FloatDTypeSoftmax/Kernels.lean#L50) | `reciprocalKernel` | Reflected |
 | [FusedLayerNorm](../bench/examples/FusedLayerNorm/Kernels.lean#L17) | `twoPassLayerNormKernel` | Reflected |
@@ -31,27 +31,27 @@ The following table is the output of `lake env lean tests/lean/InterpReflectBenc
 | [FusedSiLU](../bench/examples/FusedSiLU/Kernels.lean#L32) | `siluStepGateKernel` | Reflected |
 | [FusedSiLU](../bench/examples/FusedSiLU/Kernels.lean#L47) | `siluStepSiluKernel` | Reflected |
 | [FusedSiLU](../bench/examples/FusedSiLU/Kernels.lean#L61) | `siluStepResidualKernel` | Reflected |
-| [FusedSiLU](../bench/examples/FusedSiLU/Kernels.lean#L71) | `unfusedSiLUKernel` | Sequential composition projects component bodies via `ComputeKernel.rec`. |
+| [FusedSiLU](../bench/examples/FusedSiLU/Kernels.lean#L71) | `unfusedSiLUKernel` | reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec |
 | [FusedSwiglu](../bench/examples/FusedSwiglu/Kernels.lean#L15) | `swiglu_fused_kernel` | Reflected |
 | [FusedSwiglu](../bench/examples/FusedSwiglu/Kernels.lean#L32) | `silu_step_kernel` | Reflected |
 | [FusedSwiglu](../bench/examples/FusedSwiglu/Kernels.lean#L47) | `mul_step_kernel` | Reflected |
-| [FusedSwiglu](../bench/examples/FusedSwiglu/Kernels.lean#L58) | `swiglu_unfused` | Sequential composition projects component bodies via `ComputeKernel.rec`. |
-| [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L122) | `mhcDepthConnectionKernel` | Matching symbolic dimensions leaves the branch unknown in the `toReal` equation. |
-| [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L127) | `originalKernel` | Reflected |
-| [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L129) | `matrixOriginal` | Reflected |
+| [FusedSwiglu](../bench/examples/FusedSwiglu/Kernels.lean#L58) | `swiglu_unfused` | reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec |
 | [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L17) | `matrixKernel` | Reflected |
 | [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L53) | `scalarKernel` | Reflected |
 | [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L70) | `optimizedKernel` | Reflected |
 | [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L91) | `matrixOptimizedKernel` | Reflected |
-| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L105) | `optimizedKernel` | Reflected |
-| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L128) | `matrixMiddleKernel` | Reflected |
+| [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L122) | `mhcDepthConnectionKernel` | reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsDepth.Kernels:123: match S,T,D,numIters with |
+| [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L127) | `originalKernel` | Reflected |
+| [HyperConnectionsDepth](../bench/examples/HyperConnectionsDepth/Kernels.lean#L129) | `matrixOriginal` | Reflected |
 | [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L17) | `matrixKernel` | Reflected |
-| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L175) | `matrixOptimizedKernel` | Reflected |
-| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L217) | `mhcWidthConnectionKernel` | Matching symbolic dimensions leaves the branch unknown in the `toReal` equation. |
-| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L222) | `originalKernel` | Reflected |
-| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L224) | `matrixOriginal` | Reflected |
 | [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L64) | `scalarKernel` | Reflected |
 | [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L82) | `middleKernel` | Reflected |
+| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L105) | `optimizedKernel` | Reflected |
+| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L128) | `matrixMiddleKernel` | Reflected |
+| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L175) | `matrixOptimizedKernel` | Reflected |
+| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L217) | `mhcWidthConnectionKernel` | reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsWidth.Kernels:218: match S,T,D,numIters with |
+| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L222) | `originalKernel` | Reflected |
+| [HyperConnectionsWidth](../bench/examples/HyperConnectionsWidth/Kernels.lean#L224) | `matrixOriginal` | Reflected |
 | [LogExp](../bench/examples/LogExp/Kernels.lean#L15) | `originalKernel` | Reflected |
 | [LogExp](../bench/examples/LogExp/Kernels.lean#L24) | `optimizedKernel` | Reflected |
 | [OnlineSoftmax](../bench/examples/OnlineSoftmax/Kernels.lean#L26) | `stableSoftmaxKernel` | Reflected |
@@ -63,7 +63,7 @@ The following table is the output of `lake env lean tests/lean/InterpReflectBenc
 | [RowWiseSum](../bench/examples/RowWiseSum/Kernels.lean#L22) | `reversedKernel` | Reflected |
 | [SoftmaxReciprocal](../bench/examples/SoftmaxReciprocal/Kernels.lean#L15) | `stableSoftmaxKernel` | Reflected |
 | [SoftmaxReciprocal](../bench/examples/SoftmaxReciprocal/Kernels.lean#L27) | `softmaxRecipKernel` | Reflected |
-| [SoftmaxReciprocal](../bench/examples/SoftmaxReciprocal/Kernels.lean#L41) | `commonPrefix` | Prefix extraction projects the kernel body via `ComputeKernel.rec`. |
+| [SoftmaxReciprocal](../bench/examples/SoftmaxReciprocal/Kernels.lean#L41) | `commonPrefix` | reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec |
 | [SoftmaxReciprocal](../bench/examples/SoftmaxReciprocal/Kernels.lean#L45) | `originalKernel` | Reflected |
 | [SoftmaxReciprocal](../bench/examples/SoftmaxReciprocal/Kernels.lean#L48) | `reciprocalKernel` | Reflected |
 | [SoftmaxStable](../bench/examples/SoftmaxStable/Kernels.lean#L13) | `naiveSoftmaxKernel` | Reflected |
@@ -76,3 +76,5 @@ The following table is the output of `lake env lean tests/lean/InterpReflectBenc
 | [VectorAdd](../bench/examples/VectorAdd/Kernels.lean#L45) | `optimizedKernel` | Reflected |
 | [Welford](../bench/examples/Welford/Kernels.lean#L16) | `twopassWelfordKernel` | Reflected |
 | [Welford](../bench/examples/Welford/Kernels.lean#L32) | `onlineWelfordKernel` | Reflected |
+
+62 of 68 kernels reflected.

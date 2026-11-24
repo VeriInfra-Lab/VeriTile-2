@@ -512,6 +512,7 @@ globs = [
   "tests.lean.InterpSymbolic",
   "tests.lean.InterpArraySmoke",
   "tests.lean.InterpBridgeInvariant",
+  "tests.lean.InterpAdequacyNeg",
   "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
   "tests.lean.dist.AtomicSetRuns",
@@ -522,6 +523,9 @@ globs = [
   "tests.lean.dist.TritonExtParsing",
   "tests.lean.dist.TensorDescriptorSource",
   "tests.lean.dist.SourceHelperSyntax",
+  "tests.lean.InterpFloatCensus",
+  "tests.lean.dist.TritonDistSyntax",
+  "tests.lean.dist.StateViews",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
@@ -548,3 +552,7 @@ globs = ["VeriTile.Equiv", "VeriTile.Equiv.+"]
 [[lean_lib]]
 name = "VeriTileStaging"
 globs = ["VeriTile.Staging.+"]
+
+[[lean_exe]]
+name = "veritile-run"
+root = "tests.interp.Main"

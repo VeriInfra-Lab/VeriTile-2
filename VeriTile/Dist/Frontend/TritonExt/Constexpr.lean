@@ -5,38 +5,58 @@ import VeriTile.Triton.DSL.PythonFullConstructors
 Finite constexpr specialization for the retained Triton-distributed sources,
 pinned at 7908e4ea9010bb2238f9f05b28c904fd4b71c60a:
 
-* python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py:118–119
-  queries the primitive width of two pointer element dtypes.
-* common_ops.py:83,102–103,132 uses `tl.constexpr` as the identity on already
-  static inputs. The spelling `tl.constexpr` is an existing token. Its call
-  production and the other two call productions are scoped. None adds a
-  global token.
+* The pointer element-width form `tl.constexpr(ptr.dtype.element_ty.primitive_bitwidth)`
+  occurs as a dividend in `all_to_all_vdev_2d_offset.py:279,414`,
+  `all_to_all_vdev_2d_offset_inter_node.py:118–119`, `allreduce.py:349,409,463,544`,
+  `reduce_scatter.py:484` (kernel paths under `python/triton_dist/kernels/nvidia/`),
+  and `tutorials/06-inter-node-reduce-scatter.py:255`. It occurs as the divisor
+  of 128 in `allreduce.py:642,669`.
+* `common_ops.py:83,102–103,132` uses `tl.constexpr` as the identity on already
+  static inputs. The three call productions are scoped and use existing tokens.
 * all_to_all_single_2d.py:37 asks for `len(tensor.shape)`. Supply a Lean
-  `let «tensor.shape» : List Nat := …` in scope of the quotation. The list
-  spine determines the static rank; dimensions themselves may be symbolic.
+  `let «tensor.shape» : List Nat := …` in scope of the quotation. This is a
+  trusted transcription binding. The frontend reads only its length and
+  does not check that it matches the source tensor. Extents may be symbolic.
   See Python 3.11's `len` documentation (accessed 2026-11-22):
   https://docs.python.org/3.11/library/functions.html#len
 * allgather_group_gemm.py:74,100–101 imports `next_power_of_2` from
   common_ops.py:270–272. Opening this extension gives that exact unqualified
-  call its pinned import meaning. Triton v3.5.1, python/triton/__init__.py:72–82,
-  documents the least power of two ≥ n. The pinned Python code gives zero for
-  zero and, for example, for −1. The specialization accepts zero and positive
-  integers through 2^64, the coverage of the pinned shifts for positive inputs.
-  Negative integers are rejected.
+  call its pinned import meaning. Triton v3.5.1 documents the least power of two
+  ≥ n (accessed 2026-11-24):
+  https://github.com/triton-lang/triton/blob/v3.5.1/python/triton/__init__.py#L72-L82
+  The specialization accepts zero and positive integers through 2^64, the
+  coverage of the pinned shifts for positive inputs. The pinned code gives
+  zero for zero and, for example, for −1. The adapter rejects negative inputs.
+  Qualified `triton.next_power_of_2` calls in Python launch and sizing code
+  run on the host: `all_to_all_single_2d.py:186`,
+  `all_to_all_vdev_2d_offset_inter_node.py:438`, `allgather_group_gemm.py:182,227`,
+  `allreduce.py:931`, `moe_reduce_ar.py:213,680–681`, and
+  `moe_reduce_rs.py:817,952,954`.
+
+`reduce_scatter.py:404` queries the pointer dtype directly, without `element_ty`.
+The pointer dtype has no such primitive-width property and the helper has no
+retained production caller. The adapter rejects this spelling.
+`tutorials/04-deepseek-infer-all2all.py:82–83` uses torch-derived and floating
+constants at module scope. Its reference quantization kernel at line 344
+uses `FP8_MAX_INV = tl.constexpr(1 / 448.)`. Supply such constants through
+the existing explicit transcription bindings.
 
 For a bare block, scalar names can be bound by enclosing Lean lets and
 pointer dtypes by `tl.region`. Pasted call bodies use signature constexpr
 names, source constants and fixed pointer types. Runtime arguments are never
 compile-time bindings. The adapter evaluates only Lean data and leaves
 unrelated expressions and source instructions to the existing frontend.
+An integer folded into a register assignment is materialized with its
+Triton integer dtype. Static dimensions and inline operands retain literal
+syntax so the consuming constructor can select the type.
 Integer aliases from these calls have block scope, including inside a runtime
 `if`. The condition and runtime statements remain in the kernel.
-Float and torch-derived constants belong in the transcription's existing
-explicit bindings. Stored source procedures use their own entry point.
+Stored source procedures use their own entry point.
 
 Import the scoped extensions after the upstream frontend modules used in a
 file. In a `tl.swizzle2d` argument, write `tl.cast(tl.constexpr(n), tl.int64)`
-so the integer type is preserved if Swizzle elaborates first.
+so the integer type is preserved if Swizzle elaborates first. Its implicit
+cast applies only to number literals already present when it captures arguments.
 -/
 namespace VeriTile.Dist.Frontend.TritonExt.Constexpr
 open Lean Elab Term Meta
@@ -64,6 +84,16 @@ private def literal : Value → MacroM SourceExpr
   | .string s =>
     let lit : TSyntax `str := ⟨Syntax.mkStrLit s⟩
     `(tritonExpr| $lit:str)
+
+private def integerRegister (n : Int) : MacroM SourceExpr := do
+  let dtype ←
+    if -(2^31 : Int) ≤ n && n < 2^31 then `(tritonDType| tl.int32)
+    else if 0 ≤ n && n < 2^32 then `(tritonDType| tl.uint32)
+    else if -(2^63 : Int) ≤ n && n < 2^63 then `(tritonDType| tl.int64)
+    else if 0 ≤ n && n < 2^64 then `(tritonDType| tl.uint64)
+    else Macro.throwError "folded constexpr register exceeds Triton's integer range"
+  let value ← literal (.integer n)
+  `(tritonExpr| tl.cast($value:tritonExpr, $dtype:tritonDType))
 
 -- SourceDType supplies canonical names. Use the source precision rather than
 -- the interpreter carrier (for example uint8 and uint64 both use Nat).
@@ -290,6 +320,11 @@ private partial def lower (ctx : Bindings) (aliases : List Name) (raw : Syntax) 
     TermElabM Syntax := do
   if raw.getKind == choiceKind && containsCall raw then return ← lower ctx aliases raw[0]!
   match raw with
+  | `(tritonStmt| $id:ident = $value:tritonExpr) =>
+    if containsCall value.raw || (identifiers value.raw).any aliases.contains then
+      if let some (.integer n) ← evaluate ctx value then
+        let value ← liftMacroM (integerRegister n)
+        return (← liftMacroM `(tritonStmt| $id:ident = $value)).raw
   | `(tritonStmt| if $c:tritonExpr { $yes:tritonStmt* } else { $no:tritonStmt* })
   | `(tritonStmt| tl.if $c:tritonExpr { $yes:tritonStmt* } else { $no:tritonStmt* }) =>
     let condition : SourceExpr := ⟨← lower ctx aliases c.raw⟩

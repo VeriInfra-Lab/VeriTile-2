@@ -1,0 +1,3 @@
+# Source: thunlp/TritonBench@603e28a5050e8c268f6883a69709d477a272d49a data/TritonBench_G_v1/layer_norm_fwd.py:6-90; HazyResearch/ThunderKittens@cdfce886b2660a0345a20bc5c7d52efd0db95fc0 tests/python/layernorm/baselines/layer_norm_triton.py:1-5,128-252,255-384; Dao-AILab/flash-attention@0dfb28174333d9eefb7c1dd4292690a8458d1e89 flash_attn/ops/triton/layer_norm.py:1-5,128-252,255-392; triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/tutorials/05-layer-norm.py:48-95
+# Licence: Apache-2.0 AND MIT AND BSD-3-Clause
+# Changes: transcribed to Lean; retain the one-pass layer-normalization kernel with residual and dropout branches with local type and comparison metadata

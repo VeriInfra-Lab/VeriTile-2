@@ -1,0 +1,3 @@
+# Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/tutorials/01-vector-add.py:29-53
+# Licence: MIT
+# Changes: transcribed to Lean; record the add quotation and its subtract mutation in generated JSON

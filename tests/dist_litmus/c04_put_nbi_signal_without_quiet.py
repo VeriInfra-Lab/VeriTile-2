@@ -1,6 +1,9 @@
+# Source: VeriInfra-Lab/VeriTile-2@51419efee8944c00d6d6a8296bf708ad2956b1d7 documents/dist/LitmusTable.md:905-925
+# Licence: MIT
+# Changes: rewritten as a minimal example; A non-blocking put and a signal with neither quiet nor fence; the target waits on the signal and reads
 # LIT-c04. A non-blocking put and a signal with neither quiet nor fence; the
 # target waits on the signal and reads.
-# Source: NVSHMEM 3.6.5, "Remote Memory Access" (nvshmem_put_nbi), "Memory
+# Context: NVSHMEM 3.6.5, "Remote Memory Access" (nvshmem_put_nbi), "Memory
 # Model", "Ordering of Operations", and "Using NVSHMEM", "Data Consistency".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

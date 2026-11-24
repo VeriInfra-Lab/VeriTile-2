@@ -42,9 +42,7 @@ Each claim carries one of three marks:
    environment, built from `main` at `71e71457`, where two names the port
    needs do not exist. The GPU side built the environment `tilescale-deepep`
    from `9ba8a605` on 2026-11-12; it reports `tilelang` version
-   `0.1.7.post1+cuda.git9ba8a605`. The coordinator judged
-   the H800 run of the version 1 port a pass in #457. Section 7
-   says how it meets each need and what only a run can settle.
+   `0.1.7.post1+cuda.git9ba8a605`. The coordinator accepted the version 1 port’s H800 run in [#457](https://github.com/VeriInfra-Lab/VeriTile-2/issues/457). Section 7 says how the request `deepep-v1-intranode-001` meets each need and what only a run can settle.
 5. **Specification.** The frozen MoE declarations hold for version 1 normal
    mode as far as they go, but they leave out or weaken six things that
    version 1 fixes (section 8).

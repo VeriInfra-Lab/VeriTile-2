@@ -5,7 +5,7 @@ Sequential spelling extensions for the target census (#77).
 hint (the documentation includes values below two as no unrolling). The target
 census uses that hint with a literal value, and uses `step`.
 Other range keywords remain parse failures. `pass` emits no statement.
-Import this module and open `VeriTile.Dist.Frontend.TritonExt` to enable
+Import this module and open `VeriTile.Dist.Frontend.TritonExt.Range` to enable
 these spellings; importing alone leaves their tokens inactive.
 
 Sources (accessed 2026-11-13):
@@ -42,7 +42,7 @@ rejected, not erased. This safe syntax slice does not complete #77.
 import VeriTile.Dist.Frontend.TritonExt.SourceHelperSyntax
 import VeriTile.Triton.DSL.PythonFullConstructors
 
-namespace VeriTile.Dist.Frontend.TritonExt
+namespace VeriTile.Dist.Frontend.TritonExt.Range
 open Lean Elab Term
 open VeriTile.Triton.DSL
 
@@ -122,4 +122,4 @@ def elaborateRangeSource : TermElab := fun stx expected => do
   let replacement := Syntax.atom raw.getHeadInfo ("{\n" ++ source ++ "\n}")
   elabTerm (stx.setArgs (stx.getArgs.set! (stx.getArgs.size - 1) replacement)) expected
 
-end VeriTile.Dist.Frontend.TritonExt
+end VeriTile.Dist.Frontend.TritonExt.Range

@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/04-deepseek-infer-all2all.py:233-276
+# Licence: MIT
+# Changes: rewritten as a minimal example; A non-blocking put, a fence, then the signal
 # LIT-c05. A non-blocking put, a fence, then the signal.
-# Source: tutorials/04-deepseek-infer-all2all.py:233-276 (TD-T04); NVSHMEM
+# Context: tutorials/04-deepseek-infer-all2all.py:233-276 (TD-T04); NVSHMEM
 # 3.6.5, "Memory Ordering" (table and nvshmem_fence) and "Memory Model",
 # "Ordering of Operations".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

@@ -43,7 +43,7 @@ does. Looping over the program ids of a grid belongs to the runner (I7.2).
 
 ## 2. Frozen statements
 
-Adequacy (`VeriTile/Staging/Interp/Adequacy.lean`, proved by I3.3):
+Adequacy (`VeriTile/Interp/Adequacy/Exec.lean`, proved by I3.3):
 
 ```lean
 theorem interp_eq_structural_exec {α : Type} [Inhabited α]
@@ -82,9 +82,14 @@ I4.3 ships a kernel and a state that satisfy it.
 What the two statements do not say:
 
 - Nothing about a GPU. Agreement with GPU runs is measured, not proved.
-- Nothing about a particular carrier being IEEE-correct. `interp` over Lean
-  `Float` approximates the real semantics; the bit-level carrier is the
-  collaborator's model.
+- Nothing about a particular carrier being IEEE-correct. The binary64 carrier
+  approximates the real semantics using Lean `Float`. With one NaN operand,
+  `max` returns its first operand and `min` its second. For example, `max NaN 1 = NaN`,
+  `max 1 NaN = 1`, `min NaN 1 = 1`, and `min 1 NaN = NaN`.
+  `reduceMax` and `reduceMin` inherit these rules by folding from −∞ and +∞,
+  respectively, with the accumulator as the first operand. This differs from
+  both IEEE 754-2019 `maximum`/`minimum` and `maximumNumber`/`minimumNumber`.
+  The bit-level carrier is the precise model for the operations it supports.
 - Nothing about kernels that use constructs `FP.Structural.exec` rejects; on
   those both sides of the adequacy statement are `none`.
 
@@ -170,9 +175,13 @@ integer output states a sentinel outside the kernel's result range.
 
 - How inputs are generated from a seed: owned by `scripts/interp/gen_inputs.py` (I8.1), which must produce identical bytes on every machine.
 - The directory layout of requests and results: `documents/GpuExchangeProtocol.md`.
-- The export format of the symbolic carrier (I6.3).
 
 ## 4. Expression tree format, version 1
+
+This section specifies the export format and is outside the statement fingerprints.
+A version 1 reader rejects any other version with a diagnostic. Adding a node kind
+or reordering metadata fields requires a new version. Trees have no sharing:
+each occurrence of a subtree is written in full.
 
 `VeriTile.Interp.Symbolic.writeTrees` writes one UTF-8 JSON object with an integer
 `version` of 1 and an `outputs` array. Each entry is one output element in caller
@@ -224,8 +233,18 @@ reduceMax symbols outside the carrier's lane format.
 Run `PYTHONPATH=scripts python3 -m interp.symeval trees.json` for the reference.
 Optional `--float float.tensor` and `--gpu gpu.tensor` report absolute distance
 for each output. Both tensors must have the same number of elements as the
-export. Rational operations use Fraction. The GPU protocol, section 9, pins
-neither SymPy nor mpmath. The standard-library reference uses Decimal with
-50 significant digits for exp, log and related operations, and binary64 libm
-for sin, cos, tan, atan and erf. Values and distances are printed as strings
-to preserve rational fractions and decimal precision.
+export. Values and distances are printed as strings to preserve fractions and
+decimal precision.
+
+The reference evaluator uses exact rational arithmetic (`Fraction`), including
+integer powers of rational inputs. For exp, log, sqrt and non-integer pow, it
+uses 50 significant decimal digits. The precision contract calls for correct
+rounding at each step and does not track cancellation across steps. Python's
+C Decimal backend computes non-integer powers using correctly rounded exp and
+log, and documents that the final power is almost always correctly rounded.
+`sin`, `cos`, `tan`, `atan` and `erf` use binary64 and the platform libm, with
+typical relative error around `1e-16`. The current comparisons target fp32.
+The GPU protocol, section 9, pins neither SymPy nor mpmath.
+[Precision decision on #126](https://github.com/VeriInfra-Lab/VeriTile-2/issues/126#issuecomment-7121320412),
+[Python Decimal power](https://docs.python.org/3/library/decimal.html#decimal.Context.power)
+(accessed 2026-11-24).

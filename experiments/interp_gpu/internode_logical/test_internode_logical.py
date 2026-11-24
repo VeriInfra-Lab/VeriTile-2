@@ -539,8 +539,13 @@ class Harness(unittest.TestCase):
         self.assertIn(mock.call([5, 8, 1], dtype=torch.int32), torch.tensor.call_args_list)
 
     def test_invalid_barrier_settings_are_rejected_before_launch(self):
-        for launch, error in [({'context': 'harness', 'barrier': 'unknown'}, 'unknown barrier'),
-                              ({'context': 'tutorial', 'barrier': 'nvshmem'}, 'tutorial context')]:
+        for launch, error in [
+            ({'context': 'harness', 'barrier': 'unknown'}, 'unknown barrier'),
+            ({'context': 'harness', 'barrier': 'global'}, 'unknown barrier'),
+            ({'context': 'harness', 'barrier': 'NVSHMEM'}, 'unknown barrier'),
+            ({'context': 'tutorial', 'barrier': 'nvshmem'}, 'tutorial context'),
+            ({'context': 'tutorial', 'barrier': 'intra_node'}, 'tutorial context'),
+        ]:
             with self.subTest(launch=launch), self.assertRaisesRegex(ValueError, error):
                 harness.reduce_scatter(0, 4, {}, {}, launch)
 

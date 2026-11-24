@@ -1,3 +1,6 @@
+-- Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/triton/language/standard.py:77-114
+-- Licence: MIT
+-- Changes: transcribed to Lean; state the grouped coordinate formula and prove it for the expanded program
 import VeriTile.Dist.Frontend.TritonExt.Swizzle
 import VeriTile.Triton.Float.Structural
 import VeriTile.Triton.Semantics.Step
@@ -72,6 +75,27 @@ def documented (i j m n g : Nat) : Nat × Nat :=
 def valid (i j m n g : Nat) : Prop :=
   0 < m ∧ 0 < n ∧ 0 < g ∧ i < m ∧ j < n
 
+/-- On valid coordinates, the expanded program agrees with the documented
+row-to-column ordering within each group. -/
+theorem result_documented {i j m n g : Nat} (h : valid i j m n g) :
+    result i j m n g = some (documented i j m n g) := by
+  obtain ⟨_, hn, hg, _, hj⟩ := h
+  have widthPositive : 0 < g * n := Nat.mul_pos hg hn
+  have offsetBound : i % g * n + j < g * n := by
+    calc
+      i % g * n + j < (i % g + 1) * n := by rw [Nat.succ_mul]; omega
+      _ ≤ g * n := Nat.mul_le_mul_right n (Nat.succ_le_of_lt (Nat.mod_lt i hg))
+  have linear : i * n + j = i % g * n + j + (i / g) * (g * n) := by
+    calc
+      i * n + j = (g * (i / g) + i % g) * n + j := by rw [Nat.div_add_mod]
+      _ = _ := by rw [Nat.add_mul]; ac_rfl
+  have quotient : (i * n + j) / (g * n) = i / g := by
+    rw [linear, Nat.add_mul_div_right _ _ widthPositive, Nat.div_eq_of_lt offsetBound,
+      Nat.zero_add]
+  have remainder : (i * n + j) % (g * n) = i % g * n + j := by
+    rw [linear, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt offsetBound]
+  simp only [result_formula, documented, quotient, remainder]
+
 example : result 0 1 4 4 2 = some (documented 0 1 4 4 2) := by
   rw [result_formula]; decide
 example : result 3 1 5 4 3 = some (documented 3 1 5 4 3) := by
@@ -98,8 +122,9 @@ def signature : CallSignature where
   constexpr := ["N", "K", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M"]
 
 def direct (tile_num_ptr out_ptr : RegionName)
-    (N K BLOCK_SIZE_N BLOCK_SIZE_K GROUP_SIZE_M : Nat) : ComputeKernel :=
-  with_triton_signature signature in triton {
+    (N BLOCK_SIZE_N GROUP_SIZE_M : Nat) : ComputeKernel :=
+  with_triton_signature
+      { signature with constexpr := ["N", "BLOCK_SIZE_N", "GROUP_SIZE_M"] } in triton {
     pid = tl.program_id(0)
     num_block_n = tl.cdiv(N, BLOCK_SIZE_N)
     tile_num = tl.load(tile_num_ptr + 0)
@@ -110,7 +135,7 @@ def direct (tile_num_ptr out_ptr : RegionName)
     tl.store(out_ptr + 1, pid_n)
   }
 
-def transposed (tile_num_ptr out_ptr : RegionName)
+def transposed (out_ptr : RegionName)
     (N K BLOCK_SIZE_N BLOCK_SIZE_K GROUP_SIZE_M : Nat) : ComputeKernel :=
   with_triton_call signature call_args [] in triton {
     pid = tl.program_id(0)
@@ -139,15 +164,15 @@ def signedResult (i j m n g : Int) : Option (Int × Int) :=
 example : signedResult 0 1 4 4 2 = some (1, 0) := by
   simp [signedResult, signedKernel, ComputeKernel.toAlgorithm?, ComputeStmt.listToAlgorithm?,
     ComputeStmt.toAlgorithm?, ComputeExpr.toAlgorithm?, Except.bind, Except.toOption,
-    bind, exec, stepStmts, stepStmt, Op.tritonDiv, Op.tritonMod, eval_truncDiv, eval_truncMod,
-    evalOp, Tile.bop, Tile.scalar, NumericDType.add, NumericDType.sub, NumericDType.mul,
+    bind, exec, stepStmts, stepStmt, evalOp, Tile.bop, Tile.scalar, NumericDType.add,
+    NumericDType.sub, NumericDType.mul,
     ComparableDType.lt, Tile.cop, Tile.select, -Tile.scalar_eta]
 
 example : signedResult 3 1 5 4 3 = some (4, 0) := by
   simp [signedResult, signedKernel, ComputeKernel.toAlgorithm?, ComputeStmt.listToAlgorithm?,
     ComputeStmt.toAlgorithm?, ComputeExpr.toAlgorithm?, Except.bind, Except.toOption,
-    bind, exec, stepStmts, stepStmt, Op.tritonDiv, Op.tritonMod, eval_truncDiv, eval_truncMod,
-    evalOp, Tile.bop, Tile.scalar, NumericDType.add, NumericDType.sub, NumericDType.mul,
+    bind, exec, stepStmts, stepStmt, evalOp, Tile.bop, Tile.scalar, NumericDType.add,
+    NumericDType.sub, NumericDType.mul,
     ComparableDType.lt, Tile.cop, Tile.select, -Tile.scalar_eta]
 
 def procedure : SourceProcedure :=
@@ -175,14 +200,13 @@ def instantiated (out_ptr : RegionName) (M N G : Nat) : ComputeKernel :=
     ({ pointers := [("out_ptr", .i32)], constexpr := ["M", "N", "G"] } : CallSignature)
     procedure_args [out_ptr := out_ptr, M := M, N := N, G := G]
 
-example : True := by
-  fail_if_success
-    let invalid : ComputeKernel := triton {
-      row = 0
-      col = 0
-      row, col = tl.swizzle2d(row, col, 4, 4, 0)
-    }
-  trivial
+/-- error: swizzle2d dimensions and group size must be positive -/
+#guard_msgs in
+def zeroGroupSize : ComputeKernel := triton {
+  row = 0
+  col = 0
+  row, col = tl.swizzle2d(row, col, 4, 4, 0)
+}
 
 
 def repeated (i j : Nat) : ComputeKernel := triton {
@@ -216,20 +240,21 @@ def literal : ComputeKernel := triton {
   row, col = tl.swizzle2d(row, col, 4, 4, 2)
 }
 
-example : True := by
-  fail_if_success
-    let invalid : ComputeKernel := triton {
-      row = tl.program_id(0)
-      col = tl.program_id(1)
-      row, col = tl.swizzle2d(row, col, 0, 4, 2)
-    }
-  fail_if_success
-    let invalid : ComputeKernel := triton {
-      row = tl.program_id(0)
-      col = tl.program_id(1)
-      row, col = tl.swizzle2d(row, col, 4, -1, 2)
-    }
-  trivial
+/-- error: swizzle2d dimensions and group size must be positive -/
+#guard_msgs in
+def zeroHeight : ComputeKernel := triton {
+  row = tl.program_id(0)
+  col = tl.program_id(1)
+  row, col = tl.swizzle2d(row, col, 0, 4, 2)
+}
+
+/-- error: swizzle2d dimensions and group size must be positive -/
+#guard_msgs in
+def negativeWidth : ComputeKernel := triton {
+  row = tl.program_id(0)
+  col = tl.program_id(1)
+  row, col = tl.swizzle2d(row, col, 4, -1, 2)
+}
 
 open Lean Elab Command in
 run_cmd do
@@ -242,7 +267,7 @@ def loadedState (m : Int) : BlockState :=
   { (default : BlockState) with
     mem := fun _ _ => MemCell.of .int m
     pids := fun _ => 1 }
-theorem loaded_sizes : ((direct "tiles" "out" 4 4 1 1 2).toAlgorithm?.toOption.bind
+theorem loaded_sizes : ((direct "tiles" "out" 4 1 2).toAlgorithm?.toOption.bind
     (fun k => exec k (loadedState 4))).map (fun s =>
       ((s.regs .int [] "local_pid_m").map (·.data PUnit.unit),
        (s.regs .int [] "pid_n").map (·.data PUnit.unit))) = some (some 1, some 0) := by
@@ -253,6 +278,7 @@ theorem loaded_sizes : ((direct "tiles" "out" 4 4 1 1 2).toAlgorithm?.toOption.b
     NumericDType.div, BlockState.readMemValue, BlockState.readMemTyped, MemCell.readAs, MemCell.of, ComparableDType.lt, Tile.cop, Tile.select, -Tile.scalar_eta]
 
 #axiomsClean result_formula
+#axiomsClean result_documented
 #axiomsClean loaded_sizes
 
 end
