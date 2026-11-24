@@ -1,4 +1,5 @@
 import VeriTile.Dist.Frontend.TritonExt.Constexpr
+import VeriTile.Dist.Frontend.TritonExt.Swizzle
 
 namespace VeriTile.Tests.TritonExtConstexpr
 open VeriTile.Triton

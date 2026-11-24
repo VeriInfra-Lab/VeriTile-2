@@ -1,0 +1,195 @@
+# Pointer casts in the distributed tutorials and DeepEP v1
+
+## Scope and counting
+
+This is the source inventory for step 1 of #448. It covers all eight Triton-distributed tutorial files and their reached device kernels, including the seven library kernels/helpers in the tutorial call graph (21 kernel definitions in all). It also covers the five Python files in the pinned TileScale DeepEP v1 intranode directory. The target counts in the original ticket cover other families, including K-M. They count roots, whereas this inventory counts source expressions once across all callers. The source pins are Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a` and TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`. Source inspected 2026-11-23. [Tutorial call graph](EventControlFlow.md#2-sources) · [DeepEP v1 intranode directory](https://github.com/tile-ai/tilescale/tree/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode)
+
+A site is one pointer-targeting `tl.cast` or `.to`, one addition to the cast pointer (including an addition in the same expression as the cast, a chained addition or a later `+=`), or one `tl.cast` carrying any of `dtype=`, `bitcast=`, `_semantic=`. An expression matching two cast selectors counts once. Multiplying two integer indices counts as part of the offset. Lines shared by separate additions are identified by the operand. The second table follows reached front-end primitive wrappers to their external-call or inline-assembly boundary and reports their sites separately. No external code was run.
+
+## Kernel sites
+
+The before/after column gives the element type of the base pointer on the tutorial launch and the type used by the operation. The displacement is in bytes. For a cast by itself the added displacement is zero. **I** means the producer and consumer retain the payload's element interpretation on the cited path; **II** means different typed accesses to the same payload are visible in the source-level path. BF16 is two bytes, FP8 E4M3 and int8 each one. These are inferences from the source uses, not claims about physical accesses issued by a compiler.
+
+| Site | Operation | Before → after | Byte displacement and divisibility | Writer/reader evidence |
+| --- | --- | --- | --- | --- |
+| [T03:86](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L86) | destination cast | int8 → int8 | 0 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:86](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L86) | destination add | int8 → int8 | `segment * bytes_per_rank`; divisible by 1 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:88](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L88) | source cast | int8 → int8 | 0 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:88](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L88) | source add | int8 → int8 | `segment * bytes_per_rank`; divisible by 1 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:132](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L132) | rebind pointer by cast | int8 → int8 | 0 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:140](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L140) | destination add, inter-node | int8 → int8 | `segment * bytes_per_rank`; divisible by 1 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:141](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L141) | source add, inter-node | int8 → int8 | `segment * bytes_per_rank`; divisible by 1 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:170](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L170) | destination add, intra-node | int8 → int8 | `segment * bytes_per_rank`; divisible by 1 | I. Byte copy; T03 allocation and comparison below. |
+| [T03:171](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L171) | source add, intra-node | int8 → int8 | `segment * bytes_per_rank`; divisible by 1 | I. Byte copy; T03 allocation and comparison below. |
+| [T04:192](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L192) | cast dispatch send pointer | BF16 → FP8 | 0 at cast; pre-cast base advances by `2 * m_st * HIDDEN`; divisible by final FP8 size 1 | II, dispatch |
+| [T04:192](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L192) | add `group_offs` | FP8 → FP8 | `row * HIDDEN + lane`; a lane can be odd; divisible by final FP8 size 1 | II, dispatch |
+| [T04:212](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L212) | advance inner loop | FP8 → FP8 | `4 * FP8_GSIZE`; divisible by final FP8 size 1 | II, dispatch |
+| [T04:215](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L215) | advance outer loop | FP8 → FP8 | `(BM - 1) * HIDDEN`; divisible by final FP8 size 1 | II, dispatch |
+| [T04:350](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L350) | cast reference output | BF16 → FP8 | 0; divisible by final FP8 size 1 | I, reference |
+| [T04:350](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L350) | add row (inner addition) | FP8 → FP8 | `off_m * N`; divisible by final FP8 size 1 | I, reference |
+| [T04:350](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L350) | add column (outer addition) | FP8 → FP8 | `off_n`; includes odd lanes; divisible by final FP8 size 1 | I, reference |
+| [T04:370](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L370) | advance output pointer | FP8 → FP8 | `4 * FP8_GSIZE`; divisible by final FP8 size 1 | I, reference |
+| [T04:387](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L387) | cast dequant input | BF16 → FP8 | 0; divisible by final FP8 size 1 | II, dispatch; I on reference path |
+| [T04:387](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L387) | add row (inner addition) | FP8 → FP8 | `off_m * N`; divisible by final FP8 size 1 | II, dispatch; I on reference path |
+| [T04:387](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L387) | add column (outer addition) | FP8 → FP8 | `off_n`; includes odd lanes; divisible by final FP8 size 1 | II, dispatch; I on reference path |
+| [T04:405](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L405) | advance input pointer | FP8 → FP8 | `4 * FP8_GSIZE`; divisible by final FP8 size 1 | II, dispatch; I on reference path |
+
+**T03 byte copies.** The allocated buffer is int8, the launch receives an int8 slice, the two wrappers compute `bytes_per_rank = symm_buffer.nbytes // num_ranks`, and the result is compared with int8 data. There is no requirement that the segment start be divisible by a wider element size in these launches. The host separately constructs random int32 reference data and views it as int8 before copying it into the int8 buffer; that host view is outside the kernel-cast count. [Allocation](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L268) · [1D launch](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L98-L106) · [2D launch](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L180-L191) · [Host producer and consumer](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L196-L223)
+
+**T04 dispatch.** The send and receive buffers are allocated with BF16 elements. In the online FP8 dispatch branch the base address advances in BF16 elements *before* the cast, then independent lanes store quantized FP8 values. The transfer copies one byte per hidden component. The host slices the received BF16 tensor, reshapes and concatenates the packed data as BF16 elements. The dequantizer subsequently reads that BF16 tensor through the FP8 pointer and numerically converts the loaded values to FP32 and then BF16. This exposes both typed views of the transported payload. It does not imply BF16 arithmetic on the packed values. [Buffer and parameters](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L461-L465) · [Allocation](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L515-L520) · [Base and FP8 writes](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L168-L215) · [Byte count](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L233-L239) · [Dispatch and packed host transport](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L550-L603) · [Dequant load](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L387-L405)
+
+**T04 reference.** The reference allocates an empty BF16 tensor of shape `(m, N // 2)`. Its first payload write is FP8, at line 363. The dequantizer called directly on that output doubles the supplied width and reads FP8 at line 397. The reference path therefore contains a changed pointer type and packed layout, but no intervening BF16 payload read or write is shown. Category I here describes the writer/reader pair. It does not establish normalization to offsets in the original BF16 array: odd FP8 lanes would require half a BF16 element. For all twelve T04 sites, divisibility by the *actual* FP8 load/store width holds. Divisibility by two is a different claim: the tutorial enforces `HIDDEN % 128 == 0`, and uses four groups of 128 for the increments. Column offsets range over consecutive bytes. The generic helpers alone do not establish even row strides for arbitrary `N`. [Reference allocation and launches](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L410-L429) · [Reference caller](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L626-L631) · [Column indices](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L343-L355)
+
+## Reached CUDA front-end wrappers
+
+These rows are additional source sites below the kernel call surface. NV denotes the pinned Python NVSHMEM adapter, LE the pinned CUDA language extras. Every NV row explicitly passes `_semantic=_semantic`. It threads the front-end context; no additional value or memory effect is attributed to that keyword. Scalar rows give the destination specified in the adapter and identify a source type when fixed by the caller; rank, size and signal-value arguments can be runtime operands or compile-time constants. Their exact source widths are not specified universally. The public API distinguishes numeric conversion from `bitcast=True`. Its signature exposes `_semantic`; the parameter documentation supplies no user-level meaning for the context. [Triton cast API, accessed 2026-11-23](https://triton-lang.org/main/python-api/generated/triton.language.cast.html) · [Pinned wrapper caller, put](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L443-L453) · [Pinned wrapper caller, put with signal](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L525-L535)
+
+| Site | Operand and before → after | Added byte offset / final access | Classification |
+| --- | --- | --- | --- |
+| [NV:429](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L429) | `dest`, caller element pointer → void pointer | 0; ordinary put transfers the caller’s byte count. No void element load/store. | I for this conversion. The ABI copy carries the caller’s bytes. |
+| [NV:430](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L430) | `source`, caller element pointer → void pointer | 0; ordinary put transfers the caller’s byte count. No void element load/store. | I for this conversion. The ABI copy carries the caller’s bytes. |
+| [NV:483](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L483) | `dest`, caller element pointer → void pointer | 0; signalling put transfers the caller’s byte count. No void element load/store. | I for this conversion. The ABI copy carries the caller’s bytes. |
+| [NV:484](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L484) | `source`, caller element pointer → void pointer | 0; signalling put transfers the caller’s byte count. No void element load/store. | I for this conversion. The ABI copy carries the caller’s bytes. |
+| [NV:431](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L431) | `nbytes`, caller integer → uint64 | Scalar; no address or memory read. | Value conversion. |
+| [NV:432](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L432) | `pe`, caller integer → int32 | Scalar; no address or memory read. | Value conversion. |
+| [NV:485](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L485) | `nbytes`, caller integer → uint64 | Scalar; no address or memory read. | Value conversion. |
+| [NV:487](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L487) | `signal`, caller integer → uint64 | Scalar; no address or memory read. | Value conversion. |
+| [NV:488](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L488) | `sig_op`, caller integer → int32 | Scalar; no address or memory read. | Value conversion. |
+| [NV:489](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L489) | `pe`, caller integer → int32 | Scalar; no address or memory read. | Value conversion. |
+| [NV:556](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L556) | `signal`, caller integer → uint64 | Scalar; no address or memory read. | Value conversion. |
+| [NV:557](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L557) | `sig_op`, caller integer → int32 | Scalar; no address or memory read. | Value conversion. |
+| [NV:558](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L558) | `pe`, caller integer → int32 | Scalar; no address or memory read. | Value conversion. |
+| [NV:580](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L580) | `cmp_`, caller integer → int32 | Scalar; no address or memory read. | Value conversion. |
+| [NV:581](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L581) | `cmp_val`, caller integer → uint64 | Scalar; no address or memory read. | Value conversion. |
+| [NV:486](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L486) | uint64 pointer required at NV:478 → uint64 pointer | 0; 8-byte word, same width. Absolute alignment needs a valid word pointer. | I on the admitted path. |
+| [NV:555](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L555) | uint64 pointer required at NV:550 → uint64 pointer | 0; 8-byte word, same width. Absolute alignment needs a valid word pointer. | I on the admitted path. |
+| [NV:579](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L579) | int64 or uint64 pointer admitted at NV:573 → uint64 pointer | 0; 8-byte word, same width. Absolute alignment needs a valid word pointer. | II on a signed-backed signal word; I for a uint64 input. |
+| [LE:700](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/language_extra.py#L700) | Inside `st` (CO:177). `_semantic=`. | — | III. Inline-assembly function; stop at this boundary. |
+| [LE:702](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/language_extra.py#L702) | Inside `st` (CO:177). `bitcast=True` and `_semantic=`. | — | III. Inline-assembly function; stop at this boundary. |
+| [LE:703](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/language_extra.py#L703) | Inside `st` (CO:177). `_semantic=`. | — | III. Inline-assembly function; stop at this boundary. |
+| [LE:711](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/language_extra.py#L711) | Inside `st` (CO:177). `_semantic=`. | — | III. Inline-assembly function; stop at this boundary. |
+| [LE:713](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/language_extra.py#L713) | Inside `st` (CO:177). `_semantic=`. | — | III. Inline-assembly function; stop at this boundary. |
+
+The signal casts use `pi_u64_t` defined at NV:31. The tutorial signal dtype is `torch.int64`; T03 and T04 allocate signal tensors in that dtype. NV:573 accepts a signed word and reads it as unsigned. By contrast, NV:478 and NV:550 assert an unsigned pointer **before** their casts. An int64 pointer arriving unchanged would fail the assertion. Runtime lowering, absolute addresses, external library implementations and GPU execution are unchecked. The table grants neither assertion automatically. [Alias](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L29-L32) · [Signal dtype](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/utils.py#L572) · [T03 signal allocation](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py#L271-L278) · [T04 signal allocation](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py#L523-L528) · [Wait signature](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/language/extra/cuda/libnvshmem_device.py#L572-L581)
+
+## Coverage and totals
+
+| Counted source surface | I: same payload interpretation | II: different typed views | III: inline assembly | Scalar keyword conversion | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Kernel cast expressions | 4 | 2 | 0 | 0 | 6 |
+| Kernel pointer arithmetic | 9 | 6 | 0 | 0 | 15 |
+| Reached CUDA primitive wrappers | 6 | 1 | 5 | 11 | 23 |
+| **Total distinct sites** | **19** | **9** | **5** | **11** | **44** |
+
+II takes precedence when an expression serves both paths. Four of the thirteen kernel I sites belong to the packed FP8 reference output and nine to int8 byte copies. In particular, simply equating “allocated as BF16” with “payload produced as BF16” would change the count. Five III rows identify source locations only. The eleven additional scalar casts are counted for their keyword, separately from pointer operations. The reached sites contain no `dtype=` keyword of `tl.cast`; passing a dtype positionally and using `dtype=` on a different API are distinct. No `.to(tl.pointer_type(...))` occurs in the reached kernel set.
+
+The eight tutorial files contain qualifying kernel expressions only in T03 and T04. Following the seven library kernels in the call graph adds no direct kernel sites. CO:73,76,105,122,125 occur in other grid-barrier helpers; those helpers and the separate low-latency/EP K-M sources belong to the wider parent census. On the reached K16 scalar `st` path, the vector overload at LE:695–696 is not selected. The DeepEP directory contains `get_dispatch_layout.py`, `dispatch.py`, `combine.py`, `example_intranode.py`, and `test_intranode.py`. Its seven kernels use TileScale. None of the five files contains the requested Triton pointer or keyword forms; `T.cast(idx_value, "int32")` in dispatch is a scalar TileScale expression. [Reachable versus unused kernels](EventControlFlow.md#2-sources) · [Wider grid helper](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L61-L142) · [Scalar source call](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L172-L179) · [DeepEP scalar cast](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/dispatch.py#L385)
+
+### Reproducing the source counts
+
+With the checkout directories of the two pins in `TD` and `TS`, run the following with Python 3.10 or later from the VeriTile root. The scanner reads Python syntax without importing either project. It follows assigned cast pointers and increments inside each function, resets a pointer overwritten in a different branch, and prints distinct casts, arithmetic expressions and source wrapper keywords. The line/column pairs distinguish nested additions beginning on the same line by their end positions.
+
+```python
+import ast
+import os
+import re
+from collections import Counter
+from pathlib import Path
+
+td, ts = Path(os.environ["TD"]), Path(os.environ["TS"])
+base = td / "python/triton_dist"
+nv = base / "kernels/nvidia"
+cuda = base / "language/extra/cuda"
+files = {f: None for f in sorted((td / "tutorials").glob("0[1-8]-*.py"))}
+assert len(files) == 8
+files[nv / "common_ops.py"] = {
+    "barrier_all_intra_node_atomic_cas_block", "barrier_all_intra_node_non_atomic_block",
+    "_barrier_all_intra_node_non_atomic_once_block",
+}
+files[nv / "reduce_scatter.py"] = {
+    "kernel_ring_reduce_tma", "kernel_ring_reduce_non_tma",
+    "kernel_inter_node_p2p_for_same_local_rank", "add_continuous_kernel",
+}
+files[cuda / "libnvshmem_device.py"] = {
+    "_putmem_impl", "_putmem_signal_impl", "signal_op", "signal_wait_until",
+    "putmem_block", "putmem_nbi_block", "putmem_signal_block", "putmem_signal_nbi_block",
+    "fence", "barrier_all_block", "_barrier_all_impl",
+}
+files[cuda / "language_extra.py"] = {"st", "ld", "atomic_cas", "atomic_add", "__syncthreads", "tid"}
+port = ts / "examples/distributed/deepseek_deepep/intranode"
+deep = sorted(port.glob("*.py"))
+assert len(deep) == 5
+files.update({f: None for f in deep})
+seen = set()
+
+def expr(node, live):
+    if isinstance(node, ast.Name):
+        return node.id in live
+    children = [expr(child, live) for child in ast.iter_child_nodes(node)]
+    kind, pointer = None, False
+    if isinstance(node, ast.Call):
+        name = ast.unparse(node.func)
+        has_ptr = any(isinstance(x, ast.Call) and ast.unparse(x.func) == "tl.pointer_type"
+                      for x in node.args + [k.value for k in node.keywords])
+        keywords = {k.arg for k in node.keywords}
+        pointer = has_ptr and (name == "tl.cast" or name.endswith(".to"))
+        if pointer or (name == "tl.cast" and keywords & {"dtype", "bitcast", "_semantic"}):
+            kind = "cast"
+    elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub)):
+        pointer = any(children)
+        if pointer:
+            kind = "arithmetic"
+    if kind:
+        seen.add((f.name, node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, kind))
+    return pointer
+
+def statements(body, live):
+    for st in body:
+        if isinstance(st, ast.Assign):
+            pointer = expr(st.value, live)
+            for t in st.targets:
+                if isinstance(t, ast.Name):
+                    if pointer:
+                        live.add(t.id)
+                    else:
+                        live.discard(t.id)
+        elif isinstance(st, ast.AugAssign):
+            if isinstance(st.target, ast.Name) and st.target.id in live:
+                seen.add((f.name, st.lineno, st.col_offset, st.end_lineno, st.end_col_offset, "arithmetic"))
+            expr(st.value, live)
+        elif isinstance(st, (ast.If, ast.For, ast.While)):
+            expr(st.iter if isinstance(st, ast.For) else st.test, live)
+            branches = [statements(b, live.copy()) for b in (st.body, st.orelse)]
+            live = branches[0] | branches[1]
+        elif not isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            expr(st, live)
+    return live
+
+for f, names in files.items():
+    tree = ast.parse(f.read_text())
+    funcs = [fn for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef)]
+    if names:
+        assert names <= {fn.name for fn in funcs}, f
+    for fn in funcs:
+        if names is None or fn.name in names:
+            statements(fn.body, set())
+    if f in deep:
+        statements(tree.body, set())
+for row in sorted(seen):
+    print(*row)
+counts = Counter((file, kind) for file, *_, kind in seen)
+assert counts == {
+    ("03-inter-node-allgather.py", "cast"): 3, ("03-inter-node-allgather.py", "arithmetic"): 6,
+    ("04-deepseek-infer-all2all.py", "cast"): 3, ("04-deepseek-infer-all2all.py", "arithmetic"): 9,
+    ("libnvshmem_device.py", "cast"): 18, ("language_extra.py", "cast"): 5,
+}, counts
+aliases = {
+    "03-inter-node-allgather.py": "T03", "04-deepseek-infer-all2all.py": "T04",
+    "libnvshmem_device.py": "NV", "language_extra.py": "LE",
+}
+expected = Counter((aliases[file], line) for file, line, *_ in seen)
+table = Path("documents/dist/PointerCasts.md").read_text()
+listed = Counter((name, int(line)) for name, line in
+                 re.findall(r"^\| \[(T03|T04|NV|LE):(\d+)\]", table, re.MULTILINE))
+assert listed == expected, (listed - expected, expected - listed)
+```
