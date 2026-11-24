@@ -294,6 +294,7 @@ notes in the header. Every issue names its actor; the scheduling unit is one
 nonempty group. SoundLaunch restricts multi-event groups to a CAS pair.
 The revised interface awaits the second S4.1 signing round. -/
 
+/-- UNSIGNED. Part 2. The memory operand or discarded result attached to an event. -/
 inductive AccessValue where
   | noValue
   /-- A word-add whose old value is discarded before reaching the continuation. -/
@@ -301,12 +302,13 @@ inductive AccessValue where
   | store (value : MemCell)
   | update (apply : MemCell → MemCell)
 
+/-- UNSIGNED. Part 2. An issued event together with its actor and value information. -/
 structure Emission where
   actor : Agent
   event : Event
   data : AccessValue := .noValue
 
-/-- Finish, or issue a nonempty group and continue with the result of each
+/-- UNSIGNED. Part 2. Finish, or issue a nonempty group and continue with the result of each
 member in source order. Each member carries its actor and typed payload. -/
 inductive Next (P : Type) where
   | finish
@@ -344,18 +346,19 @@ inductive AgentProgram.Steps {P : Type} (prog : AgentProgram P) :
       (rest : prog.Steps (k vs) l) :
       prog.Steps p (.inl (prog.segment p) :: ((e :: es).map (fun x => .inr x.event) ++ l))
 
-/-- N6. The event, actor, payload and continuation are determined by the
+/-- UNSIGNED. Part 2. N6. The event, actor, payload and continuation are determined by the
 segment's declared reads and its local state. Required of launch programs. -/
 def AgentProgram.NextLocal {P : Type} (p : AgentProgram P) : Prop :=
   ∀ pc σ τ, DistState.AgreesOn ((p.segment pc).reads σ) σ τ →
     DistState.SameLocal (p.segment pc).agent σ τ → p.next pc σ = p.next pc τ
 
-/-- N7. A cut can compute its events from the state in which the preceding
+/-- UNSIGNED. Part 2. N7. A cut can compute its events from the state in which the preceding
 segment starts. This includes K6's loaded lengths; ofBody retains fixed events. -/
 structure EventCut where
   code : Segment
   issue : DistState → Emission × List Emission
 
+/-- UNSIGNED. Part 2. Run the segments and issue their event groups in list order. -/
 def AgentProgram.ofCuts (owner : Agent) : AgentProgram (List EventCut) where
   segment cuts := cuts.head?.map EventCut.code |>.getD (Segment.ofStmts owner [])
   next cuts σ := match cuts with

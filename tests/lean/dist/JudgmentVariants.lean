@@ -242,7 +242,27 @@ example (a : Agent) (p : Addr) : ¬ (Occurrence.issued a
 
 example (a : Agent) (p : Addr) : (Occurrence.issued a
     ⟨a,.bump ⟨.word p,.add,1,.atomic .sys .relaxed⟩,.discardAddResult⟩).discardedAddAt p :=
-  ⟨a,a,1,.atomic .sys .relaxed,rfl⟩
+  ⟨1,.atomic .sys .relaxed,rfl,rfl⟩
+
+-- A delivered signal-add discards its old word value. The transfer's payload
+-- address, a signal-set, and a transfer without a signal do not qualify.
+private def signalDelivery (a : Agent) (dst : Addr) (signal : Option Bump) : Occurrence :=
+  .delivered a ⟨[dst], [dst], false, signal⟩ 0
+
+example (a : Agent) (dst p : Addr) : (signalDelivery a dst
+    (some ⟨.word p,.add,1,.atomic .sys .release⟩)).discardedAddAt p :=
+  ⟨1, .atomic .sys .release, rfl⟩
+
+example (a : Agent) (dst p : Addr) (distinct : p ≠ dst) : ¬ (signalDelivery a dst
+    (some ⟨.word p,.add,1,.atomic .sys .release⟩)).discardedAddAt dst := by
+  simp [signalDelivery, Occurrence.discardedAddAt, distinct]
+
+example (a : Agent) (dst p : Addr) : ¬ (signalDelivery a dst
+    (some ⟨.word p,.set,1,.atomic .sys .release⟩)).discardedAddAt p := by
+  simp [signalDelivery, Occurrence.discardedAddAt]
+
+example (a : Agent) (dst p : Addr) : ¬ (signalDelivery a dst none).discardedAddAt p := by
+  simp [signalDelivery, Occurrence.discardedAddAt]
 
 example (l : Launch P) (s : Machine) (a : Agent) (p : Addr) (v : MemCell) :
     Fire l s ⟨a,.access .store p .plain,.store v⟩ (l.cells.put s.mem p v) s.pending none :=

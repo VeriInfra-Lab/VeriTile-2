@@ -258,7 +258,7 @@ def DirectHB (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
 /-- S4.3/#49. Scope visibility is indexed by the cell throughout the chain. -/
 def HB (l : Launch P) (h : History) (p : Addr) := Relation.TransGen (DirectHB l h p)
 
-/-- S5.1/S1: the scope checker supplies a synchronization pair for the
+/-- UNSIGNED. S5.1/S1: the scope checker supplies a synchronization pair for the
 observed cell `p`. At its two history positions, the acquire must read from
 this release on the same synchronization counter. -/
 theorem SyncEdge.hb_of_readsFrom {l : Launch P} {h : History} {p : Addr} {i j : Nat}
@@ -282,11 +282,14 @@ def DataRace (l : Launch P) (h : History) : Prop :=
 def DRF (l : Launch P) (s : DistState) : Prop :=
   ∀ sched final, Run l (l.initial s) sched final → ¬ DataRace l final.history
 
-/-- Only the emitted natural-word add whose semantics erase the old result
-can use the commutative exception. An allocator that reads its old slot
-uses the ordinary bump and remains subject to the deterministic-race test. -/
+/-- An issued word-add can discard its old value explicitly. A delivery returns
+no old signal value to a continuation, so its completion add also qualifies
+at its signal word. The transfer's payload accesses are checked separately. -/
 def Occurrence.discardedAddAt (x : Occurrence) (p : Addr) : Prop :=
-  ∃ prog a n m, x = .issued prog ⟨a,.bump ⟨.word p,.add,n,m⟩,.discardAddResult⟩
+  match x with
+  | .issued _ e => ∃ n m, e.event = .bump ⟨.word p,.add,n,m⟩ ∧ e.data = .discardAddResult
+  | .delivered _ t _ => ∃ n m, t.completion = some ⟨.word p,.add,n,m⟩
+  | .segment .. => False
 
 def UnorderedAtomicRace (l : Launch P) (h : History) : Prop :=
   ∃ i j x y p k k' m m', i < j ∧ h[i]? = some x ∧ h[j]? = some y ∧
@@ -478,19 +481,13 @@ theorem normalize_of_decreasing_swap {l : Launch P} {s : DistState} {canonical :
       exact (Relation.ReflTransGen.single swap).trans
         (ih (rank next) (by omega) next g reaches complete rfl)
 
-/-- Semantic obligation for S5.2/#57: every edge the source relies on
-at the indicated location is an actual visibility edge on each reachable run. -/
-def ScopeConsistentOn (l : Launch P) (s : DistState)
-    (needs : History → Addr → Nat → Nat → Prop) : Prop :=
-  ∀ sched final, Run l (l.initial s) sched final →
-    ∀ p i j, needs final.history p i j → HB l final.history p i j
-
-/-- C3 candidate, S4.7–8/#53/#54. DetRaceFree is the external premise; S4.7 owes normalization.
+/-- C3 candidate, S4.7–8/#53/#54. DetRaceFree uses HB, whose synchronization
+edges already check scope through Mode.Pairs. S5.2/#57 owns the source-level
+synchronization obligations. S4.7 owes normalization.
 C1 will also need a simulation for suffixes, including reads-from and delivery
 ticket renaming; equality of the raw event histories would be false. -/
-theorem drf_scopeConsistent_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
+theorem detRaceFree_scopeConsistent_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
     {reference final : Config P} (sound : SoundLaunch l) (safe : DetRaceFree l s)
-    (needs : History → Addr → Nat → Nat → Prop) (scopes : ScopeConsistentOn l s needs)
     (refRun : Run l (l.initial s) canonical reference)
     (refComplete : Complete reference) (actual : Run l (l.initial s) sched final)
     (complete : Complete final) : final.mem = reference.mem := sorry
@@ -499,13 +496,12 @@ theorem drf_scopeConsistent_complete_eq_canonical {l : Launch P} {s : DistState}
 memory and establishing race/fault freedom suffices on the deterministic-race-free fragment. -/
 theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : Schedule}
     {reference : Config P} (sound : SoundLaunch l) (safe : Safe l s) (det : DetRaceFree l s)
-    (needs : History → Addr → Nat → Nat → Prop) (scopes : ScopeConsistentOn l s needs)
     (refRun : Run l (l.initial s) canonical reference)
     (done_ : Complete reference) (spec : DistState → Prop) (ok : spec reference.mem) :
     ImplementsAll l s (fun final => spec final.mem) := by
   refine ⟨safe, fun sched final actual complete => ?_⟩
   change spec final.mem
-  rw [drf_scopeConsistent_complete_eq_canonical sound det needs scopes refRun done_ actual complete]
+  rw [detRaceFree_scopeConsistent_complete_eq_canonical sound det refRun done_ actual complete]
   exact ok
 
 open VeriTile.Triton.Concurrent (EventProgramIO Backend)
