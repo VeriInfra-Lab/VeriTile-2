@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a docs/python-api/triton-dist.semantics.rst:64-85; NVIDIA/cccl@5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5 docs/libcudacxx/extended_api/memory_model.rst:38-55
+# Licence: MIT AND (Apache-2.0 WITH LLVM-exception)
+# Changes: rewritten as a minimal example; Message passing between two ranks with a flag at device scope
 # LIT-a04. Message passing between two ranks with a flag at device scope.
-# Source: docs/python-api/triton-dist.semantics.rst, "Memory Scope and
+# Context: docs/python-api/triton-dist.semantics.rst, "Memory Scope and
 # Ordering" (TD-SEM); libcu++ "Memory model", "Scope Relationships" (CU-MM).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

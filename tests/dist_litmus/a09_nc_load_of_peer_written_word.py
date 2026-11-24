@@ -1,5 +1,8 @@
+# Source: tile-ai/tilescale@71e71457d40ed6e6a2dad297936bfdbff21d104b tilelang/language/distributed/comm.py:78-85
+# Licence: MIT
+# Changes: rewritten as a minimal example; A load with nc=True of a word that a peer writes during the kernel
 # LIT-a09. A load with nc=True of a word that a peer writes during the kernel.
-# Source: docstring of ld, tilelang/language/distributed/comm.py:78-85
+# Context: docstring of ld, tilelang/language/distributed/comm.py:78-85
 # (TS-COMM).
 # Table: documents/dist/LitmusTable.md. Front end: TileScale 71e7145.
 # A source for later tickets: not run here, and nothing imports it.

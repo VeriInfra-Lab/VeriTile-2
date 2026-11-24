@@ -1,5 +1,8 @@
+# Source: NVIDIA/cccl@5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5 docs/libcudacxx/extended_api/memory_model.rst:160-194
+# Licence: Apache-2.0 WITH LLVM-exception
+# Changes: rewritten as a minimal example; Message passing through a flag at device scope
 # LIT-a01. Message passing through a flag at device scope.
-# Source: libcu++ "Memory model", "Example: Message Passing" (CU-MM).
+# Context: libcu++ "Memory model", "Example: Message Passing" (CU-MM).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.
 # Launch: one rank, grid 2. x, flag and out are int32 words, initially 0.

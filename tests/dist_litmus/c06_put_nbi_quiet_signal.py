@@ -1,7 +1,9 @@
+# Source: VeriInfra-Lab/VeriTile-2@51419efee8944c00d6d6a8296bf708ad2956b1d7 documents/dist/LitmusTable.md:946-964
+# Licence: MIT
+# Changes: rewritten as a minimal example; Two ranks complete a non-blocking put before signalling
 # LIT-c06. A non-blocking put, a quiet, then the signal.
-# Source: NVSHMEM 3.6.5, "Remote Memory Access" (nvshmem_put_nbi), "Memory
-# Ordering" (nvshmem_quiet) and the example at the head of "Signaling
-# Operations".
+# Context: NVSHMEM 3.6.5, "Remote Memory Access" (nvshmem_put_nbi), "Memory
+# Ordering" (nvshmem_quiet) and "Signaling Operations".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.
 # Launch: ranks 0 and 1, grid 1. Each buffer has NBYTES symmetric bytes (rank

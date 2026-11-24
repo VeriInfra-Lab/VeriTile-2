@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a docs/python-api/triton-dist.semantics.rst:20-85
+# Licence: MIT
+# Changes: rewritten as a minimal example; A store to the peer, a notify, and a wait at system scope
 # LIT-b01. A store to the peer, a notify, and a wait at system scope.
-# Source: docs/python-api/triton-dist.semantics.rst, "Producer-Consumer
+# Context: docs/python-api/triton-dist.semantics.rst, "Producer-Consumer
 # Model" and "Memory Scope and Ordering" (TD-SEM), with the scope "sys".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.
