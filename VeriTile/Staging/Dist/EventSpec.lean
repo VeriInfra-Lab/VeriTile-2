@@ -8,6 +8,11 @@ approved the draft of #403 as drafted; the agent recorded the signature on the
 user's delegation. `Event.AccessibleBy` is under no signed statement, so no
 fingerprint records it: it stays UNSIGNED.
 
+S2.3 (#39) moved the event type and the pattern-(a) relations into
+`VeriTile/Dist/Event.lean` and `VeriTile/Dist/Event/Access.lean`.
+S2.4 (#40) moved the pattern-(b) lemmas into `VeriTile/Dist/Event/Counter.lean`.
+This file keeps the pattern-(c) lemmas for S2.5 (#41).
+
 An event is what one agent does at one synchronization point. The file gives
 the `Event` type, the interface of the three patterns and the statements of
 the pattern lemmas:
@@ -154,55 +159,10 @@ Not stated here: the step relation, enabledness, happens-before and the data
 race (S4.1); the map from each primitive to its events (S2.6); that a counter
 word is written only by counter writes (E-NV11), which needs the state; how a
 plain access inside a sequential segment (S3.1) meets `Conflict`.
-
-S2.3 (#39) moved the event type, the pattern-(a) relations and their six
-signed theorems into `VeriTile/Dist/Event.lean` and
-`VeriTile/Dist/Event/Access.lean`. This file keeps the pattern-(b) and
-pattern-(c) lemmas for S2.4 and S2.5.
 -/
-import VeriTile.Dist.Event.Access
+import VeriTile.Dist.Event.Counter
 
 namespace VeriTile.Dist
-
-/-! ## Pattern (b): monotone counter plus wait (S2.4) -/
-
-/-- Owner: S2.4 (#40). The counter write that an event performs: its
-own for `bump`, the bound one for a completion. -/
-def Event.bump? : Event → Option Bump
-  | .bump b => some b
-  | .complete t => t.completion
-  | _ => none
-
-/-- Owner: S2.4 (#40). The value of counter `c` after the trace
-`tr`, starting from `init c`. -/
-def Counter.value (init : Counter → Nat) (tr : Trace) (c : Counter) : Nat :=
-  tr.foldl
-    (fun v x =>
-      match x.2.bump? with
-      | some b => if b.counter = c then b.op.apply v b.amount else v
-      | none => v)
-    (init c)
-
-/-- Decision 5. Owner: S2.4 (#40). The obligation under
-which a counter with `set` writes is monotone: every `set` of `c` in `tr`
-writes a value that is at least the value `c` has just before it. -/
-def Counter.SetsMonotone (init : Counter → Nat) (tr : Trace) (c : Counter) : Prop :=
-  ∀ (pre : Trace) (x : Agent × Event) (post : Trace) (b : Bump),
-    tr = pre ++ x :: post → x.2.bump? = some b → b.counter = c → b.op = .set →
-      Counter.value init pre c ≤ b.amount
-
-/-- Signed. Proved by S2.4 (#40). Under the obligation, the value of a
-counter never decreases along a trace. -/
-theorem Counter.mono {init : Counter → Nat} {tr pre : Trace} {c : Counter}
-    (h : Counter.SetsMonotone init tr c) (hpre : pre <+: tr) :
-    Counter.value init pre c ≤ Counter.value init tr c := sorry
-
-/-- Signed. Proved by S2.4 (#40). Under the obligation, a wait for `c ≥ n`
-whose condition holds keeps holding. -/
-theorem Counter.ge_stable {init : Counter → Nat} {tr pre : Trace} {c : Counter} {n : Nat}
-    (h : Counter.SetsMonotone init tr c) (hpre : pre <+: tr)
-    (hn : Cmp.ge.holds (Counter.value init pre c) n) :
-    Cmp.ge.holds (Counter.value init tr c) n := sorry
 
 /-! ## Pattern (c): asynchronous transfer (S2.5) -/
 
