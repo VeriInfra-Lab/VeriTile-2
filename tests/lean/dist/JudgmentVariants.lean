@@ -3,6 +3,9 @@
 sequential segments are inputs; these are not full kernel transcriptions. -/
 import VeriTile.Staging.Dist.JudgmentSpec
 import tests.lean.dist.AtomicSetRuns
+import tests.lean.dist.CountingNegatives
+import tests.lean.dist.CountingRuns
+import tests.lean.dist.CountingWitness
 
 namespace VeriTile.Tests.JudgmentVariants
 open VeriTile.Dist
@@ -309,7 +312,7 @@ example (l : Launch P) (a b : Agent) (p : Addr) (apart : a ≠ b) :
     cases chain with
     | tail earlier last => have := hb_lt earlier; have := direct_lt last; omega
     | single edge =>
-      obtain ⟨x,y,hx,hy,_,po | barrier | delivery | sync⟩ := edge
+      obtain ⟨x,y,hx,hy,_,po | barrier | delivery | sync | count⟩ := edge
       all_goals simp [setWord] at hx hy; subst x; subst y
       · obtain ⟨who,h₁,h₂⟩ := po
         simp_all [Occurrence.program?]
@@ -321,6 +324,51 @@ example (l : Launch P) (a b : Agent) (p : Addr) (apart : a ≠ b) :
         simp [Occurrence.event?] at aa bb
         subst a'; subst b'
         simp [SyncEdge, Event.acquireOf?] at e
+      · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,obs,_⟩ := count
+        simp [setWord, Occurrence.event?] at obs
   · simp [setWord, Occurrence.discardedAddAt]
+
+-- Independent signal-only deliveries of arbitrary values discard both old words.
+private def arrival (a : Agent) (p : Addr) (n at_ : Nat) (m : Mode) : Occurrence :=
+  .delivered a ⟨[], [], false, some ⟨.word p, .add, n, m⟩⟩ at_
+theorem twoArrivals {P : Type} (l : Launch P) (a b : Agent) (p : Addr) (n m u v : Nat) (ma mb : Mode) :
+    ¬ UnorderedAtomicRace l [arrival a p n u ma, arrival b p m v mb] := by
+  rintro ⟨i, j, x, y, q, k, k', mode, mode', lt, hx, hy, ax, _, _, _, _, bad⟩
+  have bound : j < 2 := by simpa using (List.getElem?_eq_some_iff.mp hy).1
+  have hi : i = 0 := by omega
+  have hj : j = 1 := by omega
+  subst i; subst j
+  simp at hx hy
+  subst x; subst y
+  simp [arrival, Occurrence.access, Event.accesses, Bump.accesses, SignalOp.kind] at ax
+  obtain ⟨_, eq, _⟩ := ax
+  subst q
+  exact bad ⟨⟨n, ma, rfl⟩, ⟨m, mb, rfl⟩⟩
+
+-- A completion counter can be abstract or physical. Both release-only deliveries
+-- synchronize with the consumer but do not need a reads-from edge from the first.
+private def completionAdd (a : Agent) (c : Counter) (ticket : Nat) : Occurrence :=
+  .delivered a ⟨[], [], false, some ⟨c,.add,1,.atomic .sys .release⟩⟩ ticket
+
+example (l : Launch P) (a b consumer : Agent) (c : Counter) (p : Addr) :
+    let h := [completionAdd a c 0, completionAdd b c 1,
+      .issued consumer ⟨consumer,.wait c .ge 2 (.atomic .sys .acquire),.noValue⟩]
+    HB l h p 0 2 ∧ HB l h p 1 2 := by
+  dsimp only
+  constructor <;> apply CountingEdge.hb
+  all_goals
+    refine ⟨_,.complete _,consumer,c,1,.atomic .sys .release,2,.atomic .sys .acquire,
+      by decide,rfl,rfl,rfl,?_,⟨rfl,rfl,trivial,trivial⟩⟩
+    simp [completionAdd, Occurrence.onlyAddsTo, Event.onlyAddsTo]
+
+example (a : Agent) (p : Addr) : ¬ (Occurrence.segment a ∅ {p}).onlyAddsTo (.word p) := by
+  simp [Occurrence.onlyAddsTo]
+
+example (p : Addr) : ¬ (Event.bump ⟨.word p,.add,1,.plain⟩).onlyAddsTo (.word p) := by
+  simp [Event.onlyAddsTo]
+
+example (p : Addr) : ¬ (Event.complete
+    ⟨[], [p], false, some ⟨.word p,.add,1,.atomic .sys .release⟩⟩).onlyAddsTo (.word p) := by
+  simp [Event.onlyAddsTo]
 
 end VeriTile.Tests.JudgmentVariants

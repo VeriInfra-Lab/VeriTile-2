@@ -222,8 +222,8 @@ def Complete (s : Config P) : Prop :=
 abbrev History := List Occurrence
 
 /-- Read-from on a synchronization counter. Require matching positions and
-exclude an intervening write of that counter. Additional release-sequence,
-fence and phase edges need their documented conditions (#55). -/
+exclude an intervening write of that counter. Add-only thresholds use CountingEdge.
+General release sequences across mixed writes and fence-mediated edges belong to #55. -/
 def ReadsFrom (h : History) (i j : Nat) (c : Counter) : Prop :=
   i < j ∧ ∀ k x, i < k → k < j → h[k]? = some x →
     match c with
@@ -247,13 +247,39 @@ def RoundEdge (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
      arrivals (i+1) a = k ∧ ∀ who ∈ members, k ≤ arrivals j who) ∧
     Mode.Pairs l.reach p a b m m'
 
+/-- Ordinary stores and updates (including transfer payload stores) break an
+add-only prefix even when the same occurrence also adds to its signal. -/
+def Event.onlyAddsTo (c : Counter) : Event → Prop
+  | .access k q _ => c = .word q → k.writes = false
+  | .bump b => b.counter = c → b.op = .add ∧ b.mode ≠ .plain
+  | .complete t => (∀ b ∈ t.completion, b.counter = c → b.op = .add ∧ b.mode ≠ .plain) ∧
+      ∀ q ∈ t.dst, c ≠ .word q
+  | _ => True
+
+def Occurrence.onlyAddsTo (c : Counter) : Occurrence → Prop
+  | .segment _ _ writes => ∀ q, c = .word q → q ∉ writes
+  | .issued _ e => e.event.onlyAddsTo c
+  | .delivered _ t _ => (Event.complete t).onlyAddsTo c
+
+/-- UNSIGNED. S4.1 counting edge (#47). An executed ge wait observes every
+earlier release add to its add-only counter that pairs at the observed cell.
+Fire.wait records the wait only after its threshold holds. Event.bump? also
+covers delivered completion signals. The entire prefix before the observation,
+including writes preceding the release, must be add-only. -/
+def CountingEdge (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
+  ∃ a event b c amount m n m', i < j ∧
+    (h[i]? >>= Occurrence.event?) = some (a,event) ∧
+    event.bump? = some ⟨c,.add,amount,m⟩ ∧
+    (h[j]? >>= Occurrence.event?) = some (b,.wait c .ge n m') ∧
+    (∀ x ∈ h.take j, x.onlyAddsTo c) ∧ Mode.Pairs l.reach p a b m m'
+
 def DirectHB (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
   ∃ x y, h[i]? = some x ∧ h[j]? = some y ∧ i < j ∧
     ((∃ a, x.program? = some a ∧ y.program? = some a) ∨
       RoundEdge l h p i j ∨
       (∃ a t, x.event? = some (a,.initiate t) ∧ y = .delivered a t i) ∨
-      ∃ a b c m, x.event? = some a ∧ y.event? = some b ∧ a.2.releaseOf? = some (c,m) ∧
-        ReadsFrom h i j c ∧ SyncEdge l.reach p a b)
+      (∃ a b c m, x.event? = some a ∧ y.event? = some b ∧ a.2.releaseOf? = some (c,m) ∧
+        ReadsFrom h i j c ∧ SyncEdge l.reach p a b) ∨ CountingEdge l h p i j)
 
 /-- S4.3/#49. Scope visibility is indexed by the cell throughout the chain. -/
 def HB (l : Launch P) (h : History) (p : Addr) := Relation.TransGen (DirectHB l h p)
@@ -271,7 +297,15 @@ theorem SyncEdge.hb_of_readsFrom {l : Launch P} {h : History} {p : Addr} {i j : 
   obtain ⟨x, hx, ex⟩ := Option.bind_eq_some_iff.mp atRel
   obtain ⟨y, hy, ey⟩ := Option.bind_eq_some_iff.mp atAcq
   exact .single ⟨x, y, hx, hy, source.1,
-    Or.inr (Or.inr (Or.inr ⟨rel, acq, c, m, ex, ey, released, source, edge⟩))⟩
+    Or.inr (Or.inr (Or.inr (Or.inl ⟨rel, acq, c, m, ex, ey, released, source, edge⟩)))⟩
+
+/-- UNSIGNED. S4.1. The add-only counting edge is a direct HB edge. -/
+theorem CountingEdge.hb {l : Launch P} {h : History} {p : Addr} {i j : Nat}
+    (edge : CountingEdge l h p i j) : HB l h p i j := by
+  obtain ⟨_, _, _, _, _, _, _, _, lt, src, _, dst, _⟩ := id edge
+  obtain ⟨x, hx, _⟩ := Option.bind_eq_some_iff.mp src
+  obtain ⟨y, hy, _⟩ := Option.bind_eq_some_iff.mp dst
+  exact .single ⟨x,y,hx,hy,lt, Or.inr (Or.inr (Or.inr (Or.inr edge)))⟩
 
 def DataRace (l : Launch P) (h : History) : Prop :=
   ∃ i j x y p k k' m m', i < j ∧ h[i]? = some x ∧ h[j]? = some y ∧
@@ -282,7 +316,7 @@ def DataRace (l : Launch P) (h : History) : Prop :=
 def DRF (l : Launch P) (s : DistState) : Prop :=
   ∀ sched final, Run l (l.initial s) sched final → ¬ DataRace l final.history
 
-/-- An issued word-add can discard its old value explicitly. A delivery returns
+/-- UNSIGNED. Signed with #54. An issued word-add can discard its old value explicitly. A delivery returns
 no old signal value to a continuation, so its completion add also qualifies
 at its signal word. The transfer's payload accesses are checked separately. -/
 def Occurrence.discardedAddAt (x : Occurrence) (p : Addr) : Prop :=
@@ -291,12 +325,14 @@ def Occurrence.discardedAddAt (x : Occurrence) (p : Addr) : Prop :=
   | .delivered _ t _ => ∃ n m, t.completion = some ⟨.word p,.add,n,m⟩
   | .segment .. => False
 
+/-- UNSIGNED. Signed with #54. Unordered conflicting atomic accesses, except discarded adds. -/
 def UnorderedAtomicRace (l : Launch P) (h : History) : Prop :=
   ∃ i j x y p k k' m m', i < j ∧ h[i]? = some x ∧ h[j]? = some y ∧
     x.access p k m ∧ y.access p k' m' ∧ (k.writes = true ∨ k'.writes = true) ∧
     Mode.AtomicFor x.owner y.owner m m' ∧ ¬ HB l h p i j ∧
     ¬ (x.discardedAddAt p ∧ y.discardedAddAt p)
 
+/-- UNSIGNED. Signed with #54. Ordinary and deterministic atomic race freedom on all prefixes. -/
 def DetRaceFree (l : Launch P) (s : DistState) : Prop :=
   DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ UnorderedAtomicRace l final.history
 
@@ -481,7 +517,7 @@ theorem normalize_of_decreasing_swap {l : Launch P} {s : DistState} {canonical :
       exact (Relation.ReflTransGen.single swap).trans
         (ih (rank next) (by omega) next g reaches complete rfl)
 
-/-- C3 candidate, S4.7–8/#53/#54. DetRaceFree uses HB, whose synchronization
+/-- UNSIGNED. Signed with #54. C3 candidate, S4.7–8/#53/#54. DetRaceFree uses HB, whose synchronization
 edges already check scope through Mode.Pairs. S5.2/#57 owns the source-level
 synchronization obligations. S4.7 owes normalization.
 C1 will also need a simulation for suffixes, including reads-from and delivery
@@ -492,7 +528,7 @@ theorem detRaceFree_scopeConsistent_complete_eq_canonical {l : Launch P} {s : Di
     (refComplete : Complete reference) (actual : Run l (l.initial s) sched final)
     (complete : Complete final) : final.mem = reference.mem := sorry
 
-/-- S4.8/#54. For a memory specification, checking the canonical final
+/-- UNSIGNED. Signed with #54. For a memory specification, checking the canonical final
 memory and establishing race/fault freedom suffices on the deterministic-race-free fragment. -/
 theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : Schedule}
     {reference : Config P} (sound : SoundLaunch l) (safe : Safe l s) (det : DetRaceFree l s)
