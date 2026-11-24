@@ -4,7 +4,7 @@ The identifiers below are the filename prefixes under `tests/dist_litmus/`. The 
 
 ## Triton-distributed
 
-[Source and licence at `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/LICENSE). MIT. Litmus sources a03, a04, a05, a06, b01, b02, b03, b04, b06, b07, b08, b10, b13, c01, c05, c06.
+[Source and licence at `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/LICENSE). MIT. Litmus sources a03, a04, a05, a06, b01, b02, b03, b04, b07, b08, b10, b13, c01, c05.
 
 ```text
 /*
@@ -155,6 +155,6 @@ The documentation identifies NVIDIA Corporation as its copyright holder. Litmus 
 
 ## Locally authored litmus designs
 
-b05, c02, c03, c04, c07, c08 implement the project’s original litmus specifications at [the S8.1 revision](https://github.com/VeriInfra-Lab/VeriTile-2/blob/51419efee8944c00d6d6a8296bf708ad2956b1d7/documents/dist/LitmusTable.md). Their MIT identifier applies to the project implementation. The NVIDIA NVSHMEM 3.6.5 manual supplies the API requirements cited in the table. For b06 and c06 the test implementations were written using the MIT-licensed Triton-distributed interfaces. The manual remains a semantics reference.
+b05, b06, c02, c03, c04, c06, c07, c08 implement the project’s original litmus specifications at [the S8.1 revision](https://github.com/VeriInfra-Lab/VeriTile-2/blob/51419efee8944c00d6d6a8296bf708ad2956b1d7/documents/dist/LitmusTable.md). Their MIT identifier applies to the project implementation. The NVIDIA NVSHMEM 3.6.5 manual supplies the API requirements cited in the table.
 
 The TritonBench-G redistribution and its Apache-2.0 modification notices belong to [VeriTileBench](https://github.com/VeriInfra-Lab/VeriTileBench), where the benchmark sources now reside.
