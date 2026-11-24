@@ -17,3 +17,5 @@ import VeriTile.Dist.Event.Access
 import VeriTile.Dist.Spec.AllReduce
 import VeriTile.Dist.Spec.AllGather
 import VeriTile.Dist.Spec.ReduceScatter
+import VeriTile.Dist.Assumptions
+import VeriTile.Dist.Meta.PrintTrustAssumptions

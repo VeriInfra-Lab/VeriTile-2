@@ -21,8 +21,8 @@ namespace VeriTile.Tests.TrustAssumptions
 
 open VeriTile.Dist
 
-theorem usingA2 (claim : Prop) (h : Assumption.notify_atomic_release claim) :
-    Assumption.notify_atomic_release claim := h
+theorem usingA2 (h : Assumption.notify_atomic_release) :
+    Assumption.notify_atomic_release := h
 
 /--
 info: Trust assumptions used by usingA2:
@@ -31,13 +31,13 @@ info: Trust assumptions used by usingA2:
 #guard_msgs in
 #print_trust_assumptions usingA2
 
-theorem usingA2AndA9 (notifyContract gridContract : Prop)
-    (hNotify : Assumption.notify_atomic_release notifyContract)
-    (hGrid : Assumption.grid_barrier_cooperative_sync gridContract)
-    (hAgain : Assumption.notify_atomic_release notifyContract) :
-    Assumption.notify_atomic_release notifyContract ∧
-      Assumption.grid_barrier_cooperative_sync gridContract ∧
-      Assumption.notify_atomic_release notifyContract :=
+theorem usingA2AndA9
+    (hNotify : Assumption.notify_atomic_release)
+    (hGrid : Assumption.grid_barrier_cooperative_sync)
+    (hAgain : Assumption.notify_atomic_release) :
+    Assumption.notify_atomic_release ∧
+      Assumption.grid_barrier_cooperative_sync ∧
+      Assumption.notify_atomic_release :=
   ⟨hNotify, hGrid, hAgain⟩
 
 /--
@@ -47,6 +47,60 @@ info: Trust assumptions used by usingA2AndA9:
 -/
 #guard_msgs in
 #print_trust_assumptions usingA2AndA9
+
+theorem quantified (_h : ∀ _ : Nat, Assumption.notify_atomic_release) : True := True.intro
+
+/--
+info: Trust assumptions used by quantified:
+  notify_atomic_release (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions quantified
+
+theorem bundled (_h : Assumption.notify_atomic_release ∧ Assumption.grid_barrier_cooperative_sync) :
+    True := True.intro
+
+/--
+info: Trust assumptions used by bundled:
+  grid_barrier_cooperative_sync (semantic source)
+  notify_atomic_release (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions bundled
+
+def NotifyBundle : Prop := Assumption.notify_atomic_release
+
+theorem definedBundle (_h : NotifyBundle) : True := True.intro
+
+/--
+info: Trust assumptions used by definedBundle:
+  notify_atomic_release (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions definedBundle
+
+class HasNotify : Prop where
+  premise : Assumption.notify_atomic_release
+
+theorem classPremise [_h : HasNotify] : True := True.intro
+
+/--
+info: Trust assumptions used by classPremise:
+  notify_atomic_release (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions classPremise
+
+theorem implyNotify (_h : Assumption.notify_atomic_release → True) : True := True.intro
+
+theorem throughLemma : True := implyNotify (fun _ => True.intro)
+
+/--
+info: Trust assumptions used by throughLemma:
+  notify_atomic_release (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions throughLemma
 
 theorem usingNone : True := True.intro
 
@@ -71,6 +125,21 @@ theorem usingUnregistered (h : Assumption.unregisteredFixture) : True := h
 /-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredFixture' -/
 #guard_msgs (error) in
 #print_trust_assumptions usingUnregistered
+
+theorem unregisteredQuantified
+    (h : ∀ n : Nat, n = n → Assumption.unregisteredFixture) : True := h 0 rfl
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredFixture' -/
+#guard_msgs (error) in
+#print_trust_assumptions unregisteredQuantified
+
+def UnregisteredBundle : Prop := Assumption.unregisteredFixture ∧ True
+
+theorem unregisteredWrapped (h : UnregisteredBundle) : True := h.2
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredFixture' -/
+#guard_msgs (error) in
+#print_trust_assumptions unregisteredWrapped
 
 /-- error: trust assumption 'notify_atomic_release' is already registered -/
 #guard_msgs (error) in

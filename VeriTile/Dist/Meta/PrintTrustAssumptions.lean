@@ -82,13 +82,34 @@ private def classLabel : TrustAssumptionClass → String
   | .semanticSource => "semantic source"
   | .translationCorrectness => "translation correctness"
 
-/-- Print the named assumptions among the direct hypotheses of a theorem's
-type. Inspection uses the head constant of each premise without unfolding
-definitions or inspecting the proof. An unregistered head in the reserved
-`VeriTile.Dist.Assumption` namespace is an error. -/
+/-- Follow kernel dependencies as in `Lean.CollectAxioms.collect`. Constructors
+carry the fields of classes and structures that their type constants name. -/
+private partial def visitDependencies (env : Environment) (registered : NameSet)
+    (name : Name) : StateT NameSet CoreM Unit := do
+  if (← get).contains name then return
+  modify (·.insert name)
+  let userName := ((privateToUserName? name).getD name).eraseMacroScopes
+  if (`VeriTile.Dist.Assumption).isPrefixOf userName && !registered.contains name then
+    throwError "unregistered trust assumption '{userName}'"
+  let some info := env.checked.get.find? name
+    | throwError "could not inspect trust dependency '{name}'"
+  if let .quotInfo _ := info then return
+  let visit := visitDependencies env registered
+  info.type.getUsedConstants.forM visit
+  if let some value := info.value? (allowOpaque := Bool.true) then
+    value.getUsedConstants.forM visit
+  if let .inductInfo inductiveType := info then
+    inductiveType.ctors.forM visit
+
+/-- Print the registered assumptions reached through the theorem type and
+proof and the declarations they reference transitively. The report can include
+assumptions mentioned in a dependency even when its full interface is unused
+by the proof. A reached declaration in the reserved
+`VeriTile.Dist.Assumption` namespace requires a registry entry. -/
 elab "#print_trust_assumptions " id:ident : command => do
   let name ← liftCoreM <| realizeGlobalConstNoOverload id
-  let .thmInfo info ← getConstInfo name | throwError "'{name}' is not a theorem"
+  let .thmInfo _ ← getConstInfo name | throwError "'{name}' is not a theorem"
+  let env ← getEnv
   let registrations ← liftCoreM registeredTrustAssumptions
   -- Independently compiled imports can each introduce the same registry name.
   let mut names : NameSet := {}
@@ -97,21 +118,13 @@ elab "#print_trust_assumptions " id:ident : command => do
       throwError "trust assumption '{entry.name}' is already registered"
     names := names.insert entry.name
 
-  liftTermElabM <| forallTelescope info.type fun premises _ => do
-    let mut used : NameSet := {}
-    for premise in premises do
-      let type ← inferType premise
-      let some head := type.consumeMData.getAppFn.constName? | continue
-      if let some entry := registrations.find? (·.declaration == head) then
-        used := used.insert entry.name
-      else
-        let userName := ((privateToUserName? head).getD head).eraseMacroScopes
-        if (`VeriTile.Dist.Assumption).isPrefixOf userName then
-          throwError "unregistered trust assumption '{userName}'"
-    let entries := (registrations.filter (used.contains ·.name)).qsort
-      (·.name.toString < ·.name.toString)
-    let lines := if entries.isEmpty then ["  none"] else
-      entries.toList.map (fun entry => s!"  {entry.name} ({classLabel entry.assumptionClass})")
-    logInfo <| String.intercalate "\n" (s!"Trust assumptions used by {id.getId}:" :: lines)
+  let registered : NameSet := registrations.foldl (fun names entry =>
+    names.insert entry.declaration) {}
+  let (_, reached) ← liftCoreM <| (visitDependencies env registered name).run {}
+  let entries := (registrations.filter (reached.contains ·.declaration)).qsort
+    (·.name.toString < ·.name.toString)
+  let lines := if entries.isEmpty then ["  none"] else
+    entries.toList.map (fun entry => s!"  {entry.name} ({classLabel entry.assumptionClass})")
+  logInfo <| String.intercalate "\n" (s!"Trust assumptions used by {id.getId}:" :: lines)
 
 end VeriTile.Dist
