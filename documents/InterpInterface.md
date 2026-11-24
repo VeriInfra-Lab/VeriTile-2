@@ -82,9 +82,14 @@ I4.3 ships a kernel and a state that satisfy it.
 What the two statements do not say:
 
 - Nothing about a GPU. Agreement with GPU runs is measured, not proved.
-- Nothing about a particular carrier being IEEE-correct. `interp` over Lean
-  `Float` approximates the real semantics; the bit-level carrier is the
-  collaborator's model.
+- Nothing about a particular carrier being IEEE-correct. The binary64 carrier
+  approximates the real semantics using Lean `Float`. With one NaN operand,
+  `max` returns its first operand and `min` its second. For example, `max NaN 1 = NaN`,
+  `max 1 NaN = 1`, `min NaN 1 = 1`, and `min 1 NaN = NaN`.
+  `reduceMax` and `reduceMin` inherit these rules by folding from −∞ and +∞,
+  respectively, with the accumulator as the first operand. This differs from
+  both IEEE 754-2019 `maximum`/`minimum` and `maximumNumber`/`minimumNumber`.
+  The bit-level carrier is the precise model for the operations it supports.
 - Nothing about kernels that use constructs `FP.Structural.exec` rejects; on
   those both sides of the adequacy statement are `none`.
 
