@@ -66,11 +66,22 @@ private def diagnosticOf (stx : Syntax) : CommandElabM String := liftTermElabM d
     return ""
   catch e => return ← e.toMessageData.toString
 
+-- M5 records exactly these upstream parses when the distributed scope is closed.
+private def upstreamOverlap : List String := [
+  "x = dl.num_ranks()", "x = dl.rank()", "x = laneid()", "x = ld(p)", "x = tid(p)",
+  "tl.atomic_add(p, v, mask=v, sem=\"release\", scope=\"gpu\")",
+  "tl.atomic_add(p, v, sem=\"release\", scope=\"gpu\")"]
+
 #guard_msgs in
-run_cmd for (body, _) in forms do
-  if let .ok stx := parseBlock (← getEnv) body then
-    if hasDistNode stx then throwError "distributed syntax leaked outside scope: {body}"
-    if (← diagnosticOf stx).isEmpty then throwError "unexpected upstream elaboration: {body}"
+run_cmd
+  let mut overlapping := []
+  for (body, _) in forms do
+    if let .ok stx := parseBlock (← getEnv) body then
+      overlapping := body :: overlapping
+      if hasDistNode stx then throwError "distributed syntax leaked outside scope: {body}"
+      if (← diagnosticOf stx).isEmpty then throwError "unexpected upstream elaboration: {body}"
+  unless overlapping.reverse == upstreamOverlap do
+    throwError "unexpected set of upstream parses: {overlapping.reverse}"
 
 open scoped VeriTile.Dist.Frontend.TritonDist
 
@@ -82,7 +93,7 @@ run_cmd for (body, ticket) in forms do
   unless diagnostic == "not implemented: " ++ ticket do
     throwError "{body}: expected {ticket}, got {diagnostic}"
 
--- Zero-root names drawn from PrimitiveSources §§5.1–5.8. Exercise both statement
+-- Excluded surface names from PrimitiveSources §§5.1–5.8. Exercise both statement
 -- and value positions without counting a generic upstream identifier-call as a distributed form.
 private def excluded : List (String × String) := [
   ("dl.", "extract insert vector make_vector zeros_vector ld_vector st_vector SMEM_GENERIC_POINTER_ADDR_SPACE SharedMemoryDesc allocate_smem smem_index smem_load smem_store smem_get_ptr get_smem_shared_address_u32 smem_dealloc tma extern_call"),
@@ -94,15 +105,28 @@ private def excluded : List (String × String) := [
   ("common_ops.", "set_signal wait_eq"),
   ("tl.extra.cuda.", "num_threads num_warps utils.num_warps")]
 
+-- The upstream parser reports a position before its diagnostic. Match its message
+-- independently of the length of the source name, and pin elaboration errors verbatim.
 #guard_msgs in
 run_cmd for (qualifier, names) in excluded do
   for name in names.splitOn " " do
     for args in ["", "p", "p, v", "p, v, n", "p, v, n, q"] do
       let call := qualifier ++ name ++ "(" ++ args ++ ")"
-      for body in [call, "result = " ++ call] do
-        if let .ok stx := parseBlock (← getEnv) body then
+      for valuePosition in [Bool.false, Bool.true] do
+        let body := if valuePosition then "result = " ++ call else call
+        match parseBlock (← getEnv) body with
+        | .error diagnostic =>
+          let expected := if valuePosition then "expected ')'"
+            else "expected '%', '*=', '+=', ',', '-=', '/=', ':=' or '='"
+          unless (!valuePosition || args.contains ',') && diagnostic.endsWith (": " ++ expected) do
+            throwError "{body}: unexpected parser diagnostic: {diagnostic}"
+        | .ok stx =>
           if hasDistNode stx then throwError "unexpected distributed production: {body}"
-          if (← diagnosticOf stx).isEmpty then throwError "excluded call elaborated: {body}"
+          let expected := if args.isEmpty then "unexpected syntax\n  triton {" ++ body ++ "}"
+            else "random source helper requires an explicit tl.source_helper binding"
+          let diagnostic ← diagnosticOf stx
+          unless valuePosition && (args.isEmpty || args == "p") && diagnostic == expected do
+            throwError "{body}: unexpected elaborator diagnostic: {diagnostic}"
 
 /-- error: tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, `boundary_check`, `padding_option`, and `eviction_policy` are recognized. -/
 #guard_msgs in

@@ -92,7 +92,7 @@ private def owner? (k : Name) : Option String :=
   | ``pendingProfilerExpr | ``pendingProfilerStmt => some "#452"
   | _ => none
 
-@[term_elab VeriTile.Triton.DSL.tritonBlock]
+@[scoped term_elab VeriTile.Triton.DSL.tritonBlock]
 def pending : TermElab := fun stx _ => do
   let some call := stx.find? fun s => (owner? s.getKind).isSome | throwUnsupportedSyntax
   throwErrorAt call "not implemented: {(owner? call.getKind).get!}"
