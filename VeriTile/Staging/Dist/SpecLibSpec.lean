@@ -94,6 +94,8 @@ Decisions that the tickets left open:
 -/
 import VeriTile.Dist.Spec.RankTensor
 import Mathlib.Logic.Equiv.Fin.Basic
+import Mathlib.Tactic.NormNum
+import Lean.Elab.Tactic.Omega
 
 namespace VeriTile.Dist
 
@@ -107,6 +109,22 @@ one chunk of `n` rows per peer. Afterwards chunk `s` of rank `d` is what chunk
 def allToAll {numRanks n : Nat} {ι : Type} (x : RankTensor numRanks (Fin (numRanks * n) × ι)) :
     RankTensor numRanks (Fin (numRanks * n) × ι) :=
   fun d i => x i.1.divNat (finProdFinEquiv (d, i.1.modNat), i.2)
+
+/-- UNSIGNED. Owner: S7.4. Destination `d` receives source `s`'s chunk for `d`. -/
+theorem allToAll_apply {numRanks n : Nat} {ι : Type}
+    (x : RankTensor numRanks (Fin (numRanks * n) × ι))
+    (d s : Fin numRanks) (i : Fin n) (j : ι) :
+    allToAll x d (finProdFinEquiv (s, i), j) = x s (finProdFinEquiv (d, i), j) :=
+  congrArg (fun p : Fin numRanks × Fin n => x p.1 (finProdFinEquiv (d, p.2), j))
+    (finProdFinEquiv.symm_apply_apply (s, i))
+
+/-- UNSIGNED. Owner: S7.4. Swapping source and destination chunks twice restores the input. -/
+theorem allToAll_involutive {numRanks n : Nat} {ι : Type}
+    (x : RankTensor numRanks (Fin (numRanks * n) × ι)) : allToAll (allToAll x) = x := by
+  funext d index
+  obtain ⟨row, j⟩ := index
+  obtain ⟨⟨s, i⟩, rfl⟩ := finProdFinEquiv.surjective row
+  rw [allToAll_apply, allToAll_apply]
 
 /-- UNSIGNED. Owner: S7.4. The tables of a variable-length all-to-all.
 `count s d` is the number of rows that rank `s` sends to rank `d`;
@@ -136,6 +154,128 @@ def AllToAllV {numRanks : Nat} {ι : Type} (L : AllToAllLayout numRanks)
     (send recv : RankTensor numRanks (Nat × ι)) : Prop :=
   ∀ s d i, i < L.count s d → ∀ j,
     recv d (L.recvOffset d s + i, j) = send s (L.sendOffset s d + i, j)
+
+/-- UNSIGNED. Owner: S7.4. The received row has an offset within the source's payload. -/
+theorem AllToAllLayout.receives_iff {numRanks : Nat} (L : AllToAllLayout numRanks)
+    (d s : Fin numRanks) (p : Nat) :
+    L.Receives d s p ↔ ∃ i < L.count s d, p = L.recvOffset d s + i := by
+  unfold AllToAllLayout.Receives
+  constructor
+  · rintro ⟨hl, hu⟩
+    exact ⟨p - L.recvOffset d s, by omega, by omega⟩
+  · rintro ⟨i, hi, rfl⟩
+    constructor <;> omega
+
+/-- UNSIGNED. Owner: S7.4. If both receive buffers satisfy the relation,
+they agree on every row that some source fills. -/
+theorem allToAllV_recv_eq_of_receives {numRanks : Nat} {ι : Type}
+    {L : AllToAllLayout numRanks} {send recv₁ recv₂ : RankTensor numRanks (Nat × ι)}
+    (h₁ : AllToAllV L send recv₁) (h₂ : AllToAllV L send recv₂)
+    {d s : Fin numRanks} {p : Nat} (hrow : L.Receives d s p) (j : ι) :
+    recv₁ d (p, j) = recv₂ d (p, j) := by
+  obtain ⟨i, hi, rfl⟩ := (L.receives_iff d s p).mp hrow
+  exact (h₁ s d i hi j).trans (h₂ s d i hi j).symm
+
+/-- UNSIGNED. Owner: S7.4. Disjoint receive intervals admit a receive buffer
+for every send buffer. -/
+theorem allToAllV_exists_of_wellFormed {numRanks : Nat} {ι : Type}
+    {L : AllToAllLayout numRanks} (hL : L.WellFormed)
+    (send : RankTensor numRanks (Nat × ι)) : ∃ recv, AllToAllV L send recv := by
+  classical
+  refine ⟨fun d row => if h : ∃ s, L.Receives d s row.1 then
+    send h.choose (L.sendOffset h.choose d + (row.1 - L.recvOffset d h.choose), row.2)
+    else 0, ?_⟩
+  intro s d i hi j
+  have hrow : L.Receives d s (L.recvOffset d s + i) :=
+    (L.receives_iff d s _).mpr ⟨i, hi, rfl⟩
+  have h : ∃ q, L.Receives d q (L.recvOffset d s + i) := ⟨s, hrow⟩
+  dsimp only
+  rw [dif_pos h, hL d h.choose s _ h.choose_spec hrow]
+  simp
+
+/-- UNSIGNED. Owner: S7.4. Equal-size chunks in rank order on both sides. -/
+def AllToAllLayout.fixedSize (numRanks n : Nat) : AllToAllLayout numRanks where
+  count := fun _ _ => n
+  sendOffset := fun _ d => d.val * n
+  recvOffset := fun _ s => s.val * n
+
+private theorem allToAllRow_val {numRanks n : Nat} (s : Fin numRanks) (i : Fin n) :
+    (finProdFinEquiv (s, i)).val = s.val * n + i.val := by
+  change i.val + n * s.val = s.val * n + i.val
+  ac_rfl
+
+/-- UNSIGNED. Owner: S7.4. Fixed-size chunks have disjoint receive intervals. -/
+theorem AllToAllLayout.fixedSize_wellFormed (numRanks n : Nat) :
+    (fixedSize numRanks n).WellFormed := by
+  intro d s₁ s₂ p h₁ h₂
+  obtain ⟨i₁, hi₁, e₁⟩ := ((fixedSize numRanks n).receives_iff d s₁ p).mp h₁
+  obtain ⟨i₂, hi₂, e₂⟩ := ((fixedSize numRanks n).receives_iff d s₂ p).mp h₂
+  have he : finProdFinEquiv (s₁, (⟨i₁, hi₁⟩ : Fin n)) =
+      finProdFinEquiv (s₂, (⟨i₂, hi₂⟩ : Fin n)) := by
+    apply Fin.ext
+    rw [allToAllRow_val, allToAllRow_val]
+    exact e₁.symm.trans e₂
+  exact congrArg Prod.fst (finProdFinEquiv.injective he)
+
+/-- UNSIGNED. Owner: S7.4. Restricting the equal-size relation to its
+`numRanks * n` rows gives the fixed-size function. -/
+theorem allToAllV_fixedSize_iff {numRanks n : Nat} {ι : Type}
+    (send recv : RankTensor numRanks (Nat × ι)) :
+    AllToAllV (AllToAllLayout.fixedSize numRanks n) send recv ↔
+      (fun (r : Fin numRanks) (ij : Fin (numRanks * n) × ι) => recv r (ij.1.val, ij.2)) =
+        allToAll (fun r ij => send r (ij.1.val, ij.2)) := by
+  constructor
+  · intro h
+    funext d index
+    obtain ⟨row, j⟩ := index
+    obtain ⟨⟨s, i⟩, rfl⟩ := finProdFinEquiv.surjective row
+    rw [allToAll_apply]
+    simpa only [allToAllRow_val, AllToAllLayout.fixedSize] using h s d i.val i.isLt j
+  · intro h s d i hi j
+    have he := congrFun (congrFun h d) (finProdFinEquiv (s, (⟨i, hi⟩ : Fin n)), j)
+    rw [allToAll_apply] at he
+    simpa only [allToAllRow_val, AllToAllLayout.fixedSize] using he
+
+namespace AllToAllExamples
+
+private def overlap : AllToAllLayout 2 where
+  count := fun _ _ => 1
+  sendOffset := fun _ _ => 0
+  recvOffset := fun _ _ => 0
+
+example : ¬ overlap.WellFormed := by
+  intro h
+  exact (by decide : (0 : Fin 2) ≠ 1)
+    (h 0 0 1 0 (by simp [overlap, AllToAllLayout.Receives])
+      (by simp [overlap, AllToAllLayout.Receives]))
+
+/-- Conflicting writes to the same covered row admit no receive buffer. -/
+example : ¬ ∃ recv : RankTensor 2 (Nat × Unit),
+    AllToAllV overlap (fun s _ => if s = 0 then 0 else 1) recv := by
+  rintro ⟨recv, h⟩
+  have h₀ := h 0 0 0 (by decide) ()
+  have h₁ := h 1 0 0 (by decide) ()
+  change recv 0 (0, ()) = 0 at h₀
+  change recv 0 (0, ()) = 1 at h₁
+  rw [h₀] at h₁
+  norm_num at h₁
+
+/-- With equal payloads, distinct solutions can differ at uncovered rows. -/
+example : ∃ recv₀ recv₁ : RankTensor 2 (Nat × Unit), recv₀ ≠ recv₁ ∧
+    AllToAllV overlap (fun _ _ => 0) recv₀ ∧ AllToAllV overlap (fun _ _ => 0) recv₁ := by
+  refine ⟨fun _ _ => 0, fun _ row => if row.1 = 0 then 0 else 1, ?_, ?_, ?_⟩
+  · intro h
+    have he := congrFun (congrFun h 0) (1, ())
+    change (0 : ℝ) = 1 at he
+    norm_num at he
+  · intro _ _ _ _ _
+    rfl
+  · intro s d i hi j
+    change i < 1 at hi
+    obtain rfl : i = 0 := by omega
+    rfl
+
+end AllToAllExamples
 
 /-! ## MoE dispatch and combine, attention chunk merge (S7.5) -/
 
