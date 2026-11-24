@@ -62,6 +62,8 @@ These hold for every ticket. A ticket may add to them, never relax them.
 12. **Smallest change.** Deliver what the ticket asks. No extra options, abstractions or files; comments say only what the code cannot.
 13. **Decisions.** When the work needs a choice the ticket does not make, do not decide it silently. If it is a design choice (a definition others will build on, a statement's shape, scope), comment on the ticket with the background, the options, what each costs and the one you recommend, and continue with what does not depend on it. If it is small and local, take it and list it in your report.
 
+14. **Derived sources.** Check the exact source revision and file-level notice before copying or transcribing. A proprietary file may be cited by path and line only. Record the repository, pin, licence, holder and affected paths in [the notices file](../THIRD_PARTY_NOTICES.md), retain its MIT permission notice when applicable, and put full licence texts under `licenses/`. Begin each derived source with three comments: `Source: owner/repo@commit path:lines`, `Licence: SPDX expression`, and `Changes: transcribed to Lean`, `rewritten as a minimal example` or `unmodified copy` with a short description. Identify actual modifications, including modifications to Apache-2.0 sources. Register each new derived-source directory in the header check in `scripts/check_docs.py`. A runtime import alone needs only its existing pin.
+
 ## Setup and gate
 
 Lean and Lake come from `lean-toolchain` through `elan`. The comparator is built once with `scripts/setup-comparator.sh <dir>` and put on `PATH` (`scripts/README.md`). The first build fetches the Mathlib cache with `lake exe cache get`. Never run `lake clean` without a package name; it deletes the Mathlib build.

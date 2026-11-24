@@ -61,10 +61,9 @@ reflect_kernel HyperConnectionsDepth.Kernels.matrixKernel
 reflect_kernel HyperConnectionsDepth.Kernels.scalarKernel
 reflect_kernel HyperConnectionsDepth.Kernels.optimizedKernel
 reflect_kernel HyperConnectionsDepth.Kernels.matrixOptimizedKernel
-/-- error: (kernel) declaration type mismatch, 'VeriTile.Bench.Examples.HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel.toReal_mirror' -/
-#guard_msgs (substring := true) in
-run_cmd Lean.withoutModifyingEnv do
-  Lean.Elab.Command.elabCommand (← `(reflect_kernel HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel))
+/-- error: reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsDepth.Kernels:123: match S,T,D,numIters with -/
+#guard_msgs in
+reflect_kernel HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel
 reflect_kernel HyperConnectionsDepth.Kernels.originalKernel
 reflect_kernel HyperConnectionsDepth.Kernels.matrixOriginal
 reflect_kernel HyperConnectionsWidth.Kernels.matrixKernel
@@ -73,10 +72,9 @@ reflect_kernel HyperConnectionsWidth.Kernels.middleKernel
 reflect_kernel HyperConnectionsWidth.Kernels.optimizedKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixMiddleKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixOptimizedKernel
-/-- error: (kernel) declaration type mismatch, 'VeriTile.Bench.Examples.HyperConnectionsWidth.Kernels.mhcWidthConnectionKernel.toReal_mirror' -/
-#guard_msgs (substring := true) in
-run_cmd Lean.withoutModifyingEnv do
-  Lean.Elab.Command.elabCommand (← `(reflect_kernel HyperConnectionsWidth.Kernels.mhcWidthConnectionKernel))
+/-- error: reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsWidth.Kernels:218: match S,T,D,numIters with -/
+#guard_msgs in
+reflect_kernel HyperConnectionsWidth.Kernels.mhcWidthConnectionKernel
 reflect_kernel HyperConnectionsWidth.Kernels.originalKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixOriginal
 reflect_kernel LogExp.originalKernel
@@ -155,7 +153,7 @@ private def outputs (k : QKernel) (inputs : List (RegionName × Float)) (ports :
 end VeriTile.Tests.InterpReflectBench
 
 open Lean in
-#eval show CoreM Unit from do
+#eval show Elab.Command.CommandElabM Unit from do
   let env ← getEnv
   -- Read the declarations of the imported example files, independently of the reflection list.
   let mut rows := #[]
@@ -171,16 +169,20 @@ open Lean in
       let reason ← if env.contains (info.name ++ `toReal_mirror) then do
         reflected := reflected + 1
         pure "Reflected"
-      else match name with
-        | "commonPrefix" => pure "Prefix extraction projects the kernel body via `ComputeKernel.rec`."
-        | "unfusedSiLUKernel" | "swiglu_unfused" =>
-          pure "Sequential composition projects component bodies via `ComputeKernel.rec`."
-        | "mhcDepthConnectionKernel" | "mhcWidthConnectionKernel" =>
-          pure "Matching symbolic dimensions leaves the branch unknown in the `toReal` equation."
-        | _ => throwError "unaccounted kernel {info.name}"
+      else
+        let id := mkIdent info.name
+        let saved ← get
+        let messages ← try
+          modify fun st => { st with messages := {} }
+          Elab.Command.elabCommand (← `(command| reflect_kernel $id:ident))
+          pure (← get).messages.toList
+        finally set saved
+        let [err] := messages.filter (·.severity == .error)
+          | throwError "expected one rejection for {info.name}"
+        err.data.toString
       let file := s!"bench/examples/{exampleDir}/Kernels.lean"
       let some ranges ← findDeclarationRanges? info.name | throwError "missing source range {info.name}"
       let line := ranges.selectionRange.pos.line
-      rows := rows.push s!"| [{exampleDir}](../{file}#L{line}) | `{name}` | {reason} |"
-  for row in rows.qsort (· < ·) do IO.println row
+      rows := rows.push ((exampleDir, line), s!"| [{exampleDir}](../{file}#L{line}) | `{name}` | {reason} |")
+  for (_, row) in rows.qsort (fun a b => a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2 < b.1.2)) do IO.println row
   IO.println s!"{reflected} of {rows.size} kernels reflected."

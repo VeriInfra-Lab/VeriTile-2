@@ -1,6 +1,9 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/01-distributed-notify-wait.py:109-133
+# Licence: MIT
+# Changes: rewritten as a minimal example; The same exchange with the wait at device scope, as the documentation writes it
 # LIT-b02. The same exchange with the wait at device scope, as the
 # documentation writes it.
-# Source: docs/python-api/triton-dist.semantics.rst, "Producer-Consumer
+# Context: docs/python-api/triton-dist.semantics.rst, "Producer-Consumer
 # Model" (TD-SEM); tutorials/01-distributed-notify-wait.py:109-133 (TD-T01).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

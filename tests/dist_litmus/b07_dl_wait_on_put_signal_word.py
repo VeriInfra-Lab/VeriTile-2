@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/07-overlapping-allgather-gemm.py:181-185,293-301
+# Licence: MIT
+# Changes: rewritten as a minimal example; dl.wait on a word that an NVSHMEM put-with-signal writes
 # LIT-b07. dl.wait on a word that an NVSHMEM put-with-signal writes.
-# Source: tutorials/07-overlapping-allgather-gemm.py:181-185 (the wait) and
+# Context: tutorials/07-overlapping-allgather-gemm.py:181-185 (the wait) and
 # 293-301 (the put-with-signal) (TD-T07).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

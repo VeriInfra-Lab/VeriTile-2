@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/common_ops.py:154-168
+# Licence: MIT
+# Changes: rewritten as a minimal example; A two-rank handshake by compare-and-swap at system scope
 # LIT-a06. A two-rank handshake by compare-and-swap at system scope.
-# Source: python/triton_dist/kernels/nvidia/common_ops.py:154-168, with its
+# Context: python/triton_dist/kernels/nvidia/common_ops.py:154-168, with its
 # docstring (tutorial 05 launches this kernel); TD-API, atomic_cas.
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

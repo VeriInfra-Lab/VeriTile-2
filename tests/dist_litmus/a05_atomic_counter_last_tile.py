@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/08-overlapping-gemm-reduce-scatter.py:274-284
+# Licence: MIT
+# Changes: rewritten as a minimal example; A counter of finished tiles; the last one fires the signal
 # LIT-a05. A counter of finished tiles; the last one fires the signal.
-# Source: tutorials/08-overlapping-gemm-reduce-scatter.py:274-284 (TD-T08);
+# Context: tutorials/08-overlapping-gemm-reduce-scatter.py:274-284 (TD-T08);
 # docstring of triton.language.atomic_add (TR-CORE).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

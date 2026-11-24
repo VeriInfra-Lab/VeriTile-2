@@ -49,6 +49,25 @@ def check_links(root, documents):
     return errors
 
 
+# Register each source pattern with its language's line-comment marker.
+DERIVED_SOURCES = {'tests/dist_litmus/**/*.py': '#'}
+SOURCE_SITE = r'[\w.-]+/[\w.-]+@[0-9a-f]{40} [^:;]+:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*'
+
+
+def check_attribution(root):
+    errors = []
+    for pattern, marker in DERIVED_SOURCES.items():
+        for source in sorted(root.glob(pattern)):
+            lines = source.read_text().splitlines()[:3]
+            formats = (rf'Source: {SOURCE_SITE}(?:; {SOURCE_SITE})*',
+                       r'Licence: [\w.+()-]+(?: [\w.+()-]+)*',
+                       r'Changes: (?:transcribed to Lean|rewritten as a minimal example|unmodified copy)(?:[;,] .+)?')
+            for i, fmt in enumerate(formats):
+                if i >= len(lines) or not re.fullmatch(re.escape(marker) + ' ' + fmt, lines[i]):
+                    errors.append(f'{source.relative_to(root)}:{i + 1}: expected {fmt.split(":")[0]} header')
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--links-only', action='store_true', help='skip the generated-reference freshness check')
@@ -57,7 +76,7 @@ def main():
     documents = [ROOT / name.decode() for name in raw.split(b'\0') if name]
     if not documents:
         raise SystemExit('No tracked Markdown documents found.')
-    errors = check_links(ROOT, documents)
+    errors = check_links(ROOT, documents) + check_attribution(ROOT)
     if errors:
         print('\n'.join(errors))
         return 1

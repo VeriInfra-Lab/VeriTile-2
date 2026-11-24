@@ -1,6 +1,9 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/07-overlapping-allgather-gemm.py:181-185,325-334
+# Licence: MIT
+# Changes: rewritten as a minimal example; isolate stream-ordered host signal and device wait
 # LIT-b08. The host copies to the peer and sets its signal on a stream while
 # a kernel of the peer waits on that signal.
-# Source: tutorials/07-overlapping-allgather-gemm.py:181-185 (the wait) and
+# Context: tutorials/07-overlapping-allgather-gemm.py:181-185 (the wait) and
 # 325-334 (the copy and set_signal) (TD-T07). The tutorial copies with
 # cudart.cudaMemcpyAsync and passes an address and a fourth argument to
 # set_signal; this file calls set_signal as

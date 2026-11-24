@@ -38,10 +38,13 @@ if [ "$lean" = 1 ]; then
              "python3 scripts/check_frozen_statements.py"
              "python3 scripts/test_fork_targets.py"
              # Fork-owned regression modules that no target gate builds.
+             "bash tests/interp/run_regression.sh"
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpReflectBench"
              "lake build tests.lean.InterpEvalSmoke"
+             "lake build tests.lean.InterpAdequacyNeg"
              "lake build tests.lean.InterpFloatCarrier"
+             "lake build tests.lean.InterpFloatCensus"
              "lake build tests.lean.InterpSymbolic"
              "lake env lean tests/lean/InterpSymbolic.lean"
              "lake build tests.lean.InterpArraySmoke"
@@ -49,7 +52,9 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TensorDescriptorSource"
              "lake build tests.lean.dist.SourceHelperSyntax"
              "lake build tests.lean.InterpBridgeInvariant"
+             "lake env lean tests/lean/InterpBridgeCensus.lean"
              "lake build tests.lean.InterpFPValue"
+             "python3 -B -m unittest scripts.test_fp_value_carrier"
              "lake build tests.lean.dist.SwizzleSource"
              "lake build tests.lean.dist.TritonExtConstexpr"
              "lake build tests.lean.dist.TritonExtProfiler")
