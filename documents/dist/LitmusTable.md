@@ -480,7 +480,7 @@ item that holds the quotation.
 - **Expected.** At `71e7145`, the instruction guide identifies the whole-block barrier with `__syncthreads`; D8 gives the order among participating lanes. Under A1(c) and A8 the tail release/wait connects the publishing and waiting lanes. With both local barrier legs and that system-scope hand-off, only `out == src` is allowed. S5.2 owes the scoped chain proof. In the DeepEP version 1 port at `9ba8a605`, A5 supplies the order of the block barriers, and A6 and A10 supply the wait defaults and matching call reading.
   L-TS3: "Synchronize all threads in a
   block."
-- **Decided by.** D8 applies at the source file’s pin (`instructions.md:191` and E-CU7). L-TS3 and E-TS1 ("They do not call NVSHMEM.") bound
+- **Decided by.** D8 applies at the front-end pin `71e7145` (`instructions.md:191` and E-CU7). L-TS3 and E-TS1 ("They do not call NVSHMEM.") bound
   what is stated.
 - **Mark.** R(A1 c, D8, A8) at `71e7145`.
 - **Events.** `access store plain` by 32 agents; `bump` and `wait` on a
@@ -735,7 +735,7 @@ item that holds the quotation.
   barrier". L-TD4: "wait for all peers done". E-NV11: the wait "blocks until
   the value contained in the signal data object, sig_addr, at the calling PE
   satisfies the wait condition".
-- **Mark.** Q. The row uses the rendezvous of the barrier only. Participant memory ordering follows D8 for this Triton barrier and for the TileScale barrier at the LIT-a08 source pin.
+- **Mark.** Q. The row uses the rendezvous of the barrier only. Participant memory ordering follows D8 for this Triton barrier and for the TileScale barrier at the LIT-a08 front-end pin `71e7145`.
   D2: the same under both readings.
 - **Events.** `wait` on a `word` with `eq`, mode `shmem`, by several threads;
   `bump` and `wait` on a `phase` counter; `bump` of a `word` with `set`, mode
@@ -775,7 +775,7 @@ item that holds the quotation.
   executes `T.wait_ne(start[0], 0)`, then `T.ld(start[0], v, sem="volatile")`,
   and stores `-v - 1` to `out`.
 - **Asked.** The value of `out`.
-- **Expected.** At the source pin `71e7145`, E-TS6 gives the wait system scope and acquire order. W1 treats the volatile load as plain. It conflicts with the other rank’s relaxed store, so the result is undefined.
+- **Expected.** At the front-end pin `71e7145`, E-TS6 gives the wait system scope and acquire order. W1 treats the volatile load as plain. It conflicts with the other rank’s relaxed store, so the result is undefined.
   In the version 1 port at `9ba8a605`, A6 and A10 give the wait its defaults. Under A7 the unqualified volatile load is GPU/relaxed and still conflicts across ranks, even under A8. The selected `scope="sys"` repair makes it system/relaxed. Under A8 the successful wait has observed -8, there is no later writer, and the output is 7.
 - **Decided by.** E-TS6 specifies the wait defaults. L-TS1 states an intent ("to ensure
   visibility across PEs") and no definition of volatile.
