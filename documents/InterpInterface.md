@@ -233,8 +233,18 @@ reduceMax symbols outside the carrier's lane format.
 Run `PYTHONPATH=scripts python3 -m interp.symeval trees.json` for the reference.
 Optional `--float float.tensor` and `--gpu gpu.tensor` report absolute distance
 for each output. Both tensors must have the same number of elements as the
-export. Rational operations use Fraction. The GPU protocol, section 9, pins
-neither SymPy nor mpmath. The standard-library reference uses Decimal with
-50 significant digits for exp, log and related operations, and binary64 libm
-for sin, cos, tan, atan and erf. Values and distances are printed as strings
-to preserve rational fractions and decimal precision.
+export. Values and distances are printed as strings to preserve fractions and
+decimal precision.
+
+The reference evaluator uses exact rational arithmetic (`Fraction`), including
+integer powers of rational inputs. For exp, log, sqrt and non-integer pow, it
+uses 50 significant decimal digits. The precision contract calls for correct
+rounding at each step and does not track cancellation across steps. Python's
+C Decimal backend computes non-integer powers using correctly rounded exp and
+log, and documents that the final power is almost always correctly rounded.
+`sin`, `cos`, `tan`, `atan` and `erf` use binary64 and the platform libm, with
+typical relative error around `1e-16`. The current comparisons target fp32.
+The GPU protocol, section 9, pins neither SymPy nor mpmath.
+[Precision decision on #126](https://github.com/VeriInfra-Lab/VeriTile-2/issues/126#issuecomment-7121320412),
+[Python Decimal power](https://docs.python.org/3/library/decimal.html#decimal.Context.power)
+(accessed 2026-11-24).
