@@ -21,25 +21,28 @@ structure CellWrites where
 belongs to the issuing agent for scope checks, outside its program order. -/
 inductive Occurrence where
   | segment (owner : Agent) (reads writes : Set Addr)
-  | event (owner : Agent) (e : Event)
+  | issued (program : Agent) (emission : Emission)
   | delivered (owner : Agent) (t : Transfer) (start : Nat)
 
 def Occurrence.owner : Occurrence → Agent
-  | .segment a .. | .event a _ | .delivered a .. => a
+  | .segment a .. | .delivered a .. => a
+  | .issued _ x => x.actor
 
 def Occurrence.event? : Occurrence → Option (Agent × Event)
   | .segment .. => none
-  | .event a e => some (a,e)
+  | .issued _ x => some (x.actor,x.event)
   | .delivered a t _ => some (a,.complete t)
 
-def Occurrence.delivery : Occurrence → Bool
-  | .delivered .. => true
-  | _ => false
+/-- Only program occurrences have a position on a source path. The actor
+of an issued event still determines permission, scope and synchronization. -/
+def Occurrence.program? : Occurrence → Option Agent
+  | .segment a .. | .issued a _ => some a
+  | .delivered .. => none
 
 def Occurrence.access (p : Addr) : Occurrence → AccessKind → Mode → Prop
   | .segment _ r _, .load, .plain => p ∈ r
   | .segment _ _ w, .store, .plain => p ∈ w
-  | .event _ e, k, m => (k,p,m) ∈ e.accesses
+  | .issued _ x, k, m => (k,p,m) ∈ x.event.accesses
   | .delivered _ t _, k, m => (k,p,m) ∈ (Event.complete t).accesses
   | _, _, _ => False
 
@@ -63,11 +66,20 @@ structure Launch (P : Type) where
   start : Agent → Option P
   symm : VeriTile.Triton.RegionName → Bool
   reach : ShmemReach
-  initialCount : Counter → Nat
-  /-- Participants of a documented collective, with a fresh counter id per
-  generation. Supplied by the source lowering only for an actual barrier. -/
+  gridRank : Rank → Nat
+  abstractInitial : {c : Counter // ∀ p, c ≠ .word p} → Nat
+  /-- Participants of a documented collective, with a fixed object id and
+  cumulative thresholds across generations. Supplied by the source lowering only for an actual barrier. -/
   roster : Counter → Option (List Agent)
   cells : CellWrites
+
+/-- The launch has no separately settable initial word table. This extension
+is used only for non-word trace folds; count? reads word values from memory. -/
+def Launch.initialCount (l : Launch P) : Counter → Nat
+  | .word _ => 0
+  | .phase c i => l.abstractInitial ⟨.phase c i, by intro p h; cases h⟩
+  | .rendezvous i => l.abstractInitial ⟨.rendezvous i, by intro p h; cases h⟩
+  | .delivered a => l.abstractInitial ⟨.delivered a, by intro p h; cases h⟩
 
 /-- A word read by an access and by a wait is the same physical cell. A
 non-word counter is the signed fold over the synchronization trace. -/
@@ -98,30 +110,38 @@ inductive Fire {P : Type} (l : Launch P) (s : Machine) :
   | bump (a b old) (read : b.op = .add → s.count? l.initialCount b.counter = some old) :
       Fire l s ⟨a,.bump b,.noValue⟩ (bumpMem l.cells s.mem b old) s.pending
         (if b.op = .add then some (.of .nat old) else none)
+  | discardAdd (a p n m old) (read : s.count? l.initialCount (.word p) = some old) :
+      Fire l s ⟨a,.bump ⟨.word p,.add,n,m⟩,.discardAddResult⟩
+        (l.cells.put s.mem p (.of .nat (old + n))) s.pending none
   | initiate (a t) (sizes : t.src.length = t.dst.length) :
       Fire l s ⟨a,.initiate t,.noValue⟩ s.mem
         (⟨a,t,s.history.length,if t.nbi then none else some (t.src.map s.mem.cell)⟩ :: s.pending) none
 
-/-- D1/D7: a blocking put issued earlier by this caller to this PE must
-be delivered before a subsequent NVSHMEM signal becomes observable if the
-caller fenced between them. NBI, another PE and another caller are excluded. -/
+/-- D4/D7: the caller participated in its own collective block operation.
+This grants no coverage of operations issued separately by sibling threads. -/
+def FenceCovers (caller issuer : Agent) : Prop :=
+  caller = issuer ∨ ∃ c g t, caller = .thread c g t ∧ issuer = .cta c
+
+/-- D1/D7: only eligible blocking puts to the signal PE are ordered. An
+unbound blocking put can therefore block a subsequent fenced signal forever
+under W5; a source promising liveness must supply a completion. -/
 def PendingFence (s : Machine) (x : Emission) : Prop :=
   ∃ old ∈ s.pending, ∃ i mode b p r,
-    old.transfer.nbi = false ∧ old.owner = x.actor ∧ old.start < i ∧
-    s.history[i]? = some (.event x.actor (.fence (.shmem mode))) ∧
+    old.transfer.nbi = false ∧ FenceCovers x.actor old.owner ∧ old.start < i ∧
+    (s.history[i]? >>= Occurrence.event?) = some (x.actor,.fence (.shmem mode)) ∧
     x.event = .bump b ∧ b.counter = .word p ∧ (∃ order, b.mode = .shmem order) ∧
     p.space = .global r ∧ ∃ dst ∈ old.transfer.dst, dst.space = .global r
 
 /-- Entire nonempty group is one scheduler choice. Earlier events in it are
 visible to its later events. Other programs cannot enter between them. -/
-inductive FireGroup {P} (l : Launch P) : Machine → List Emission → Machine → List (Option MemCell) → Prop
-  | nil (s) : FireGroup l s [] s []
+inductive FireGroup {P} (l : Launch P) (program : Agent) : Machine → List Emission → Machine → List (Option MemCell) → Prop
+  | nil (s) : FireGroup l program s [] s []
   | cons {s x mem pending v xs final vs} (access : x.event.AccessibleBy l.symm x.actor)
       (available : ∀ k p m, (k,p,m) ∈ x.event.accesses → ¬ InFlight s.trace p)
       (ordered : ¬ PendingFence s x)
       (fire : Fire l s x mem pending v)
-      (rest : FireGroup l ⟨mem,s.history ++ [.event x.actor x.event],pending⟩ xs final vs) :
-      FireGroup l s (x :: xs) final (v :: vs)
+      (rest : FireGroup l program ⟨mem,s.history ++ [.issued program x],pending⟩ xs final vs) :
+      FireGroup l program s (x :: xs) final (v :: vs)
 
 /-- The phase split allows another agent or the delivery engine to run after
 a segment and before its events. A blocked wait never repeats its segment. -/
@@ -129,9 +149,8 @@ inductive Cursor (P : Type) where
   | ready (pc : P)
   | waiting (head : Emission) (tail : List Emission) (cont : List (Option MemCell) → P)
 
-def Next.cursor (a : Agent) : Next P → Option (Cursor P)
+def Next.cursor : Next P → Option (Cursor P)
   | .finish => none
-  | .emit e k => some (.waiting ⟨a,e,.noValue⟩ [] fun vs => k (vs.head?.join))
   | .emitGroup h t k => some (.waiting h t k)
 
 structure Config (P : Type) extends Machine where
@@ -153,11 +172,11 @@ private noncomputable def deliverMemory (w : CellWrites) (s : Machine) (o : Outs
   bumpMem w copied b old
 
 /-- D1/D7: a fence orders delivery of blocking operations only; it orders the caller's earlier puts to the same destination PE.
-A different thread's put is not ordered by a CTA's or another thread's fence.
+The caller participates in its CTA collective; it does not cover a sibling thread's separate put.
 The event carries a destination list, so compare the actual destination ranks. -/
 def FencedBefore (s : Machine) (x y : Outstanding) : Prop :=
-  x.transfer.nbi = false ∧ y.transfer.nbi = false ∧ x.owner = y.owner ∧ (∃ i m, x.start < i ∧ i < y.start ∧
-    s.history[i]? = some (.event x.owner (.fence (.shmem m)))) ∧
+  x.transfer.nbi = false ∧ y.transfer.nbi = false ∧ (∃ caller i m, FenceCovers caller x.owner ∧ FenceCovers caller y.owner ∧ x.start < i ∧ i < y.start ∧
+    (s.history[i]? >>= Occurrence.event?) = some (caller,.fence (.shmem m))) ∧
   ∃ px ∈ x.transfer.dst, ∃ py ∈ y.transfer.dst, ∃ r, px.space = .global r ∧ py.space = .global r
 
 /-- S4.2/#48 and S4.9/#55. A segment runs once, an enabled group fires once,
@@ -172,10 +191,10 @@ inductive step {P} (l : Launch P) (s : Config P) : Choice → Config P → Prop 
       step l s (.agent a) { s with
         mem := mem
         history := s.history ++ [.segment a (seg.reads s.mem) (seg.writes s.mem)]
-        pc := Function.update s.pc a (((l.program a).next pc s.mem).cursor a) }
+        pc := Function.update s.pc a (((l.program a).next pc s.mem).cursor) }
   | fire {a h t k final values} (atPC : s.pc a = some (.waiting h t k))
       (owned : ∀ x ∈ h :: t, x.actor.within a)
-      (events : FireGroup l s.toMachine (h :: t) final values) :
+      (events : FireGroup l a s.toMachine (h :: t) final values) :
       step l s (.agent a) { final with pc := Function.update s.pc a (some (.ready (k values))) }
   | deliver {pre post o b old} (outstanding : s.pending = pre ++ o :: post)
       (bound : o.transfer.completion = some b)
@@ -211,26 +230,28 @@ def ReadsFrom (h : History) (i j : Nat) (c : Counter) : Prop :=
     | .word q => ∀ k m, x.access q k m → k.writes = false
     | _ => ∀ e, x.event? = some e → ∀ m, e.2.releaseOf? ≠ some (c,m)
 
-/-- D8/A5/A9 collective edges. A participant sees all arrivals of its
-phase, not just the last increment. Fresh counter ids, exact roster and
-scope checks prevent manufacturing a barrier from an ordinary word wait. -/
+/-- D8/A5/A9. The kth arrival of a participant is paired with a wait for
+k times the roster size. Faster participants cannot substitute for a missing
+participant merely by incrementing the shared counter again. -/
 def RoundEdge (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
-  ∃ c a b m m' members,
+  ∃ c a b m m' members k,
     (match c with | .phase .. | .rendezvous .. => True | _ => False) ∧
-    l.roster c = some members ∧ members.Nodup ∧ b ∈ members ∧ l.initialCount c = 0 ∧
-    i < j ∧ h[i]? = some (.event a (.bump ⟨c,.add,1,m⟩)) ∧
-    h[j]? = some (.event b (.wait c .ge members.length m')) ∧
-    (∀ k < j, ∀ x ∈ h[k]?, ∀ ae ∈ x.event?, ∀ bump ∈ ae.2.bump?,
-      bump.counter = c → ae.2 = .bump ⟨c,.add,1,m⟩) ∧
-    ((h.take j).filterMap (fun x => match x with
-      | .event actor (.bump bump) => if bump.counter = c then some actor else none
-      | _ => none)).Perm members ∧ Mode.Pairs l.reach p a b m m'
+    l.roster c = some members ∧ members.Nodup ∧ a ∈ members ∧ b ∈ members ∧
+    l.initialCount c = 0 ∧ 0 < k ∧ i < j ∧
+    (h[i]? >>= Occurrence.event?) = some (a,.bump ⟨c,.add,1,m⟩) ∧
+    (h[j]? >>= Occurrence.event?) = some (b,.wait c .ge (k * members.length) m') ∧
+    (∀ x ∈ h.take j, ∀ ae ∈ x.event?, ∀ bump ∈ ae.2.bump?, bump.counter = c →
+      ae.1 ∈ members ∧ ae.2 = .bump ⟨c,.add,1,m⟩) ∧
+    (let arrivals := fun (n : Nat) (who : Agent) => ((h.take n).filterMap Occurrence.event?).countP
+      (fun ae => decide (ae.1 = who ∧ ae.2.bump? = some ⟨c,.add,1,m⟩))
+     arrivals (i+1) a = k ∧ ∀ who ∈ members, k ≤ arrivals j who) ∧
+    Mode.Pairs l.reach p a b m m'
 
 def DirectHB (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
   ∃ x y, h[i]? = some x ∧ h[j]? = some y ∧ i < j ∧
-    ((x.owner = y.owner ∧ x.delivery = false ∧ y.delivery = false) ∨
+    ((∃ a, x.program? = some a ∧ y.program? = some a) ∨
       RoundEdge l h p i j ∨
-      (∃ a t, x = .event a (.initiate t) ∧ y = .delivered a t i) ∨
+      (∃ a t, x.event? = some (a,.initiate t) ∧ y = .delivered a t i) ∨
       ∃ a b c m, x.event? = some a ∧ y.event? = some b ∧ a.2.releaseOf? = some (c,m) ∧
         ReadsFrom h i j c ∧ SyncEdge l.reach p a b)
 
@@ -246,6 +267,21 @@ def DataRace (l : Launch P) (h : History) : Prop :=
 def DRF (l : Launch P) (s : DistState) : Prop :=
   ∀ sched final, Run l (l.initial s) sched final → ¬ DataRace l final.history
 
+/-- Only the emitted natural-word add whose semantics erase the old result
+can use the commutative exception. An allocator that reads its old slot
+uses the ordinary bump and remains subject to the deterministic-race test. -/
+def Occurrence.discardedAddAt (x : Occurrence) (p : Addr) : Prop :=
+  ∃ prog a n m, x = .issued prog ⟨a,.bump ⟨.word p,.add,n,m⟩,.discardAddResult⟩
+
+def UnorderedAtomicRace (l : Launch P) (h : History) : Prop :=
+  ∃ i j x y p k k' m m', i < j ∧ h[i]? = some x ∧ h[j]? = some y ∧
+    x.access p k m ∧ y.access p k' m' ∧ (k.writes = true ∨ k'.writes = true) ∧
+    Mode.AtomicFor x.owner y.owner m m' ∧ ¬ HB l h p i j ∧
+    ¬ (x.discardedAddAt p ∧ y.discardedAddAt p)
+
+def DetRaceFree (l : Launch P) (s : DistState) : Prop :=
+  DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ UnorderedAtomicRace l final.history
+
 /-- A well-formed but unsatisfied wait blocks. All other absent transitions
 for the current instruction are faults. In a group, inspect members in order
 so a blocked member does not misclassify a later instruction. -/
@@ -255,14 +291,14 @@ def BlockedMember (l : Launch P) (s : Machine) (x : Emission) : Prop :=
   (PendingFence s x ∨ ∃ c cmp n m actual, x.data = .noValue ∧ x.event = .wait c cmp n m ∧
     s.count? l.initialCount c = some actual ∧ ¬ cmp.holds actual n)
 
-def BlockedGroup (l : Launch P) (s : Machine) (es : List Emission) : Prop :=
-  ∃ pre x post mid vs, es = pre ++ x :: post ∧ FireGroup l s pre mid vs ∧ BlockedMember l mid x
+def BlockedGroup (l : Launch P) (program : Agent) (s : Machine) (es : List Emission) : Prop :=
+  ∃ pre x post mid vs, es = pre ++ x :: post ∧ FireGroup l program s pre mid vs ∧ BlockedMember l mid x
 
 def Fault (l : Launch P) (s : Config P) : Prop :=
   ∃ a cursor, s.pc a = some cursor ∧ (¬ ∃ next, step l s (.agent a) next) ∧
     match cursor with
     | .ready _ => True
-    | .waiting h t _ => ¬ ((∀ x ∈ h :: t, x.actor.within a) ∧ BlockedGroup l s.toMachine (h :: t))
+    | .waiting h t _ => ¬ ((∀ x ∈ h :: t, x.actor.within a) ∧ BlockedGroup l a s.toMachine (h :: t))
 
 def Safe (l : Launch P) (s : DistState) : Prop :=
   DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final
@@ -305,8 +341,31 @@ def Reserves (l : Launch P) (s : Config P) (c : Choice) (r : Resources) : Prop :
       (∀ tr, x.event = .initiate tr → tr ∈ r.transfers ∧ ∀ p ∈ tr.dst, p ∈ r.writes)
   | .delivery _ => False -- S4.9 must also account for the identity of an outstanding delivery.
 
-def SoundLaunch (l : Launch P) : Prop :=
-  ∀ a, (l.program a).NextLocal ∧ ∀ pc, ((l.program a).segment pc).FootprintSound
+/-- A multi-event group is exactly one CAS observation and write to the
+same word by the same actor. Singleton emissions are ordinary source cuts. -/
+def CASGroup (h : Emission) (tail : List Emission) : Prop :=
+  tail = [] ∨ ∃ a p expected next scope readOrder writeOrder,
+    h = ⟨a,.wait (.word p) .eq expected (.atomic scope readOrder),.noValue⟩ ∧
+    tail = [⟨a,.bump ⟨.word p,.set,next,.atomic scope writeOrder⟩,.noValue⟩] ∧
+    readOrder.releases = false ∧ writeOrder.acquires = false
+
+structure SoundLaunch (l : Launch P) : Prop where
+  localNext : ∀ a, (l.program a).NextLocal
+  footprints : ∀ a pc, ((l.program a).segment pc).FootprintSound
+  pidLength : ∀ a c, (l.start a).isSome → a.cta? = some c → c.pid.length = l.gridRank c.rank
+  groups : ∀ a pc s h t k, (l.program a).next pc s = .emitGroup h t k →
+    CASGroup h t ∧ ∀ x ∈ h :: t, x.actor.within a
+  /-- A source path can switch between a collective and a participant. It
+  cannot manufacture program order between two different sibling lanes. -/
+  nestedPath : ∀ s sched f, Run l (l.initial s) sched f →
+    ∀ x ∈ f.history, ∀ y ∈ f.history, ∀ a, x.program? = some a → y.program? = some a →
+      x.owner.within y.owner ∨ y.owner.within x.owner
+
+  /-- One thread's explicit instructions belong to one source path. CTA
+  collective instructions can still be shared by its participants. -/
+  uniqueThreadPath : ∀ s sched f, Run l (l.initial s) sched f →
+    ∀ x ∈ f.history, ∀ y ∈ f.history, ∀ c g t, x.owner = .thread c g t →
+      y.owner = .thread c g t → ∀ a b, x.program? = some a → y.program? = some b → a = b
 
 /-- C1 candidate, S4.5/#51. Histories record the swapped order, so the
 equality asserted is on memory and continuations. -/
@@ -411,27 +470,27 @@ def ScopeConsistentOn (l : Launch P) (s : DistState)
   ∀ sched final, Run l (l.initial s) sched final →
     ∀ p i j, needs final.history p i j → HB l final.history p i j
 
-/-- C3 candidate, S4.7–8/#53/#54. The normalizing restriction is unsigned.
+/-- C3 candidate, S4.7–8/#53/#54. DetRaceFree is the external premise; S4.7 owes normalization.
 C1 will also need a simulation for suffixes, including reads-from and delivery
 ticket renaming; equality of the raw event histories would be false. -/
 theorem drf_scopeConsistent_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
-    {reference final : Config P} (sound : SoundLaunch l) (safe : DRF l s)
+    {reference final : Config P} (sound : SoundLaunch l) (safe : DetRaceFree l s)
     (needs : History → Addr → Nat → Nat → Prop) (scopes : ScopeConsistentOn l s needs)
-    (normal : NormalizesTo l s canonical) (refRun : Run l (l.initial s) canonical reference)
+    (refRun : Run l (l.initial s) canonical reference)
     (refComplete : Complete reference) (actual : Run l (l.initial s) sched final)
     (complete : Complete final) : final.mem = reference.mem := sorry
 
 /-- S4.8/#54. For a memory specification, checking the canonical final
-memory and establishing race/fault freedom suffices on the normalizing fragment. -/
+memory and establishing race/fault freedom suffices on the deterministic-race-free fragment. -/
 theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : Schedule}
-    {reference : Config P} (sound : SoundLaunch l) (safe : Safe l s)
+    {reference : Config P} (sound : SoundLaunch l) (safe : Safe l s) (det : DetRaceFree l s)
     (needs : History → Addr → Nat → Nat → Prop) (scopes : ScopeConsistentOn l s needs)
-    (normal : NormalizesTo l s canonical) (refRun : Run l (l.initial s) canonical reference)
+    (refRun : Run l (l.initial s) canonical reference)
     (done_ : Complete reference) (spec : DistState → Prop) (ok : spec reference.mem) :
     ImplementsAll l s (fun final => spec final.mem) := by
   refine ⟨safe, fun sched final actual complete => ?_⟩
   change spec final.mem
-  rw [drf_scopeConsistent_complete_eq_canonical sound safe.1 needs scopes normal refRun done_ actual complete]
+  rw [drf_scopeConsistent_complete_eq_canonical sound det needs scopes refRun done_ actual complete]
   exact ok
 
 open VeriTile.Triton.Concurrent (EventProgramIO Backend)

@@ -2,6 +2,7 @@
 1.3–1.4 and 4, K1/K3/K6/K11/K23. Quantities, transfers, barriers and the
 sequential segments are inputs; these are not full kernel transcriptions. -/
 import VeriTile.Staging.Dist.JudgmentSpec
+import tests.lean.dist.AtomicSetRuns
 
 namespace VeriTile.Tests.JudgmentVariants
 open VeriTile.Dist
@@ -38,12 +39,12 @@ private def k1 (c : Cta) (peer : Rank) (produce : Bool) (cmp : Cmp)
   let flag := Counter.word (cell r "flag" slot)
   let address := cell r "queue" (slot * width + lane)
   -- A participating lane's arrival/wait. The other lanes contribute their own
-  -- pair to the same fresh phase; no sibling event order is fixed by this cut.
+  -- pair to the same barrier; no sibling event order is fixed by this cut.
   let thread := Agent.thread c 0 lane
   return [plain owner (.wait flag cmp expected (.atomic .gpu .acquire)),
     if produce then plain thread (.access .store address .plain) (.store v)
     else plain thread (.access .load address .plain)] ++
-    barrier thread (.phase c i) participants ++ (if lane == 0 then
+    barrier thread (.phase c 0) ((i+1)*participants) ++ (if lane == 0 then
       [plain thread (.fence (.shmem .release)),
        plain thread (.bump ⟨flag,.set,expected + 1,.atomic .sys .release⟩)] else [])
 
@@ -66,18 +67,19 @@ private def k6 (c : Cta) (data splits scales : DistState → Transfer) (mode0 qu
   let thread := Agent.thread c 0 0
   let put := fun f => (⟨owner,fun σ => (.initiate (f σ),.noValue),none⟩ : Cut)
   [put data] ++ (if mode0 then [put splits] else []) ++ (if quant then [put scales] else []) ++
-    [plain owner (.fence (.shmem .release))] ++
+    [plain thread (.fence (.shmem .release))] ++
     (if !quant then [plain thread (.bump ⟨.word (cell pid "signal" (actPos*ranks+c.rank)),
       .set,callCount,.shmem .release⟩)] else []) ++
     [plain thread (.wait (.word (cell c.rank "signal" (actPos*ranks+pid))) .eq callCount (.shmem .acquire))]
 
-/-- K11 CO:158–168. One thread's two successful CAS spins, with opposite
+/-- The read side of CAS gets acquire or relaxed; the write side gets
+release or relaxed. K11 CO:158–168. One thread's two successful CAS spins, with opposite
 directions and modes. The enclosing CTA subsequently joins at its barrier. -/
 private def k11Thread (c : Cta) (tid localRank localSize participants : Nat) :=
   let thread := Agent.thread c 0 tid
-  let cas := fun word expected next order =>
-    (⟨thread, fun _ => (.wait (.word word) .eq expected (.atomic .sys order),.noValue),
-      some (fun _ => .bump ⟨.word word,.set,next,.atomic .sys order⟩)⟩ : Cut)
+  let cas := fun word expected next (order : MemOrder) =>
+    (⟨thread, fun _ => (.wait (.word word) .eq expected (.atomic .sys (if order.acquires then .acquire else .relaxed)),.noValue),
+      some (fun _ => .bump ⟨.word word,.set,next,.atomic .sys (if order.releases then .release else .relaxed)⟩)⟩ : Cut)
   (if tid < localSize then
      [cas (cell (c.rank-localRank+tid) "flag" localRank) 0 1 .release,
       cas (cell c.rank "flag" tid) 1 0 .acquire] else []) ++
@@ -93,9 +95,9 @@ private def k23 (c : Cta) (notifyBlock : Bool) (tid ranks experts : Nat)
   -- The block-0 caller contributes once per rank. All the other blocks take
   -- the channel-prefix branch. Admission is separate from memory ordering.
   let grid := fun phase syncOnly =>
-    [plain owner (.bump ⟨.rendezvous phase,.add,1,
+    [plain owner (.bump ⟨.rendezvous 0,.add,1,
        if syncOnly then .plain else .atomic .sys .release⟩),
-     plain owner (.wait (.rendezvous phase) .ge ranks .plain)]
+     plain owner (.wait (.rendezvous 0) .ge ((phase+1)*ranks) .plain)]
   let send := fun region i v => plain thread (.access .store (cell tid region i) .plain) (.store v)
   let peerStores := if tid < ranks then [send "per_rank" (c.rank*ranks+tid) (value tid 0)] ++
       (List.range experts).map (fun e => send "per_expert" (c.rank * experts + e) (value tid (e+1)))
@@ -113,9 +115,8 @@ inductive PC where
   | atCut (i : Nat)
   | emptyThenSet (i : Nat) (actor : Agent) (e : Event)
 
-/-- Both alternatives elaborate as programs. For the empty-segment encoding
-the *alternative scheduler rule* below is essential: S4's ordinary step
-would expose the intermediate PC. A missing actor is a genuine refusal. -/
+/-- Only the explicit-actor, grouped form is the source lowering. The
+comparison variants below expose the lost actor or the intermediate PC. A missing actor is a genuine refusal. -/
 private def lower (own : Ownership) (grouping : Grouping) (owner : Agent)
     (segments : Nat → Segment) (cuts : List Cut) : Option (AgentProgram PC) :=
   if !fits own owner cuts then none else some {
@@ -135,16 +136,8 @@ private def lower (own : Ownership) (grouping : Grouping) (owner : Agent)
           | some f, .list => .emitGroup h [⟨a,f σ,.noValue⟩] fun _ => .atCut (i+1)
           | some f, .fusedEmpty => .emitGroup h [] fun _ => .emptyThenSet i a (f σ) }
 
-/-- The marked intermediate must be consumed by the scheduler, with no
-choice in between. It has an empty identity segment and exactly one set.
-Both source occurrences then fire in a single FireGroup. -/
-def FusedEmpty (l : Launch PC) (prog : AgentProgram PC) (i : Nat) (a : Agent)
-    (wait write : Event) (s final : Machine) : Prop :=
-  let pc := PC.emptyThenSet i a write
-  (prog.segment pc).run s.mem = some s.mem ∧
-  prog.next pc s.mem = .emitGroup ⟨a,write,.noValue⟩ [] (fun _ => .atCut (i+1)) ∧
-  ∃ vs, FireGroup l s [⟨a,wait,.noValue⟩,⟨a,write,.noValue⟩] final vs
-
+-- The split encoding is a rejected test variant. Its intermediate PC is a
+-- separate scheduling point, exposed by the negative K11 comparison below.
 private def c : Cta := ⟨0,[0]⟩
 private def dummyPut : Transfer := ⟨[],[],true,none⟩
 private def programs (own : Ownership) (g : Grouping) : List Bool :=
@@ -181,7 +174,7 @@ private def k11Program (g : Grouping) : AgentProgram PC :=
 
 example (σ : DistState) :
     match (k11Program .list).next (.atCut 0) σ with
-    | .emitGroup ⟨_,.wait _ .eq 0 (.atomic .sys .release),_⟩
+    | .emitGroup ⟨_,.wait _ .eq 0 (.atomic .sys .relaxed),_⟩
         [⟨_,.bump ⟨_,.set,1,.atomic .sys .release⟩,_⟩] _ => True
     | _ => False := by trivial
 
@@ -189,7 +182,7 @@ example (σ : DistState) :
     match (k11Program .fusedEmpty).next (.atCut 1) σ with
     | .emitGroup ⟨_,.wait _ .eq 1 (.atomic .sys .acquire),_⟩ [] k =>
       match k [] with
-      | .emptyThenSet 1 _ (.bump ⟨_,.set,0,.atomic .sys .acquire⟩) => True
+      | .emptyThenSet 1 _ (.bump ⟨_,.set,0,.atomic .sys .relaxed⟩) => True
       | _ => False
     | _ => False := by trivial
 
@@ -202,10 +195,101 @@ example (w : CellWrites) (s : Machine) (p : Addr) (init : Counter → Nat) :
 -- A plain segment write between the release and acquire cuts off the old
 -- release as a source, even though it does not appear in the event trace.
 example (a b : Agent) (p : Addr) :
-    ¬ ReadsFrom [.event a (.bump ⟨.word p,.set,1,.atomic .sys .release⟩),
-        .segment b ∅ {p}, .event b (.access .load p (.atomic .sys .acquire))] 0 2 (.word p) := by
+    ¬ ReadsFrom [.issued a ⟨a,.bump ⟨.word p,.set,1,.atomic .sys .release⟩,.noValue⟩,
+        .segment b ∅ {p}, .issued b ⟨b,.access .load p (.atomic .sys .acquire),.noValue⟩] 0 2 (.word p) := by
   intro h
   have bad := h.2 1 (.segment b ∅ {p}) (by decide) (by decide) rfl .store .plain (by simp [Occurrence.access])
   cases bad
+
+-- One CTA path orders its segment and its participant's event. The old
+-- actor-only order reported a race on p even on this two-occurrence history.
+example (l : Launch P) (c : Cta) (p : Addr) :
+    DirectHB l [.segment (.cta c) ∅ {p},
+      .issued (.cta c) ⟨.thread c 0 0,.access .load p .plain,.noValue⟩] p 0 1 :=
+  ⟨_, _, rfl, rfl, by decide, Or.inl ⟨.cta c,rfl,rfl⟩⟩
+
+example (c : Cta) : FenceCovers (.thread c 0 0) (.cta c) := Or.inr ⟨c,0,0,rfl,rfl⟩
+example (c : Cta) : ¬ FenceCovers (.thread c 0 0) (.thread c 0 1) := by
+  simp [FenceCovers]
+
+example (a : Agent) (p : Addr) : CASGroup
+    ⟨a,.wait (.word p) .eq 0 (.atomic .sys .relaxed),.noValue⟩
+    [⟨a,.bump ⟨.word p,.set,1,.atomic .sys .release⟩,.noValue⟩] :=
+  Or.inr ⟨a,p,0,1,.sys,.relaxed,.release,rfl,rfl,rfl,rfl⟩
+
+example (a : Agent) (p q : Addr) (distinct : p ≠ q) : ¬ CASGroup
+    ⟨a,.wait (.word p) .eq 0 (.atomic .sys .relaxed),.noValue⟩
+    [⟨a,.bump ⟨.word q,.set,1,.atomic .sys .release⟩,.noValue⟩] := by
+  have reverse := Ne.symm distinct
+  simp_all [CASGroup]
+
+-- A discarded word-add and an allocator that actually consumes the old
+-- value are distinguished in the history even if their signed Event is equal.
+example (a : Agent) (p : Addr) : ¬ (Occurrence.issued a
+    ⟨a,.bump ⟨.word p,.add,1,.atomic .sys .relaxed⟩,.noValue⟩).discardedAddAt p := by
+  simp [Occurrence.discardedAddAt]
+
+example (a : Agent) (p : Addr) : (Occurrence.issued a
+    ⟨a,.bump ⟨.word p,.add,1,.atomic .sys .relaxed⟩,.discardAddResult⟩).discardedAddAt p :=
+  ⟨a,a,1,.atomic .sys .relaxed,rfl⟩
+
+example (l : Launch P) (s : Machine) (a : Agent) (p : Addr) (v : MemCell) :
+    Fire l s ⟨a,.access .store p .plain,.store v⟩ (l.cells.put s.mem p v) s.pending none :=
+  .store a p .plain v
+
+-- Both adapters preserve the value that will actually be stored and the
+-- update function. Dropping the payload makes these reductions fail.
+example (a : Agent) (s : DistState) (p : Addr) (v : MemCell) :
+    (AgentProgram.ofBody a).next [.inr ⟨a,.access .store p .plain,.store v⟩] s =
+      .emitGroup ⟨a,.access .store p .plain,.store v⟩ [] (fun _ => []) := rfl
+example (a : Agent) (s : DistState) (p : Addr) (f : MemCell → MemCell) :
+    (AgentProgram.ofBody a).next [.inr ⟨a,.access .update p .plain,.update f⟩] s =
+      .emitGroup ⟨a,.access .update p .plain,.update f⟩ [] (fun _ => []) := rfl
+
+-- SoundLaunch forbids a CTA program from serializing sibling threads.
+example {l : Launch P} (sound : SoundLaunch l) {s sched f} (run : Run l (l.initial s) sched f)
+    (c : Cta) (p : Addr) (path : Agent)
+    (first : (.issued path ⟨.thread c 0 0,.access .load p .plain,.noValue⟩) ∈ f.history)
+    (second : (.issued path ⟨.thread c 0 1,.access .load p .plain,.noValue⟩) ∈ f.history) : False := by
+  have h := sound.nestedPath s sched f run _ first _ second path rfl rfl
+  simp [Occurrence.owner, Agent.within] at h
+
+private theorem direct_lt {l : Launch P} {h p i j} (order : DirectHB l h p i j) : i < j := by
+  obtain ⟨_,_,_,_,lt,_⟩ := order
+  exact lt
+
+private theorem hb_lt {l : Launch P} {h p i j} (order : HB l h p i j) : i < j := by
+  induction order with
+  | single edge => exact direct_lt edge
+  | tail _ edge ih => exact lt_trans ih (direct_lt edge)
+
+private def setWord (a : Agent) (p : Addr) (n : Nat) : Occurrence :=
+  .issued a ⟨a,.bump ⟨.word p,.set,n,.atomic .sys .relaxed⟩,.noValue⟩
+
+/-- The extra C3 condition rejects the two relaxed stores even though the
+signed conflict relation in atomic_sets_differ admits them. -/
+example (l : Launch P) (a b : Agent) (p : Addr) (apart : a ≠ b) :
+    UnorderedAtomicRace l [setWord a p 1,setWord b p 2] := by
+  refine ⟨0,1,_,_,p,.store,.store,.atomic .sys .relaxed,.atomic .sys .relaxed,
+    by decide,rfl,rfl,by simp [setWord, Occurrence.access, Event.accesses, Bump.accesses, SignalOp.kind],
+    by simp [setWord, Occurrence.access, Event.accesses, Bump.accesses, SignalOp.kind],
+    Or.inl rfl,by simp [Mode.AtomicFor, Scope.covers],?_,?_⟩
+  · intro chain
+    cases chain with
+    | tail earlier last => have := hb_lt earlier; have := direct_lt last; omega
+    | single edge =>
+      obtain ⟨x,y,hx,hy,_,po | barrier | delivery | sync⟩ := edge
+      all_goals simp [setWord] at hx hy; subst x; subst y
+      · obtain ⟨who,h₁,h₂⟩ := po
+        simp_all [Occurrence.program?]
+      · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,wait,_⟩ := barrier
+        simp [setWord, Occurrence.event?] at wait
+      · obtain ⟨_,_,_,bad⟩ := delivery
+        cases bad
+      · obtain ⟨a',b',c,m,aa,bb,_,_,e⟩ := sync
+        simp [Occurrence.event?] at aa bb
+        subst a'; subst b'
+        simp [SyncEdge, Event.acquireOf?] at e
+  · simp [setWord, Occurrence.discardedAddAt]
 
 end VeriTile.Tests.JudgmentVariants

@@ -514,6 +514,8 @@ globs = [
   "tests.lean.InterpBridgeInvariant",
   "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
+  "tests.lean.dist.AtomicSetRuns",
+  "tests.lean.dist.JudgmentVariants",
   "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtProfiler",
   "tests.lean.InterpReflectBench",
