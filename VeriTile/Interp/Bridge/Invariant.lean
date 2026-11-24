@@ -12,15 +12,19 @@ inputs to float8 decoding. All offsets are covered, including symbolic ones. -/
 structure Layout where
   reads : RegionName → TileDType → Prop
   bytes : RegionName → Prop
+  /-- Possible base regions of checked pointer values, at arbitrary offsets. -/
+  pointerRegion : RegionName → Prop := fun _ => True
   finiteReg : RegName → Prop := fun _ => True
 
-def FiniteValue : (d : TileDType) → Structural.Value (WithBot ℝ) d → Prop
+/-- Floating lanes are finite. Pointer lanes retain a declared base. -/
+def FiniteValue (L : Layout) : (d : TileDType) → Structural.Value (WithBot ℝ) d → Prop
   | .real, v | .fp32, v | .fp16, v | .bf16, v | .f8e4, v | .f8e5, v => ∃ x : ℝ, v = ↑x
+  | .ptr, v => L.pointerRegion v.1
   | _, _ => True
 
 structure Invariant (L : Layout) (s : S) : Prop where
-  cells : ∀ r d, L.reads r d → ∀ o, ∃ v, s.mem r o = .mk d v ∧ FiniteValue d v
-  registers : ∀ d sh n v, L.finiteReg n → s.regs d sh n = some v → ∀ i, FiniteValue d (v i)
+  cells : ∀ r d, L.reads r d → ∀ o, ∃ v, s.mem r o = .mk d v ∧ FiniteValue L d v
+  registers : ∀ d sh n v, L.finiteReg n → s.regs d sh n = some v → ∀ i, FiniteValue L d (v i)
   undefined : ∀ r d, L.reads r d → ∀ o, UndefAgrees s d true r o
   bytes : ∀ r, L.bytes r → ∀ o, let b := (s.mem r o).read .int
     Float8E5Bits.isInt8 b = true → (Float8E5Bits.ofInt b).decodeRat.isSome = true
@@ -33,7 +37,7 @@ private theorem undef_of_eq {L : Layout} {s t : S} (h : t.undef = s.undef)
   cases d <;> simpa only [UndefAgrees, BlockState.unspecifiedValue, erase_undef, h] using hu
 
 theorem Invariant.setReg {L s} (hs : Invariant L s) (n d sh v)
-    (hv : L.finiteReg n → ∀ i, FiniteValue d (v i)) : Invariant L (s.setReg n d sh v) := by
+    (hv : L.finiteReg n → ∀ i, FiniteValue L d (v i)) : Invariant L (s.setReg n d sh v) := by
   refine ⟨hs.cells, ?_, undef_of_eq rfl hs.undefined, hs.bytes⟩
   intro d' sh' n' v' hnReg h i
   by_cases hn : n' = n
@@ -51,7 +55,7 @@ def Writable (L : Layout) (r : RegionName) (d : TileDType) : Prop :=
   (∀ d', L.reads r d' → d' = d) ∧ ¬ L.bytes r
 
 theorem Invariant.write {L s} (hs : Invariant L s) {r d} (hw : Writable L r d)
-    (o v) (hv : FiniteValue d v) : Invariant L (s.write r o (.mk d v)) := by
+    (o v) (hv : FiniteValue L d v) : Invariant L (s.write r o (.mk d v)) := by
   refine ⟨?_, hs.registers, undef_of_eq rfl hs.undefined, ?_⟩
   · intro r' d' hr o'
     by_cases h : r' = r ∧ o' = o
@@ -103,13 +107,13 @@ theorem Invariant.decode {L s} (hs : Invariant L s) {sh} (r : Region .int)
   exact hs.bytes _ hr (offsets i)
 
 private theorem undefReal {L s} (hs : Invariant L s) (r o) (hr : L.reads r .real) :
-    FiniteValue .real (s.undef .real r o) := by
+    FiniteValue L .real (s.undef .real r o) := by
   have hu := hs.undefined r .real hr o
   have fl : ¬ (∀ f : FloatDType, f.toTileDType ≠ .real) := fun h => h .real rfl
   exact ⟨(erase s).undef r o, by simpa [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue] using hu⟩
 
 private theorem finiteRead {L s d} (hs : Invariant L s) (r o) (hr : L.reads r d) :
-    FiniteValue d ((s.mem r o).read d) := by
+    FiniteValue L d ((s.mem r o).read d) := by
   obtain ⟨x, eq, hf⟩ := hs.cells r d hr o
   simpa [eq] using hf
 
@@ -117,6 +121,13 @@ private theorem finiteRead {L s d} (hs : Invariant L s) (r o) (hr : L.reads r d)
 there is no constructor for a floating negative infinity. Discrete results
 are always finite; their nested operations still have to satisfy the bridge. -/
 inductive FiniteOp (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d sh → Prop
+  | base (r : Region d) : L.pointerRegion (Region.cast r) → FiniteOp L (.ptrBase r)
+  | ptrAdd (bc : Broadcast a b sh) {ptr} (off : Op .nat b) : FiniteOp L ptr →
+      FiniteOp L (.ptrAdd bc ptr off)
+  | ptrRead {ptr : Op .ptr sh} (mask pad) : FiniteOp L ptr →
+      (∀ r, L.pointerRegion r → L.reads r .real) →
+      FiniteOp L (.load .real (.ptr ptr) (.mask mask) pad)
+  | neg {e : Op .real sh} : FiniteOp L e → FiniteOp L (.negFloat .real e)
   | nat (e : Op .nat sh) : FiniteOp L e
   | literal (c) : FiniteOp L (.const c)
   | reg (d sh n) : L.finiteReg n → FiniteOp L (.ref d sh n)
@@ -125,6 +136,10 @@ inductive FiniteOp (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d 
   | bool (e : Op .bool sh) : FiniteOp L e
   | int (e : Op .int sh) : FiniteOp L e
   | sum {e : Op .real sh} (axis keep) : FiniteOp L e → FiniteOp L (.reduceSum axis keep e)
+  | expand {e : Op d sh} (axis) : FiniteOp L e → FiniteOp L (.expandDim axis e)
+  | transpose {e : Op d [m,n]} : FiniteOp L e → FiniteOp L (.transpose (batch := []) e)
+  | dot {a : Op .real [m,k]} {b : Op .real [k,n]} (opts) :
+      FiniteOp L a → FiniteOp L b → FiniteOp L (.dot (batch := []) a b opts)
   | select (c : Op .bool sh) {a b : Op d sh} : FiniteOp L a → FiniteOp L b → FiniteOp L (.where c a b)
   | fromNat (e : Op .nat sh) : FiniteOp L (.natToReal e)
   | precision {e : Op .real sh} (p) : FiniteOp L e → FiniteOp L (.withPrecision .real p e)
@@ -144,7 +159,7 @@ inductive FiniteOp (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d 
   | maxFloat (bc : Broadcast a b sh) {x y} : FiniteOp L x → FiniteOp L y → FiniteOp L (.maximumFloat .real bc x y)
   | exp {e : Op .real sh} : FiniteOp L e → FiniteOp L (.exp e)
   | log {e : Op .real sh} : FiniteOp L e → FiniteOp L (.log e)
-  | libdeviceExp {e : Op .real sh} : FiniteOp L e → FiniteOp L (.libdeviceExp e)
+  | libdeviceExp (e : Op .real sh) : FiniteOp L (.libdeviceExp e)
   | libdeviceLog {e : Op .real sh} : FiniteOp L e → FiniteOp L (.libdeviceLog e)
   | sigmoid {e : Op .real sh} : FiniteOp L e → FiniteOp L (.sigmoid e)
   | sqrt {e : Op .real sh} : FiniteOp L e → FiniteOp L (.sqrt e)
@@ -153,16 +168,38 @@ inductive FiniteOp (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d 
   | decode (r : Region .int) (off : Op .nat sh) (pad) : L.bytes (Region.cast r) →
       FiniteOp L (.decodeFloat8E5 .real (.load .int (.region r off) .none pad))
 
-private theorem finiteSup {ι} (xs : Finset ι) (hn : xs.Nonempty) (f : ι → WithBot ℝ)
-    (hf : ∀ j, FiniteValue .real (f j)) : FiniteValue .real (xs.sup' hn f) := by
+private theorem finiteSup {L ι} (xs : Finset ι) (hn : xs.Nonempty) (f : ι → WithBot ℝ)
+    (hf : ∀ j, FiniteValue L .real (f j)) : FiniteValue L .real (xs.sup' hn f) := by
   obtain ⟨k, _, eq⟩ := Finset.exists_mem_eq_sup' hn f
   rw [eq]
   exact hf k
 
 theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : FiniteOp L e)
-    (p v) (h : SE p e s = some v) (i) : FiniteValue d (v i) := by
+    (p v) (h : SE p e s = some v) (i) : FiniteValue L d (v i) := by
   induction he generalizing p with
   | nat | bool | int => trivial
+  | base r hr => rw [Structural.evalOp_unfold] at h; cases h; exact hr
+  | ptrAdd bc off _ ih =>
+    rw [Structural.evalOp_unfold] at h
+    simp only [bind, Option.bind_eq_some_iff] at h
+    obtain ⟨a, ha, b, _, ht⟩ := h
+    cases ht
+    exact ih p a ha (bc.leftIndex i)
+  | ptrRead mask pad _ hr ih =>
+    rw [Structural.evalOp_unfold] at h
+    simp only [bind, Option.bind_eq_some_iff] at h
+    obtain ⟨addr, ha, active, _, _, hf, ht⟩ := h
+    cases hf
+    cases ht
+    have rd := hr _ (ih p addr ha i)
+    dsimp only
+    split <;> first | exact finiteRead hs _ _ rd | exact undefReal hs _ _ rd
+  | neg _ ih =>
+    rw [Structural.evalOp_unfold] at h
+    obtain ⟨a, ha, ht⟩ := Option.bind_eq_some_iff.mp h
+    cases ht
+    obtain ⟨x,hx⟩ := ih p a ha i
+    simp [FiniteValue, realAlgebra, Structural.ofFloat, Structural.toFloat, hx]
   | literal => rw [Structural.evalOp_unfold] at h; cases h; exact ⟨_, rfl⟩
   | reg _ _ _ hn => rw [Structural.evalOp_unfold] at h; exact hs.registers _ _ _ _ hn h _
   | broadcast _ _ ih | «full» _ _ ih =>
@@ -179,12 +216,28 @@ theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : Fi
     subst a
     cases keep <;> simp [realAlgebra, FiniteValue, ofTile, toTile, toCarrier, ofCarrier,
       Tile.reduceSumDrop, Tile.reduceSumKeep, ← WithBot.coe_sum]
+  | expand axis _ ih | transpose _ ih =>
+    rw [Structural.evalOp_unfold] at h
+    obtain ⟨a, ha, ht⟩ := Option.bind_eq_some_iff.mp h
+    cases ht
+    exact ih p a ha _
+  | dot opts _ _ iha ihb =>
+    rw [Structural.evalOp_unfold] at h
+    simp only [bind, Option.bind_eq_some_iff] at h
+    obtain ⟨a, ha, b, hb, ht⟩ := h
+    simp only [realAlgebra, ite_self, Option.some.injEq] at ht
+    subst v
+    choose x hx using iha p a ha
+    choose y hy using ihb p b hb
+    rcases i with ⟨row, col, _⟩
+    refine ⟨∑ j, x (row, j, PUnit.unit) * y (j, col, PUnit.unit), ?_⟩
+    simp [Tile.dot, ofTile, toTile, ofCarrier, toCarrier, hx, hy, WithBot.coe_sum]
   | select c _ _ iha ihb =>
     rw [Structural.evalOp_unfold] at h
     simp only [bind, Option.bind_eq_some_iff] at h
     obtain ⟨vc, _, a, ha, b, hb, ht⟩ := h
     cases ht
-    change FiniteValue _ (if vc i then a i else b i)
+    change FiniteValue L _ (if vc i then a i else b i)
     split <;> first | exact iha p a ha i | exact ihb p b hb i
   | fromNat e =>
     rw [Structural.evalOp_unfold] at h
@@ -229,7 +282,15 @@ theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : Fi
         intro k
         exact ih p a ha _
     · contradiction
-  | exp _ ih | log _ ih | libdeviceExp _ ih | libdeviceLog _ ih | sigmoid _ ih | sqrt _ ih =>
+  | libdeviceExp e =>
+    rw [Structural.evalOp_unfold] at h
+    obtain ⟨a, _, ht⟩ := Option.bind_eq_some_iff.mp h
+    cases ht
+    change ∃ x : ℝ, WithBot.realExp (a i) = ↑x
+    cases a i with
+    | none => exact ⟨0, rfl⟩
+    | some x => exact ⟨Real.exp x, rfl⟩
+  | exp _ ih | log _ ih | libdeviceLog _ ih | sigmoid _ ih | sqrt _ ih =>
     rw [Structural.evalOp_unfold] at h
     obtain ⟨a, ha, ht⟩ := Option.bind_eq_some_iff.mp h
     cases ht
@@ -273,14 +334,13 @@ theorem FiniteOp.finite {L s} (hs : Invariant L s) {d sh} {e : Op d sh} (he : Fi
 inductive FiniteExpr (L : Layout) : {d : TileDType} → {sh : TileShape} → ComputeExpr d sh → Prop
   | alg {e : Op d sh} : FiniteOp L e → FiniteExpr L (.alg e)
   | typed (cd) {e : Op cd.eraseDType sh} : FiniteOp L e → FiniteExpr L (.compute (.alg cd e))
-  | fp32 {r : Region .real} {off : Op .nat sh} {mask pad} :
-      FiniteOp L (.load .real (.region r off) mask pad) →
-      FiniteExpr L (.compute (.load .fp32 (.region r off) mask pad))
-  | load (r : Region .real) (off : Op .nat sh) (pad) : L.reads (Region.cast r) .real →
-      FiniteExpr L (.compute (.load .fp32 (.region r off) .none pad))
+  | fill (cd) {e : Op cd.eraseDType []} (sh) : FiniteOp L e →
+      FiniteExpr L (.compute (.full sh (.alg cd e)))
+  | fp32 {mem : MemAccess .real sh} {mask pad} :
+      FiniteOp L (.load .real mem mask pad) → FiniteExpr L (.compute (.load .fp32 mem mask pad))
 
 theorem FiniteExpr.finite {L s} (hs : Invariant L s) {d sh} {e : ComputeExpr d sh} (he : FiniteExpr L e)
-    (v) (h : Structural.evalExpr realAlgebra e s = some v) (i) : FiniteValue d (v i) := by
+    (v) (h : Structural.evalExpr realAlgebra e s = some v) (i) : FiniteValue L d (v i) := by
   cases he with
   | alg he => exact he.finite hs none v h i
   | fp32 he =>
@@ -289,11 +349,11 @@ theorem FiniteExpr.finite {L s} (hs : Invariant L s) {d sh} {e : ComputeExpr d s
     cases ht
     exact he.finite hs (some .fp32) a ha i
   | typed cd he => exact he.finite hs (some cd) v h i
-  | load r off pad hr =>
+  | fill cd sh he =>
     simp only [Structural.evalExpr, Structural.evalComputeOp, bind, Option.bind_eq_some_iff] at h
-    obtain ⟨a,ha,ht⟩ := h
+    obtain ⟨a, ha, ht⟩ := h
     cases ht
-    exact (FiniteOp.load r off pad hr).finite hs (some .fp32) a ha i
+    exact he.finite hs (some cd) a ha PUnit.unit
 
 /-- The operand of a certified decode reads a byte from a declared input. -/
 inductive ByteInput (L : Layout) : {sh : TileShape} → Op .int sh → Prop
@@ -302,6 +362,7 @@ inductive ByteInput (L : Layout) : {sh : TileShape} → Op .int sh → Prop
 
 def ReadSite (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d sh → Prop
   | _, _, .load d (.region r _) _ _ => L.reads (Region.cast r) d
+  | _, _, .load d (.ptr e) _ _ => FiniteOp L e ∧ ∀ r, L.pointerRegion r → L.reads r d
   | _, _, .load .. => False
   | _, _, _ => True
 
@@ -324,7 +385,15 @@ private theorem StaticSite.sound {L s} (hs : Invariant L s) {d sh} (e : Op d sh)
     case load =>
       cases ‹MemAccess _ _› with
       | region r off => exact hs.loadOk read off _ _
-      | ptr | blockPtr => exact False.elim read
+      | ptr e =>
+        obtain ⟨hp, hr⟩ := read
+        intro p addr active ha _ i
+        obtain ⟨v, hv, eq⟩ := Option.map_eq_some_iff.mp ha
+        subst addr
+        have rd := hr _ (hp.finite hs p v hv i)
+        exact ⟨fun _ _ => hs.readable rd _, fun _ h _ => by contradiction,
+          fun _ _ _ => hs.undefined _ _ rd _⟩
+      | blockPtr => exact False.elim read
 
 /-- A syntax tree all of whose nodes meet the layout's site rules. Quantifying
 over consequences lets a client use the existing heterogeneous traversal
@@ -361,6 +430,10 @@ inductive Code (L : Layout) : List ComputeStmt → Prop
       Writable L (Region.cast r) d → FiniteExpr L e →
       (CheckedExpr L e ∧ CheckedNodes L off ∧ CheckedMask L mask) →
       Code L tail → Code L (.store d sh (.region r off) e mask :: tail)
+  | storePtr {d sh e mask tail} {ptr : Op .ptr sh} :
+      FiniteOp L ptr → (∀ r, L.pointerRegion r → Writable L r d) → FiniteExpr L e →
+      (CheckedExpr L e ∧ CheckedNodes L ptr ∧ CheckedMask L mask) →
+      Code L tail → Code L (.store d sh (.ptr ptr) e mask :: tail)
   | atomic {d sh e mask tail} (nd : NumericDType d) (r : Region d) (off : Op .nat sh) :
       L.reads (Region.cast r) d → Writable L (Region.cast r) d → FiniteExpr L e →
       (CheckedExpr L e ∧ CheckedNodes L off ∧ CheckedMask L mask) → Code L tail →
@@ -400,42 +473,55 @@ private theorem goodCons {L st body} (htail : Good L body)
   obtain ⟨u, hu, ht⟩ := Option.bind_eq_some_iff.mp ht
   exact (htail u (hkeep u hu)).2 t ht
 
-private theorem store_preserves {L d sh} {r : Region d} {off : Op .nat sh} {mask}
-    (hw : Writable L (Region.cast r) d) {s t : S} (hs : Invariant L s) {v}
-    (hv : ∀ i, FiniteValue d (v i))
-    (h : Structural.store realAlgebra (.region r off) mask v s = some t) : Invariant L t := by
-  have fold (offsets : TileIndex sh → Nat) (active : TileIndex sh → Bool) (lanes : List (TileIndex sh)) :
-      ∀ u, Invariant L u → Invariant L (lanes.foldl (fun a i => if active i then
-        a.write (Region.cast r) (offsets i) (.mk d (v i)) else a) u) := by
-    induction lanes with
-    | nil => exact fun _ hu => hu
-    | cons i rest ih =>
-      intro u hu
-      apply ih
-      dsimp only
-      split <;> first | exact hu.write hw _ _ (hv i) | exact hu
-  cases ho : SE none off s <;> simp [Structural.store, ho] at h
-  rename_i offsets
-  cases mask with
-  | none =>
-    simp at h
-    subst t
-    simpa using fold offsets (fun _ => true) _ s hs
-  | mask m | maskOther m _ =>
-    cases hm : SE none m s <;> simp [hm] at h
-    subst t
-    exact fold offsets _ _ s hs
+private theorem storeFold {L d sh} (addr : TileIndex sh → RegionName × Nat)
+    (hw : ∀ i, Writable L (addr i).1 d) (v : Structural.Values (WithBot ℝ) d sh) (hv : ∀ i, FiniteValue L d (v i))
+    (active : TileIndex sh → Bool) (lanes : List (TileIndex sh)) :
+    ∀ u, Invariant L u → Invariant L (lanes.foldl (fun a i => if active i then
+      a.write (addr i).1 (addr i).2 (.mk d (v i)) else a) u) := by
+  induction lanes with
+  | nil => exact fun _ hu => hu
+  | cons i _ ih =>
+    intro u hu
+    apply ih
+    dsimp only
+    split <;> first | exact hu.write (hw i) _ _ (hv i) | exact hu
 
-private theorem atomicFinite {d} (nd : NumericDType d) (combine)
+private theorem store_preserves {L d sh} {mem : MemAccess d sh} {mask} {s t : S} (hs : Invariant L s)
+    (hw : match mem with
+      | .region r _ => Writable L (Region.cast r) d
+      | .ptr ptr => FiniteOp L ptr ∧ (∀ r, L.pointerRegion r → Writable L r d)
+      | .blockPtr .. => False)
+    {v} (hv : ∀ i, FiniteValue L d (v i))
+    (h : Structural.store realAlgebra mem mask v s = some t) : Invariant L t := by
+  cases mem with
+  | blockPtr => exact False.elim hw
+  | region r off | ptr off =>
+    cases ho : SE none off s <;> simp [Structural.store, ho] at h
+    rename_i offsets
+    first
+    | have fold := storeFold (fun i => (Region.cast r, offsets i)) (fun _ => hw) v hv
+    | have fold := storeFold offsets (fun i => hw.2 _ (hw.1.finite hs none offsets ho i)) v hv
+    all_goals
+      cases mask with
+      | none =>
+        simp at h
+        subst t
+        simpa using fold (fun _ => true) _ s hs
+      | mask m | maskOther m _ =>
+        cases hm : SE none m s <;> simp [hm] at h
+        subst t
+        exact fold _ _ s hs
+
+private theorem atomicFinite {L d} (nd : NumericDType d) (combine)
     (hc : Structural.atomicAddition realAlgebra nd = some combine) {a b}
-    (ha : FiniteValue d a) (hb : FiniteValue d b) : FiniteValue d (combine a b) := by
+    (ha : FiniteValue L d a) (hb : FiniteValue L d b) : FiniteValue L d (combine a b) := by
   cases nd <;> simp only [Structural.atomicAddition, realAlgebra, Option.some.injEq] at hc <;> subst combine
   all_goals first | trivial | (obtain ⟨x, rfl⟩ := ha; obtain ⟨y, rfl⟩ := hb; exact ⟨_, rfl⟩)
 
 private theorem atomicFold {L d sh} {r : RegionName} (hr : L.reads r d) (hw : Writable L r d)
     (nd : NumericDType d) (combine) (hc : Structural.atomicAddition realAlgebra nd = some combine)
     (offsets : TileIndex sh → Nat) (active : TileIndex sh → Bool) (v : Structural.Values (WithBot ℝ) d sh)
-    (hv : ∀ i, FiniteValue d (v i)) (lanes : List (TileIndex sh)) (s : S) (hs : Invariant L s) :
+    (hv : ∀ i, FiniteValue L d (v i)) (lanes : List (TileIndex sh)) (s : S) (hs : Invariant L s) :
     let step := atomicLane d combine (fun i => (r, offsets i, true)) active v
     AlongFold step (fun t i => active i = true → true = true →
       CellFinite d (t.mem r (offsets i)) ∧ CellTagged d (t.mem r (offsets i))) lanes s ∧
@@ -453,7 +539,7 @@ private theorem atomicFold {L d sh} {r : RegionName} (hr : L.reads r d) (hw : Wr
 
 private theorem atomicReadsRegion {L s d sh} (hs : Invariant L s) (nd : NumericDType d)
     (r : Region d) (off : Op .nat sh) (mask) (hr : L.reads (Region.cast r) d)
-    (hw : Writable L (Region.cast r) d) {v} (hv : ∀ i, FiniteValue d (v i)) :
+    (hw : Writable L (Region.cast r) d) {v} (hv : ∀ i, FiniteValue L d (v i)) :
     AtomicReads nd (.region r off) mask v s := by
   intro combine addr active hc ha _
   cases ho : SE none off s <;> simp [laneAddrs, ho] at ha
@@ -462,7 +548,7 @@ private theorem atomicReadsRegion {L s d sh} (hs : Invariant L s) (nd : NumericD
 
 private theorem atomicPreserves {L s t d sh} (hs : Invariant L s) (nd : NumericDType d)
     (r : Region d) (off : Op .nat sh) (mask) (hr : L.reads (Region.cast r) d)
-    (hw : Writable L (Region.cast r) d) {v} (hv : ∀ i, FiniteValue d (v i))
+    (hw : Writable L (Region.cast r) d) {v} (hv : ∀ i, FiniteValue L d (v i))
     (h : Structural.atomicAdd realAlgebra nd (.region r off) mask v s = some t) : Invariant L t := by
   cases hc : Structural.atomicAddition realAlgebra nd <;> simp [Structural.atomicAdd, hc] at h
   rename_i combine
@@ -517,7 +603,17 @@ private theorem Code.good {L body} (hc : Code L body) : Good L body := by
     intro t ht
     rw [Structural.step] at ht
     obtain ⟨v,hv,ht⟩ := Option.bind_eq_some_iff.mp ht
-    exact store_preserves hw hs (hf.finite hs v hv) ht
+    exact store_preserves hs hw (hf.finite hs v hv) ht
+  | storePtr hp hw hf site _ ih =>
+    apply goodCons ih
+    intro s hs
+    obtain ⟨he,ho,hm⟩ := site
+    refine ⟨by rw [StmtPre]; exact ⟨he.sound hs,ho.sound hs,hm.sound hs⟩, ?_⟩
+    intro t ht
+    rw [Structural.step] at ht
+    obtain ⟨v,hv,ht⟩ := Option.bind_eq_some_iff.mp ht
+    apply store_preserves hs _ (hf.finite hs v hv) ht
+    exact ⟨hp,hw⟩
   | atomic nd r off hr hw hf site _ tail =>
     apply goodCons tail
     intro s hs
@@ -565,7 +661,7 @@ theorem Code.stmtsPre {L body s} (hc : Code L body) (hs : Invariant L s) : Stmts
 theorem Code.supported {L body} (hc : Code L body) : SupportedStmts body := by
   induction hc with
   | nil => trivial
-  | assign hf _ _ ih | store _ _ _ hf _ _ ih | atomic _ _ _ _ _ hf _ _ ih =>
+  | assign hf _ _ ih | store _ _ _ hf _ _ ih | storePtr _ _ hf _ _ ih | atomic _ _ _ _ _ hf _ _ ih =>
     refine ⟨?_, ih⟩
     cases hf <;> simp [SupportedStmt, SupportedExpr, SupportedCompute]
   | assignUntracked _ supported _ _ iht => exact ⟨supported,iht⟩
