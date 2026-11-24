@@ -1,3 +1,6 @@
+-- Source: DEShawResearch/random123@726a093cd9a73f3ec3c8d7a70ff10ed8efec8d13 tests/kat_vectors:24-29
+-- Licence: BSD-3-Clause
+-- Changes: transcribed to Lean; turn the six published Philox4x32 known-answer vectors into decidable equalities
 import VeriTile.Triton.Random.DecoderCompatibility
 import VeriTile.Triton.Random.DropoutFormula
 

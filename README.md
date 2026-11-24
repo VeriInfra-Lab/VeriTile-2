@@ -1,3 +1,6 @@
+<!-- Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/tutorials/01-vector-add.py:29-53 -->
+<!-- Licence: MIT -->
+<!-- Changes: transcribed to Lean; display the unmasked example with the project call signature -->
 # VeriTile
 
 📖 **Docs site:** [veriinfra-lab.github.io/VeriTile/](https://veriinfra-lab.github.io/VeriTile/) (bench cookbook, status, architecture). Run locally: `./site/scripts/dev.sh`.
