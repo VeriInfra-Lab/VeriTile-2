@@ -1537,7 +1537,7 @@ item 11 answers an older open item.
 2. **Whole-block barriers.** The three `T.sync_threads()` calls in the DeepEP port stay under A5. A10 keeps its current scope.
 3. **Warp barriers.** `T.sync_warp` remains under A5 at both TileScale commits until a target at `71e7145` depends on it.
 4. **Grid-barrier coverage.** A9 covers the wrapper only. When writing the K-M launch contract, trace the direct calls at `moe_utils.py:258,291`. Extend A9 only if a K-M target reaches one.
-5. **Cooperative launch.** Launch as a cooperative grid is a precondition of the K-M launch contract. A kernel theorem can use that contract. [Four decisions on #467](https://github.com/VeriInfra-Lab/VeriTile-2/issues/467)
+5. **Cooperative launch.** “Launched as a cooperative grid” becomes a launch precondition of the K-M launch contract, not a hypothesis repeated per theorem. [Four decisions on #467](https://github.com/VeriInfra-Lab/VeriTile-2/issues/467)
 
 ## 10. Still open
 
@@ -1553,7 +1553,7 @@ report and one as a point to revisit.
    report upstream at the end of the project; nobody has been contacted.
 2. **Tutorial 07 and the host signals (decided 2026-11-23).** `common_ops.set_signal` has the
    weakest semantics, so it races with the `dl.wait` of the kernel (I6).
-   The original is recorded as unprovable; the repaired variant must also provide matching host and device signal operations. No new guarantee is given to the host helper. In addition, the calls in tutorials 06
+   The original is recorded as unprovable. The repaired variant must also provide matching host and device signal operations, including the host-side `set_signal` of LIT-b08. [Extension accepted on 2026-11-24](https://github.com/VeriInfra-Lab/VeriTile-2/issues/489#issuecomment-7121319895) No new guarantee is given to the host helper. In addition, the calls in tutorials 06
    and 07 do not match the definitions at the pin (E-TD17); this was read, not
    run.
 3. **Contract versus implementation.** The frozen manual now directly
