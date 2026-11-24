@@ -106,6 +106,13 @@ namespace VeriTile.Tests.InterpReflectBench
 open VeriTile Triton Interp
 open VeriTile.Triton.FP
 
+private def partialDepth (S : Nat) (tau : ℝ) : ComputeKernel :=
+  HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel "res_mix" "branch_out" "h_post" "out" S 1 1 0 tau
+
+/-- error: reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsDepth.Kernels:122: match S, 1, 1, 0 with -/
+#guard_msgs in
+reflect_kernel partialDepth
+
 -- Binary64 arithmetic for these small fixtures. An unused mandatory operation
 -- produces NaN so an unexpected dependency fails the output checks.
 private def testCarrier : CAlgebra Float where
