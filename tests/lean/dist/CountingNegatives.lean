@@ -126,4 +126,59 @@ theorem intervening_set_no_hb (l : Launch P) (a b reader : Agent) (ab : a ≠ b)
       have bad := only (signal b flag .set .release) (by simp [h])
       simp [signal, Occurrence.onlyAddsTo, Event.onlyAddsTo] at bad
 
+private def signalAdd (a : Agent) (p : Addr) (order : MemOrder) : Occurrence :=
+  .issued a ⟨a, .bump ⟨.word p, .add, 1, .atomic .sys order⟩, .discardAddResult⟩
+
+private def observeCmp (a : Agent) (p : Addr) (cmp : Cmp) : Occurrence :=
+  .issued a ⟨a, .wait (.word p) cmp 2 (.atomic .sys .acquire), .noValue⟩
+
+/-- Only a ge wait counts: after two release adds, a non-ge acquire wait has
+no HB edge from the earlier add. -/
+theorem nonGe_no_hb (l : Launch P) (a b reader : Agent) (ab : a ≠ b) (ar : a ≠ reader)
+    (flag p : Addr) (cmp : Cmp) (notGe : cmp ≠ .ge) :
+    ¬ HB l [signalAdd a flag .release, signalAdd b flag .release, observeCmp reader flag cmp] p 0 2 := by
+  have no01 : ¬ HB l [signalAdd a flag .release, signalAdd b flag .release, observeCmp reader flag cmp] p 0 1 := by
+    intro path
+    cases path with
+    | tail prev last => have := hb_lt prev; have := direct_lt last; omega
+    | single edge =>
+      obtain ⟨x,y,hx,hy,_,po | round | delivery | sync | count⟩ := edge
+      all_goals simp at hx hy; subst x; subst y
+      · simp [signalAdd, Occurrence.program?, Ne.symm ab] at po
+      · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,dst,_⟩ := round
+        simp [signalAdd, Occurrence.event?] at dst
+      · obtain ⟨_,_,_,bad⟩ := delivery; cases bad
+      · obtain ⟨x,y,_,_,hx,hy,_,_,s⟩ := sync
+        simp [signalAdd, Occurrence.event?] at hx hy
+        subst x; subst y
+        simp [SyncEdge, Event.releaseOf?, Event.acquireOf?, Mode.Pairs, MemOrder.acquires] at s
+      · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,dst,_⟩ := count
+        simp [signalAdd, Occurrence.event?] at dst
+  intro path
+  cases path with
+  | tail prev last =>
+    rename_i k
+    have := hb_lt prev; have := direct_lt last
+    have : k = 1 := by omega
+    subst this; exact no01 prev
+  | single edge =>
+    obtain ⟨x,y,hx,hy,_,po | round | delivery | sync | count⟩ := edge
+    all_goals simp at hx hy; subst x; subst y
+    · simp [signalAdd, observeCmp, Occurrence.program?] at po
+      exact ar po.symm
+    · obtain ⟨c,_,_,_,_,_,_,kind,_,_,_,_,_,_,_,src,_⟩ := round
+      cases c <;> simp_all [signalAdd, Occurrence.event?]
+    · obtain ⟨_,_,_,bad⟩ := delivery; cases bad
+    · obtain ⟨x,y,c,m,hx,hy,rel,rf,_⟩ := sync
+      simp [signalAdd, observeCmp, Occurrence.event?] at hx hy
+      subst x; subst y
+      simp [Event.releaseOf?] at rel
+      obtain ⟨rfl,rfl⟩ := rel
+      have bad := rf.2 1 (signalAdd b flag .release) (by decide) (by decide) rfl
+        .update (.atomic .sys .release) (by simp [signalAdd, Occurrence.access, Event.accesses, Bump.accesses, SignalOp.kind])
+      cases bad
+    · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,dst,_⟩ := count
+      simp [observeCmp, Occurrence.event?] at dst
+      obtain ⟨_,_,hcmp,_⟩ := dst
+      exact notGe hcmp
 end VeriTile.Tests.CountingNegatives
