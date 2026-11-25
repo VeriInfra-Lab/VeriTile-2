@@ -62,19 +62,44 @@ class ForkTargetGates(unittest.TestCase):
             log, allowlist = Path(temp) / 'command.log', Path(temp) / 'allowlist.txt'
             log.write_text(ran.stdout + ran.stderr +
                            f'warning: {relative}:1:8: declaration uses `sorry`\n'
-                           'warning: VeriTile/Staging/Probe.lean:1:8: declaration uses `sorry`\n')
+                           'warning: VeriTile/Staging/Probe.lean:1:8: declaration uses `sorry`\n'
+                           # A dependency's own tests/lean is not this repository's.
+                           'warning: .lake/packages/dep/tests/lean/Dep.lean:1:8: declaration uses `sorry`\n')
             allowlist.write_text(f'{relative}\texample\tprobe\n')
             rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
             self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
             self.assertIn(f'SORRY\t{relative}\tveritileTestSorryProbe\t({relative}:1:8)', rejected.stderr)
             self.assertNotIn('\texample\t', rejected.stderr)
             self.assertNotIn('Staging', rejected.stderr)
+            self.assertNotIn('Dep.lean', rejected.stderr)
             allowlist.write_text(f'{relative}\texample\tprobe\n{relative}\tveritileTestSorryProbe\tprobe\n')
             accepted = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
             self.assertEqual(accepted.returncode, 0, accepted.stderr)
             allowlist.write_text(f'{relative}\tveritileTestSorryProbe\tprobe\n')
             rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
             self.assertIn(f'SORRY\t{relative}\texample\t({relative}:2:0)', rejected.stderr)
+
+    def test_sources_that_hide_sorry_warnings_fail(self):
+        hiding = {'lakefile.toml': '[[lean_lib]]\nname = "FinalRegressions"\nleanOptions = { warn.sorry = false }\n',
+                  'library/lakefile.toml': 'moreLeanArgs = ["-Dwarn.sorry=false"]\n',
+                  'tests/lean/Quiet.lean': 'set_option warn.sorry false in\ntheorem t : 1 = 2 := sorry\n',
+                  'tests/lean/Guarded.lean': '/-- warning: declaration uses `sorry` -/\n#guard_msgs in\n'
+                                             'example : 1 = 2 := sorry\n'}
+        for relative, text in hiding.items():
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                (root / 'tests/lean').mkdir(parents=True)
+                (root / 'tests/lean/Clean.lean').write_text('theorem t : True := trivial\n')
+                (root / 'lakefile.toml').write_text('name = "veritile"\n')
+                clean = run('check_test_sorry.py', '--sources', '--root', str(root))
+                self.assertEqual(clean.returncode, 0, clean.stderr)
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_text(text)
+                rejected = run('check_test_sorry.py', '--sources', '--root', str(root))
+                self.assertNotEqual(rejected.returncode, 0, relative)
+                self.assertIn(f'{relative}:', rejected.stderr)
+        accepted = run('check_test_sorry.py', '--sources')  # this checkout
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
 
     def test_frozen_statement_rejects_an_importing_module(self):
         owner = 'VeriTile.Staging.FrozenOwnerProbe'
