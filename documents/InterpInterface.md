@@ -248,3 +248,24 @@ The GPU protocol, section 9, pins neither SymPy nor mpmath.
 [Precision decision on #126](https://github.com/VeriInfra-Lab/VeriTile-2/issues/126#issuecomment-7121320412),
 [Python Decimal power](https://docs.python.org/3/library/decimal.html#decimal.Context.power)
 (accessed 2026-11-24).
+
+## NumPy runner
+
+`Carrier.exportPython` emits a module whose `run` entry point evaluates the typed
+kernel through the NumPy carrier. The runner rounds floating literals and
+arithmetic results to the operation's declared dtype. For FP8 it uses
+non-saturating round-to-nearest-even overflow.
+
+| Format | Largest finite magnitude | First overflowing positive integer | Overflow result |
+| --- | ---: | ---: | --- |
+| E4M3FN (`f8e4`) | 448 | 465 (464 rounds to 448) | NaN |
+| E5M2 (`f8e5`) | 57,344 | 61,440 (61,439 rounds to 57,344) | Infinity with the input sign |
+
+The bounds apply symmetrically to negative values. The public runner tests
+exercise both signs, rational literals and addition of representable operands.
+Lean's bit-level `FPValue` reference covers FP32 and BF16. FP8 overflow agreement
+with the project's GPU remains unverified. On the project's H800, the pinned
+Triton implementation selects finite saturation for default FP32-to-FP8 casts,
+including the numeric conversion performed by a store. The CPU runner retains
+its current behavior pending a GPU comparison.
+[Pinned conversion evidence](https://github.com/VeriInfra-Lab/VeriTile-2/issues/579#issuecomment-7169215868).
