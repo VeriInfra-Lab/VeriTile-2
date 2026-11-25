@@ -531,6 +531,9 @@ globs = [
   "tests.lean.InterpFloatCensus",
   "tests.lean.dist.TritonDistSyntax",
   "tests.lean.dist.StateViews",
+  "tests.lean.dist.SourceHelpers",
+  "tests.lean.dist.ProcedureHelpers",
+  "tests.lean.dist.ElementHelper",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own

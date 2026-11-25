@@ -52,8 +52,8 @@ def check_links(root, documents):
 # Mixed directories select only the files actually derived from outside code.
 DERIVED_SOURCES = {
     'tests/dist_litmus': ('**/*.py',),
-    'VeriTile/Dist/Frontend/TritonExt': ('Swizzle.lean',),
-    'tests/lean/dist': ('SwizzleSource.lean',),
+    'VeriTile/Dist/Frontend/TritonExt': ('Swizzle.lean', 'SourceHelpers.lean', 'ProcedureHelpers.lean'),
+    'tests/lean/dist': ('SwizzleSource.lean', 'SourceHelpers.lean', 'ProcedureHelpers.lean', 'ElementHelper.lean'),
     'bench/examples/VectorAdd': ('VectorAdd.py', 'Kernels.lean'),
     'experiments/interp_gpu/smoke': ('kernels.py',),
     'experiments/floating_point/value_validation/fp4_unscaled/reference': ('original.py', 'original_jit.py'),
