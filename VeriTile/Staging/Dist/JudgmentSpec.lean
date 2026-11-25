@@ -8,7 +8,10 @@ Signed on 2026-11-25 (user decisions of 2026-11-24 and 2026-11-25, recorded on
 `SyncEdge.hb_of_readsFrom` and the add-only counting edge `CountingEdge.hb`,
 with the definitions under them. C3, `implementsAll_of_canonical`,
 `DetRaceFree`, `UnorderedAtomicRace` and `Occurrence.discardedAddAt` stay
-unsigned and are signed with #54. Everything else in this file is a candidate
+unsigned and are signed with #54. The 2026-11-25 fixes of #47 (`CountMonotone`
+restricted to reachable configurations, `Fire.wait` and `Fire.bump` returning
+no count of a non-word counter) change `threshold_stays_enabled` and the
+definitions under `step_comm`; they await re-signing. Everything else in this file is a candidate
 statement to review, not a certificate. The five source/control comparisons are in
 tests/lean/dist/JudgmentVariants.lean. -/
 import VeriTile.Staging.Dist.SegmentSpec
@@ -101,9 +104,11 @@ private def bumpMem (w : CellWrites) (s : DistState) (b : Bump) (old : Nat) : Di
   | .word p => w.put s p (.of .nat (b.op.apply old b.amount))
   | _ => s
 
-/-- N5. Loads and updates return their old cell, waits the observed natural
-counter, adding bumps the old count. Stores, fences, set bumps and initiations
-return none. A completion takes no continuation. An access with missing or
+/-- N5. Loads and updates return their old cell. A wait and an adding bump
+return the old count only for a memory word; on a phase, rendezvous or
+delivery counter they return none, as `__syncthreads`, `barrier_all` and
+`quiet` return no count (#47, 2026-11-25). Stores, fences, set bumps and
+initiations return none. A completion takes no continuation. An access with missing or
 wrong data cannot execute. Actor choice and payload are separate from Event. -/
 inductive Fire {P : Type} (l : Launch P) (s : Machine) :
     Emission → DistState → List Outstanding → Option MemCell → Prop where
@@ -115,10 +120,11 @@ inductive Fire {P : Type} (l : Launch P) (s : Machine) :
   | fence (a m) : Fire l s ⟨a,.fence m,.noValue⟩ s.mem s.pending none
   | wait (a c cmp n m old) (read : s.count? l.initialCount c = some old) (enabled : cmp.holds old n) :
       Fire l s ⟨a,.wait c cmp n m,.noValue⟩ s.mem s.pending
-        (some (.of .nat old))
+        (match c with | .word _ => some (.of .nat old) | _ => none)
   | bump (a b old) (read : b.op = .add → s.count? l.initialCount b.counter = some old) :
       Fire l s ⟨a,.bump b,.noValue⟩ (bumpMem l.cells s.mem b old) s.pending
-        (if b.op = .add then some (.of .nat old) else none)
+        (if b.op = .add then (match b.counter with | .word _ => some (.of .nat old) | _ => none)
+          else none)
   | discardAdd (a p n m old) (read : s.count? l.initialCount (.word p) = some old) :
       Fire l s ⟨a,.bump ⟨.word p,.add,n,m⟩,.discardAddResult⟩
         (l.cells.put s.mem p (.of .nat (old + n))) s.pending none
@@ -538,19 +544,23 @@ theorem normalize_of_decreasing_swap {l : Launch P} {s : DistState} {canonical :
       exact (Relation.ReflTransGen.single swap).trans
         (ih (rank next) (by omega) next g reaches complete rfl)
 
-/-- UNSIGNED. Signed with #54. C3 candidate, S4.7–8/#53/#54. DetRaceFree uses HB, whose synchronization
-edges already check scope through Mode.Pairs. S5.2/#57 owns the source-level
-synchronization obligations. S4.7 owes normalization.
+/-- UNSIGNED. Signed with #54. C3 candidate, S4.7–8/#53/#54. No scope-consistency
+premise (#47, 2026-11-25): DetRaceFree uses HB, whose synchronization edges
+already check scope through Mode.Pairs, and `Fire` returns no count of a
+non-word counter, so an unrecorded observation cannot reach memory.
+S5.2/#57 owns the source-level synchronization obligations, outside this
+theorem. S4.7 owes normalization.
 C1 will also need a simulation for suffixes, including reads-from and delivery
 ticket renaming; equality of the raw event histories would be false. -/
-theorem detRaceFree_scopeConsistent_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
+theorem detRaceFree_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
     {reference final : Config P} (sound : SoundLaunch l) (safe : DetRaceFree l s)
     (refRun : Run l (l.initial s) canonical reference)
     (refComplete : Complete reference) (actual : Run l (l.initial s) sched final)
     (complete : Complete final) : final.mem = reference.mem := sorry
 
 /-- UNSIGNED. Signed with #54. For a memory specification, checking the canonical final
-memory and establishing race/fault freedom suffices on the deterministic-race-free fragment. -/
+memory and establishing race/fault freedom suffices on the deterministic-race-free
+fragment, through `detRaceFree_complete_eq_canonical`. -/
 theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : Schedule}
     {reference : Config P} (sound : SoundLaunch l) (safe : Safe l s) (det : DetRaceFree l s)
     (refRun : Run l (l.initial s) canonical reference)
@@ -558,7 +568,7 @@ theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : S
     ImplementsAll l s (fun final => spec final.mem) := by
   refine ⟨safe, fun sched final actual complete => ?_⟩
   change spec final.mem
-  rw [detRaceFree_scopeConsistent_complete_eq_canonical sound det refRun done_ actual complete]
+  rw [detRaceFree_complete_eq_canonical sound det refRun done_ actual complete]
   exact ok
 
 open VeriTile.Triton.Concurrent (EventProgramIO Backend)
