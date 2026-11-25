@@ -102,8 +102,7 @@ def signedKernel (split : RegionName) (N : Nat) : ComputeKernel :=
     picked = get_element_at(scan, tl.program_id(0))
   }
 
--- A complete expected kernel written without sum, cumsum or local helper calls.
--- Each group explicitly reads a single signed lane and wraps its addition.
+-- This golden term mirrors the lowering. The executable guards below check its results.
 private def expected (split : RegionName) (N : Nat) : ComputeKernel :=
   with_triton_call numericProfile call_args [] in triton {
     x = tl.load(split + tl.arange(0, N))
@@ -173,6 +172,75 @@ example (split : RegionName) (N : Nat) :
       x = tl.load(split + tl.arange(0, N))
       y = tl.sum(x, axis=0)
     } : ComputeKernel) := rfl
+
+private def mixed : CallSignature where
+  pointers := [("split", .i32)]
+  floatingPointers := [("fp", .fp32)]
+  constexpr := ["N"]
+
+private def tupleFloat (split fp : RegionName) (N : Nat) : ComputeKernel :=
+  with_triton_call mixed call_args [] in triton {
+    x = tl.load(split + tl.arange(0, N))
+    f = tl.load(fp + tl.arange(0, N))
+    x, g = (f, f)
+    y = tl.sum(x)
+  }
+
+-- Spelling out the default axis and keep_dims uses the ordinary typed reduction.
+-- Keeping the initial load in both terms makes the complete kernels comparable.
+private def explicitFloat (split fp : RegionName) (N : Nat) : ComputeKernel :=
+  with_triton_call mixed call_args [] in triton {
+    x = tl.load(split + tl.arange(0, N))
+    f = tl.load(fp + tl.arange(0, N))
+    x, g = (f, f)
+    y = tl.sum(x, axis=0, keep_dims=False)
+  }
+
+example (split fp : RegionName) (N : Nat) : tupleFloat split fp N = explicitFloat split fp N := rfl
+
+reflect_kernel tupleFloat
+
+private def fraction (kernel : QKernel) (reg : String := "y") : Option Float := do
+  let state : State Float := {
+    init := fun region i => if region == "fp" then .mk .fp32 (if i == 0 then 0.5 else 1.25)
+      else .mk .int (-19)
+    pids := fun _ => 1
+    numPids := fun _ => 2
+    undef := fun d _ _ => VeriTile.Triton.FP.Structural.defaultValue d }
+  let s ← interp Binary64.algebra kernel state
+  return (← s.getReg .fp32 [] reg) ()
+
+#guard fraction (tupleFloat.mirror "split" "fp" 2) == some 1.75
+
+private def flowFloat (split fp : RegionName) (N : Nat) : ComputeKernel :=
+  with_triton_call mixed call_args [] in triton {
+    x = tl.load(split + tl.arange(0, N))
+    f = tl.load(fp + tl.arange(0, N))
+    if tl.program_id(0) > 0:
+        g, x = tl.broadcast(f, f)
+    branch = tl.sum(x)
+    x = tl.load(split + tl.arange(0, N))
+    for i in range(0, N):
+        g, x = tl.broadcast(f, f)
+        looped = tl.sum(x)
+  }
+
+reflect_kernel flowFloat
+#guard fraction (flowFloat.mirror "split" "fp" 2) "branch" == some 1.75
+#guard fraction (flowFloat.mirror "split" "fp" 2) "looped" == some 1.75
+
+-- A loop-carried rebind can also change the dtype seen at the next iteration.
+-- This join retains the ordinary frontend diagnostic.
+/-- error: tl.cast: signed integer casts are not modeled yet -/
+#guard_msgs in
+example (split fp : RegionName) (N : Nat) : ComputeKernel :=
+  with_triton_call mixed call_args [] in triton {
+    x = tl.load(split + tl.arange(0, N))
+    f = tl.load(fp + tl.arange(0, N))
+    for i in range(0, N):
+        y = tl.sum(x)
+        x, g = tl.broadcast(f, f)
+  }
 
 private def wide : CallSignature where
   pointers := [("split", .i64)]

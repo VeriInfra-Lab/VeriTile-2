@@ -121,13 +121,21 @@ private def reduction? (e : Operand) : Option (Bool × Operand) :=
 
 abbrev Helper := Syntax → TermElabM (Option (Operand × Operand))
 
-private partial def writes (s : Syntax) : List Name :=
-  if let `(tritonStmt| $a:ident, $b:ident $[, $rest:ident]* = $_:ident($_:statementJitArgument,*)) := s then
-    (#[a,b] ++ rest).toList.map (·.getId.eraseMacroScopes)
-  else
-    let assigned := if s.getNumArgs ≥ 2 && s[0]!.isIdent &&
-      ["=",":=","+=","-=","*=","/="].contains s[1]!.getAtomVal then [s[0]!.getId.eraseMacroScopes] else []
-    assigned ++ s.getArgs.toList.flatMap writes
+/-- Names a statement may overwrite. All tuple and annotated targets precede
+the assignment token. Unknown forms conservatively invalidate every name they mention. -/
+private partial def writes (s : Syntax) : List Name := Id.run do
+  let args := s.getArgs.toList
+  if s.getKind == choiceKind || s.getKind == nullKind then
+    return args.flatMap writes
+  if let first :: rest := args then
+    if first.isIdent then
+      let assignment := fun (s : Syntax) => ["=", ":=", "+=", "-=", "*=", "/="].contains s.getAtomVal
+      if let some i := args.findIdx? assignment then return (args.take i).flatMap names
+    if ["if", "while", "for"].contains first.getAtomVal then
+      if let some i := rest.findIdx? (·.getAtomVal == "{") then
+        let binder := if first.getAtomVal == "for" then (rest.take 1).flatMap names else []
+        return binder ++ (rest.drop (i + 1)).flatMap writes
+  return names s
 
 /-- A zero followed by a conditional helper write has an int32 join type.
 Preserve the zero path when later operations read the joined register as signed. -/
