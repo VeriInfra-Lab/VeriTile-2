@@ -234,6 +234,8 @@ def project (launch : Launch) (code : List Instruction) : Except String (List Ac
         throw "signal wait: expected int64 or uint64 storage"
       let word ← p.range 8
       let rhs ← indexValue (← value target)
+      unless -(2^63) ≤ rhs && rhs < 2^64 do
+        throw "signal wait: target outside int64 and uint64 ranges"
       accesses := accesses.push (.wait ⟨word.first, p.allocation.unit == .i64, cmp, BitVec.ofInt 64 rhs⟩)
     | .transfer put d s n rank =>
       let dst ← ptr d
