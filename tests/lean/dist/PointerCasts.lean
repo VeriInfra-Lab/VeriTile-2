@@ -109,7 +109,7 @@ example : (with_pointer_views (args .i64 .i64) in triton {
     q = tl.cast(p, pi_u64_t, _semantic=_semantic)
   }) = .ok [] := rfl
 
--- The cast forms an address; only the signal wait can reinterpret the stored bits.
+-- Ordinary dereference still requires the physical dtype after a cast.
 example : (with_pointer_views (args .i64 .i64) in triton {
     q = tl.cast(p, pi_u64_t, _semantic=_semantic)
     x = tl.load(q)
@@ -201,6 +201,97 @@ example : observeOne (waitEQ (signalArgs .u64 .u64 0)) (.of .nat (2^64)) =
 #guard_msgs in
 example := with_pointer_views (signalArgs .i64 .i64 7) in triton {
   libshmem_device.signal_wait_until(symm_flag, libshmem_device.NVSHMEM_CMP_BAD, signal_value)
+}
+
+-- T03:85-94 and 139-147 put the sender's segment into that segment at the peer.
+private def putArgs (rank : Nat) (declared stored : SourceDType) (value : Int) : Launch := {
+  pointers := [
+    ⟨"symm_ptr", ⟨.global rank, "bytes", 4096, 16, .i8, Bool.true⟩, .i8⟩,
+    ⟨"symm_flag", ⟨.global rank, "flag", 8192, 16, stored, Bool.true⟩, declared⟩]
+  integers := [("segment", 1), ("bytes_per_rank", 8), ("peer", 0), ("signal_value", value)] }
+
+private def setBlock (args : Launch) := with_pointer_views args in triton {
+  libshmem_device.putmem_signal_block(
+    tl.cast(symm_ptr, tl.pointer_type(tl.int8)) + segment * bytes_per_rank,
+    tl.cast(symm_ptr, tl.pointer_type(tl.int8)) + segment * bytes_per_rank,
+    bytes_per_rank, symm_flag + segment, signal_value, libshmem_device.NVSHMEM_SIGNAL_SET, peer,)
+}
+private def setNbi (args : Launch) := with_pointer_views args in triton {
+  libshmem_device.putmem_signal_nbi_block(symm_ptr + 8, symm_ptr + 8, 8, symm_flag + 1,
+    signal_value, libshmem_device.NVSHMEM_SIGNAL_SET, peer)
+}
+private def addBlock (args : Launch) := with_pointer_views args in triton {
+  libshmem_device.putmem_signal_block(symm_ptr + 8, symm_ptr + 8, 8, symm_flag + 1,
+    signal_value, libshmem_device.NVSHMEM_SIGNAL_ADD, peer)
+}
+private def addNbi (args : Launch) := with_pointer_views args in triton {
+  libshmem_device.putmem_signal_nbi_block(symm_ptr + 8, symm_ptr + 8, 8, symm_flag + 1,
+    signal_value, libshmem_device.NVSHMEM_SIGNAL_ADD, peer)
+}
+
+private def publishAndWait (entry : Launch → Except String (List Access)) (nbi : Bool)
+    (declared stored : SourceDType) (operand target : Int) (old : MemCell) :
+    Except String (Option (BitVec 64) × Option Int × Option Nat) := do
+  let [.putSignal mode dst src write] ← entry (putArgs 1 declared stored operand)
+    | throw "expected a signalling put"
+  let address := (cells "flag" 0 1 1).first
+  unless mode == nbi && dst == cells "bytes" 0 8 8 && src == cells "bytes" 1 8 8 &&
+      write.address == address do throw "wrong mode, copy, or remote signal address"
+  let before := { signalState (.of .bool Bool.false) with
+    numRanks := 2
+    cell := fun p => if p == address then old else .of .bool Bool.true }
+  let after ← write.commit before
+  for untouched in [(cells "flag" 0 0 1).first, (cells "flag" 1 1 1).first, dst.first] do
+    unless (after.cell untouched).readAs .bool == some Bool.true do throw "changed another cell"
+  let [.wait wait] ← (with_pointer_views (putArgs 0 declared stored target) in triton {
+    libshmem_device.signal_wait_until(symm_flag + segment, libshmem_device.NVSHMEM_CMP_EQ, signal_value,)
+  }) | throw "expected peer wait"
+  return (← wait.observe after.cell, (after.cell address).readAs .int, (after.cell address).readAs .nat)
+
+-- Both call forms preserve the physical cell tag. SET ignores old contents.
+example : publishAndWait setBlock Bool.false .i64 .i64 (2^64-1) (-1) (.of .int 2) =
+    .ok (some 0xffffffffffffffff, some (-1), none) := rfl
+example : publishAndWait setNbi Bool.true .u64 .i64 (2^63) (2^63) (.of .int 0) =
+    .ok (some 0x8000000000000000, some (-(2^63)), none) := rfl
+example : publishAndWait setBlock Bool.false .u64 .u64 (-1) (-1) (.of .nat 1) =
+    .ok (some 0xffffffffffffffff, none, some (2^64-1)) := rfl
+example : publishAndWait setNbi Bool.true .u64 .u64 9 8 (.of .nat 8) =
+    .ok (none, none, some 9) := rfl
+
+-- An ADD crosses the unsigned wrap boundary on either physical representation.
+example : publishAndWait addBlock Bool.false .i64 .i64 1 0 (.of .int (-1)) =
+    .ok (some 0, some 0, none) := rfl
+example : publishAndWait addNbi Bool.true .u64 .i64 2 1 (.of .int (-1)) =
+    .ok (some 1, some 1, none) := rfl
+example : publishAndWait addBlock Bool.false .u64 .u64 2 1 (.of .nat (2^64-1)) =
+    .ok (some 1, none, some 1) := rfl
+example : publishAndWait addNbi Bool.true .u64 .u64 1 0 (.of .nat (2^64-1)) =
+    .ok (some 0, none, some 0) := rfl
+
+example : setBlock (putArgs 1 .u64 .i32 9) = .error "signal write: expected int64 or uint64 storage" := rfl
+example : addNbi (putArgs 1 .i32 .i32 9) = .error "signal write: expected an int64 or uint64 pointer" := rfl
+example : publishAndWait addBlock Bool.false .u64 .i64 1 0 (.of .nat 0) =
+    .error "signal write: expected an int64 cell" := rfl
+example : publishAndWait addNbi Bool.true .u64 .u64 1 0 (.of .nat (2^64)) =
+    .error "signal write: stored value outside uint64 range" := rfl
+example : setBlock (putArgs 1 .i64 .i64 (2^64)) =
+    .error "signal write: value outside int64 and uint64 ranges" := rfl
+
+-- The remote signal is checked independently of the valid payload range.
+private def alterFlag (f : Allocation → Allocation) : Launch :=
+  let launch := putArgs 1 .u64 .u64 1
+  { launch with pointers := launch.pointers.map fun a =>
+      if a.name == "symm_flag" then { a with allocation := f a.allocation } else a }
+
+example : setBlock (alterFlag fun a => { a with symmetric := Bool.false }) =
+    .error "pointer view: remote endpoint requires symmetric global storage" := rfl
+example : addNbi (alterFlag fun a => { a with extentBytes := 8 }) =
+    .error "pointer view: access outside allocation" := rfl
+
+/-- error: signal write: unsupported signal operation -/
+#guard_msgs in
+example := with_pointer_views (putArgs 1 .i64 .i64 1) in triton {
+  libshmem_device.putmem_signal_block(symm_ptr, symm_ptr, 8, symm_flag, 1, libshmem_device.OTHER, peer)
 }
 
 -- An access must match the allocation dtype even after erasing the pointee,
