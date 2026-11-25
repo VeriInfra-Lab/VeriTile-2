@@ -36,7 +36,15 @@ satisfies `SyncEdge` for the requested cell. -/
 theorem scopeConsistent_sound (reach : ShmemReach) (reliances : List ScopeReliance)
     (h : scopeConsistent reach reliances = true) :
     ∀ r ∈ reliances, SyncEdge reach r.cell r.writer r.reader := by
-  sorry
+  intro r hr
+  unfold scopeConsistent at h
+  have admitted := List.all_eq_true.mp h r hr
+  split at admitted
+  · rename_i c m c' m' release acquire
+    simp only [decide_eq_true_eq] at admitted
+    obtain ⟨rfl, paired⟩ := admitted
+    exact ⟨c, m, m', release, acquire, paired⟩
+  · contradiction
 
 /-- Signed (#56). Owner: S5.2. A GPU-scope acquire cannot pair with a release
 issued from another rank. -/
