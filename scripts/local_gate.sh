@@ -70,6 +70,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.ProcedureHelpers"
              "lake build tests.lean.dist.ElementHelper"
              "lake build tests.lean.dist.PointerCasts"
+             "lake env lean tests/lean/dist/P2PTransferViews.lean"
              "lake build tests.lean.dist.UnguardedShared"
              "lake build tests.lean.dist.SegmentFootprint")
 fi
