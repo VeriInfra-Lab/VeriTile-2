@@ -31,7 +31,7 @@ To locate the growth, a separate run used the same B1 and C1 kernels and inputs,
 
 The array interpreter now computes the row-major offset from the output coordinates and splits it into input coordinates using the strides. Each lookup takes a fixed number of arithmetic operations per axis, independent of the number of elements at a given rank. A Lean equality covers every valid index and lets the compiler use this calculation in place of the enumerated lookup. [Implementation and proof](../VeriTile/Interp/Reshape.lean)
 
-Median Lean execution and result readback, in milliseconds, using the unchanged recipe below. The baseline is the [#601 run](https://github.com/VeriInfra-Lab/VeriTile-2/issues/587#issuecomment-7169862190).
+The table gives median Lean execution and result readback in milliseconds. To reproduce the comparison, run both drivers below on the [baseline revision](https://github.com/VeriInfra-Lab/VeriTile-2/commit/89d5996c1aec4dffaac9506fbe9f2c315ad6ea59) and the [optimized revision](https://github.com/VeriInfra-Lab/VeriTile-2/commit/2a38bd90b46162f7fd4997da98d93dd52564dff2). The before column uses the [#601 measurements](https://github.com/VeriInfra-Lab/VeriTile-2/issues/587#issuecomment-7169862190).
 
 | N | B1 before | B1 after | C1 before | C1 after |
 | ---: | ---: | ---: | ---: | ---: |
