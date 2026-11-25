@@ -60,6 +60,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.InterpFPValue"
              "python3 -B -m unittest scripts.test_fp_value_carrier"
              "lake build tests.lean.dist.SwizzleSource"
+             "lake build tests.lean.dist.JudgmentVariants"
              "lake build tests.lean.dist.TritonExtConstexpr"
              "lake build tests.lean.dist.TritonExtProfiler"
              "lake build tests.lean.dist.TritonDistSyntax"
