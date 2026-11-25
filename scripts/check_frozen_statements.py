@@ -6,8 +6,8 @@ Two tables under documents/dist/ record two fingerprints.
 FrozenStatements.tsv has one row per signed declaration. Its fingerprint is
 the SHA-256 of the elaborated statement (the declaration's type: every
 constant, universe level, implicit argument and coercion), up to the names of
-bound variables. It is the same in staging and after the proof lands, as long
-as the declaration keeps its name.
+bound variables. This digest survives a move from staging to the main target
+under the same declaration name. The module column must name the new owner.
 
 FrozenDefinitions.tsv has one row per project constant that a signed statement
 depends on: every constant the statement mentions, and every constant those
@@ -93,7 +93,10 @@ elab "#frozenStatements " "[" names:str,* "]" : command => do
   let mut all : NameSet := {}
   for name in names.getElems do
     let some info := env.find? name.getString.toName | continue
-    liftIO <| IO.println s!"S\t{name.getString}\t{frozenSer info.type}"
+    let owner := match env.getModuleIdxFor? info.name with
+      | some idx => env.header.moduleNames[idx.toNat]!
+      | none => env.mainModule
+    liftIO <| IO.println s!"S\t{name.getString}\t{owner}\t{frozenSer info.type}"
     let closure := frozenClosure env info.type.getUsedConstants.toList {}
     for constant in closure.toList do
       liftIO <| IO.println s!"M\t{name.getString}\t{constant}"
@@ -139,7 +142,8 @@ def elaborate(rows):
     for line in checked.stdout.splitlines():
         tag, name, text = line.split('\t', 2)
         if tag == 'S':
-            statements[name] = hashlib.sha256(text.encode()).hexdigest()
+            owner, serialized = text.split('\t', 1)
+            statements[name] = owner, hashlib.sha256(serialized.encode()).hexdigest()
         elif tag == 'D':
             definitions[name] = hashlib.sha256(text.encode()).hexdigest()
         else:
@@ -168,12 +172,16 @@ def main():
     for index, (name, module, digest, signed) in rows.items():
         if name not in statements:
             errors.append(f'{name}: not declared in {module}')
+            continue
+        owner, fingerprint = statements[name]
+        if owner != module:
+            errors.append(f'{args.tsv.name}:{index + 1}: {name}: recorded module {module}, declared in {owner}')
         elif digest == '-' and args.fill:
-            lines[index] = '\t'.join([name, module, statements[name], signed])
+            lines[index] = '\t'.join([name, module, fingerprint, signed])
         elif digest == '-':
             errors.append(f'{name}: no fingerprint recorded; run with --fill at sign-off')
-        elif digest != statements[name]:
-            errors.append(f'{name}: statement changed since sign-off (recorded {digest}, now {statements[name]})')
+        elif digest != fingerprint:
+            errors.append(f'{name}: statement changed since sign-off (recorded {digest}, now {fingerprint})')
     if args.accept_definitions:
         recorded = dict(definitions)
     elif args.fill:
