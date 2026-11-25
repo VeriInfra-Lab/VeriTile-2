@@ -3,21 +3,29 @@
 
 check_frozen_statements.py compares the two tables only with the build of the
 same branch, so a branch that edits a table, or runs --fill or
---accept-definitions, still passes it. This check reads both tables at
-`git merge-base HEAD <main>` and in the working tree. It fails when a row
-recorded at the merge base was deleted or its fingerprint changed. A statement
-whose fingerprint is unchanged may change only its module: the move to a main
-target that documents/ContributorGuide.md prescribes. It is printed as
-`[moved]`; check_frozen_statements.py checks that the new module declares it.
-New rows pass here; check_frozen_statements.py accepts them only with `-` or
-with the computed fingerprint.
+--accept-definitions, still passes it. This check reads both tables at their
+fixed paths documents/dist/FrozenStatements.tsv and FrozenDefinitions.tsv,
+once at `git merge-base HEAD <main>` and once in the working tree, and fails
+when a row recorded at the merge base was deleted or its fingerprint or its
+`signed` text changed. It also fails when a table, or a directory on its path,
+is a symbolic link.
 
-<main> is --main, else the first of fork/main, origin/main and main that exists.
+A statement whose fingerprint and `signed` text are unchanged may change only
+its module to one outside VeriTile.Staging: the move to a main target that
+documents/ContributorGuide.md prescribes. It is printed as `[moved]`;
+check_frozen_statements.py checks that the new module declares it. New rows
+pass here; check_frozen_statements.py accepts them only with `-` or with the
+computed fingerprint.
+
+<main> is --main, else fork/main, else origin/main; if none exists, or HEAD
+has no merge base with it, the check fails.
 
 Override, for the coordinator's sign-off and re-sign batches only:
 VERITILE_FROZEN_OVERRIDE=name,name,... allows exactly the named rows (first
 column, either table) to change or disappear, and every named row must differ.
-scripts/local_gate.sh never sets it; each overridden row is printed.
+Whenever the variable is set, the check says so and prints each overridden
+row. scripts/local_gate.sh unsets it, so the gate always checks without it;
+the coordinator runs the override check separately.
 """
 import argparse
 import os
@@ -25,30 +33,32 @@ from pathlib import Path
 import subprocess
 import sys
 
-from check_frozen_statements import DEFINITION_HEADER, DEFINITIONS, STATEMENT_HEADER, STATEMENTS, read
+from check_frozen_statements import DEFINITION_HEADER, ROOT, STATEMENT_HEADER, read
 
 OVERRIDE = 'VERITILE_FROZEN_OVERRIDE'
+STATEMENTS = 'documents/dist/FrozenStatements.tsv'
+DEFINITIONS = 'documents/dist/FrozenDefinitions.tsv'
 
 
 def git(repo, *args):
     return subprocess.run(['git', '-C', str(repo), *args], text=True, capture_output=True)
 
 
-def rows(path, header, text=None):
-    return {row[0]: row for row in read(path, header, text)[1].values()}
+def rows(relative, header, text):
+    return {row[0]: row for row in read(Path(relative), header, text)[1].values()}
+
+
+def staging(module):
+    return module == 'VeriTile.Staging' or module.startswith('VeriTile.Staging.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--main', help='main branch ref (default: fork/main, origin/main or main)')
-    parser.add_argument('--tsv', type=Path, default=STATEMENTS)
-    parser.add_argument('--definitions', type=Path, default=DEFINITIONS)
+    parser.add_argument('--main', help='main branch ref (default: fork/main, else origin/main)')
+    parser.add_argument('--repo', type=Path, default=ROOT, help='repository to check (default: this one)')
     args = parser.parse_args()
-    top = git(args.tsv.resolve().parent, 'rev-parse', '--show-toplevel')
-    if top.returncode:
-        raise ValueError(f'{args.tsv} is not in a Git repository')
-    repo = Path(top.stdout.strip()).resolve()
-    candidates = [args.main] if args.main else ['fork/main', 'origin/main', 'main']
+    repo = args.repo
+    candidates = [args.main] if args.main else ['fork/main', 'origin/main']
     ref = next((r for r in candidates if not git(repo, 'rev-parse', '--verify', '--quiet', r + '^{commit}').returncode),
                None)
     if ref is None:
@@ -57,26 +67,33 @@ def main():
     if merged.returncode:
         raise ValueError(f'no merge base of HEAD and {ref}')
     base = merged.stdout.strip()
+    if OVERRIDE in os.environ:
+        print(f'[override] {OVERRIDE} is set: {os.environ[OVERRIDE]!r}')
     allowed = {name.strip() for name in os.environ.get(OVERRIDE, '').split(',') if name.strip()}
     changed, errors, overridden, moved, counts = set(), [], [], [], []
-    for path, header, key in ((args.tsv, STATEMENT_HEADER, slice(1, 3)), (args.definitions, DEFINITION_HEADER, slice(1, 2))):
-        relative = path.resolve().relative_to(repo).as_posix()
-        # A table absent at the merge base has no recorded rows.
+    for relative, header, key in ((STATEMENTS, STATEMENT_HEADER, slice(1, 4)), (DEFINITIONS, DEFINITION_HEADER, slice(1, 2))):
+        parts = relative.split('/')
+        links = [p for p in ('/'.join(parts[:i]) for i in range(1, len(parts) + 1)) if (repo / p).is_symlink()]
+        if links:
+            raise ValueError(f'{links[0]} is a symbolic link; the frozen tables must be regular files at {relative}')
+        # A table absent at the merge base has no recorded rows; one absent now has none left.
         shown = git(repo, 'show', f'{base}:{relative}') \
             if not git(repo, 'cat-file', '-e', f'{base}:{relative}').returncode else None
         if shown and shown.returncode:
             raise ValueError(f'cannot read {relative} at {base}')
-        old = rows(path, header, shown.stdout) if shown else {}
-        new = rows(path, header)
-        counts.append(f'{len(old)} {path.name} row(s), {len(set(new) - set(old))} new')
+        old = rows(relative, header, shown.stdout if shown else '')
+        path = repo / relative
+        new = rows(relative, header, path.read_text() if path.exists() else '')
+        table = parts[-1]
+        counts.append(f'{len(old)} {table} row(s), {len(set(new) - set(old))} new')
         for name, row in old.items():
-            if name in new and new[name][key] == row[key]:
+            now = new.get(name)
+            if now and now[key] == row[key]:
                 continue
-            if name in new and key.stop == 3 and new[name][2] == row[2]:
-                moved.append(f'{name}: {row[1]} → {new[name][1]}')
+            if now and key.stop == 4 and now[2:4] == row[2:4] and not staging(now[1]):
+                moved.append(f'{name}: {row[1]} → {now[1]}')
                 continue
-            now = ' '.join(new[name][key]) if name in new else 'deleted'
-            line = f'{path.name}: {name}: recorded {" ".join(row[key])}, now {now}'
+            line = f'{table}: {name}: recorded {" ".join(row[key])}, now ' + (' '.join(now[key]) if now else 'deleted')
             changed.add(name)
             (overridden if name in allowed else errors).append(line)
     for name in sorted(allowed - changed):

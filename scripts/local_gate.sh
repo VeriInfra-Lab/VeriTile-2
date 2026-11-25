@@ -11,6 +11,9 @@
 # Prints one line per command with its exit code; exits 0 only if all are 0.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# The gate checks the frozen tables without any override; a sign-off runs
+# check_frozen_base.py with it separately (VeriTile/Staging/README.md).
+unset VERITILE_FROZEN_OVERRIDE
 
 lean=1 status=0
 for argument in "$@"; do
@@ -28,7 +31,6 @@ commands=("python3 scripts/check_docs.py"
           "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
           "python3 -B -m unittest scripts.test_fork_replay"
-          # Never with VERITILE_FROZEN_OVERRIDE here: only a coordinator sign-off sets it.
           "python3 scripts/check_frozen_base.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")

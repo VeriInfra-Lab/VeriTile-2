@@ -154,75 +154,126 @@ class ForkTargetGates(unittest.TestCase):
 
 
 class FrozenTablesAgainstBase(unittest.TestCase):
-    """check_frozen_base.py on a throwaway repository whose `main` holds the recorded tables."""
+    """check_frozen_base.py on a throwaway repository.
+
+    `main` holds the recorded tables and then moves on (it adds P.later), and the
+    branch `pr` commits its edits, so HEAD, the merge base and the tip of main differ.
+    """
     STATEMENTS = ('statement\tmodule\tsha256\tsigned\n'
-                  f'P.kept\tM.kept\t{"a" * 64}\tbase\nP.other\tM.other\t{"b" * 64}\tbase\n')
+                  f'P.kept\tVeriTile.Dist.Kept\t{"a" * 64}\tbase\n'
+                  f'P.other\tVeriTile.Dist.Other\t{"b" * 64}\tbase\n'
+                  f'P.staged\tVeriTile.Staging.Dist.Spec\t{"f" * 64}\tbase\n')
     DEFINITIONS = f'definition\tsha256\nP.Def\t{"d" * 64}\n'
+    TABLES = Path('documents/dist')
+
+    def git(self, *args):
+        subprocess.run(['git', '-c', 'user.name=gate', '-c', 'user.email=gate@example.invalid',
+                        '-c', 'commit.gpgsign=false', *args], cwd=self.repo, check=True, capture_output=True)
 
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.repo = Path(temp.name)
-        self.tsv, self.definitions = self.repo / 'Statements.tsv', self.repo / 'Definitions.tsv'
-        self.tsv.write_text(self.STATEMENTS)
-        self.definitions.write_text(self.DEFINITIONS)
-        for command in (['init', '-q', '-b', 'main'], ['add', '.'],
-                        ['-c', 'user.name=gate', '-c', 'user.email=gate@example.invalid',
-                         '-c', 'commit.gpgsign=false', 'commit', '-qm', 'base']):
-            subprocess.run(['git', *command], cwd=self.repo, check=True, capture_output=True)
+        self.tsv = self.repo / self.TABLES / 'FrozenStatements.tsv'
+        self.definitions = self.repo / self.TABLES / 'FrozenDefinitions.tsv'
+        self.tsv.parent.mkdir(parents=True)
+        self.git('init', '-q', '-b', 'main')
+        self.commit(self.STATEMENTS, self.DEFINITIONS)
+        self.git('branch', 'pr')
+        self.commit(self.STATEMENTS + f'P.later\tVeriTile.Dist.Later\t{"9" * 64}\tlater\n')
+        self.git('checkout', '-q', 'pr')
 
-    def check(self, override=None):
+    def commit(self, statements=None, definitions=None):
+        if statements is not None:
+            self.tsv.write_text(statements)
+        if definitions is not None:
+            self.definitions.write_text(definitions)
+        self.git('add', '-A')
+        self.git('commit', '-qm', 'tables')
+
+    def check(self, override=None, main='main'):
         env = {k: v for k, v in os.environ.items() if k != 'VERITILE_FROZEN_OVERRIDE'}
         if override is not None:
             env['VERITILE_FROZEN_OVERRIDE'] = override
-        return run('check_frozen_base.py', '--main', 'main', '--tsv', str(self.tsv),
-                   '--definitions', str(self.definitions), env=env)
+        return run('check_frozen_base.py', '--repo', str(self.repo), *(['--main', main] if main else []), env=env)
+
+    def rejects(self, message, **check):
+        rejected = self.check(**check)
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn(message, rejected.stderr)
 
     def test_deleted_row_fails(self):
-        self.tsv.write_text(self.STATEMENTS.replace(self.STATEMENTS.splitlines()[2] + '\n', ''))
-        rejected = self.check()
-        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-        self.assertIn('Statements.tsv: P.other: recorded M.other ' + 'b' * 64 + ', now deleted', rejected.stderr)
+        self.commit(self.STATEMENTS.replace(self.STATEMENTS.splitlines()[2] + '\n', ''))
+        self.rejects(f'FrozenStatements.tsv: P.other: recorded VeriTile.Dist.Other {"b" * 64} base, now deleted')
 
     def test_changed_fingerprint_fails(self):
-        self.tsv.write_text(self.STATEMENTS.replace('a' * 64, 'c' * 64))
-        rejected = self.check()
-        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-        self.assertIn(f'P.kept: recorded M.kept {"a" * 64}, now M.kept {"c" * 64}', rejected.stderr)
+        self.commit(self.STATEMENTS.replace('a' * 64, 'c' * 64))
+        self.rejects(f'P.kept: recorded VeriTile.Dist.Kept {"a" * 64} base, now VeriTile.Dist.Kept {"c" * 64} base')
         # What --accept-definitions would do to a recorded definition.
-        self.tsv.write_text(self.STATEMENTS)
-        self.definitions.write_text(self.DEFINITIONS.replace('d' * 64, 'e' * 64))
-        rejected = self.check()
-        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-        self.assertIn(f'Definitions.tsv: P.Def: recorded {"d" * 64}, now {"e" * 64}', rejected.stderr)
+        self.commit(self.STATEMENTS, self.DEFINITIONS.replace('d' * 64, 'e' * 64))
+        self.rejects(f'FrozenDefinitions.tsv: P.Def: recorded {"d" * 64}, now {"e" * 64}')
 
-    def test_module_moves_only_with_the_same_fingerprint(self):
+    def test_changed_signed_text_fails(self):
+        self.commit(self.STATEMENTS.replace(f'{"a" * 64}\tbase', f'{"a" * 64}\tapproved by the user'))
+        self.rejects(f'P.kept: recorded VeriTile.Dist.Kept {"a" * 64} base, '
+                     f'now VeriTile.Dist.Kept {"a" * 64} approved by the user')
+
+    def test_module_moves_only_out_of_staging_with_the_same_fingerprint(self):
         # The move to a main target that the contributor guide prescribes.
-        self.tsv.write_text(self.STATEMENTS.replace('M.kept', 'M.moved'))
+        self.commit(self.STATEMENTS.replace('VeriTile.Staging.Dist.Spec', 'VeriTile.Dist.Spec'))
         accepted = self.check()
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
-        self.assertIn('[moved] P.kept: M.kept → M.moved', accepted.stdout)
-        self.tsv.write_text(self.STATEMENTS.replace(f'M.kept\t{"a" * 64}', f'M.moved\t{"c" * 64}'))
-        rejected = self.check()
-        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-        self.assertIn(f'P.kept: recorded M.kept {"a" * 64}, now M.moved {"c" * 64}', rejected.stderr)
+        self.assertIn('[moved] P.staged: VeriTile.Staging.Dist.Spec → VeriTile.Dist.Spec', accepted.stdout)
+        self.commit(self.STATEMENTS.replace(f'VeriTile.Staging.Dist.Spec\t{"f" * 64}', f'VeriTile.Dist.Spec\t{"c" * 64}'))
+        self.rejects(f'P.staged: recorded VeriTile.Staging.Dist.Spec {"f" * 64} base, now VeriTile.Dist.Spec {"c" * 64}')
+        # Back into staging, where `sorry` is allowed, is not a move.
+        self.commit(self.STATEMENTS.replace('VeriTile.Dist.Kept', 'VeriTile.Staging.Dist.Kept'))
+        self.rejects(f'P.kept: recorded VeriTile.Dist.Kept {"a" * 64} base, now VeriTile.Staging.Dist.Kept')
 
     def test_added_unfilled_row_passes(self):
-        self.tsv.write_text(self.STATEMENTS + 'P.new\tM.new\t-\tnew\n')
+        self.commit(self.STATEMENTS + 'P.new\tVeriTile.Dist.New\t-\tnew\n')
         accepted = self.check()
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
-        self.assertIn('(2 Statements.tsv row(s), 1 new; 1 Definitions.tsv row(s), 0 new)', accepted.stdout)
+        self.assertIn('(3 FrozenStatements.tsv row(s), 1 new; 1 FrozenDefinitions.tsv row(s), 0 new)', accepted.stdout)
 
     def test_override_allows_exactly_the_named_rows(self):
-        self.tsv.write_text(self.STATEMENTS.replace('a' * 64, 'c' * 64))
-        self.definitions.write_text(self.DEFINITIONS.replace('d' * 64, 'e' * 64))
+        self.commit(self.STATEMENTS.replace('a' * 64, 'c' * 64), self.DEFINITIONS.replace('d' * 64, 'e' * 64))
         self.assertNotEqual(self.check().returncode, 0)
         self.assertNotEqual(self.check('P.kept').returncode, 0)  # P.Def is still not named
         self.assertNotEqual(self.check('P.kept,P.Def,P.other').returncode, 0)  # P.other did not change
         accepted = self.check('P.kept, P.Def')
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
-        self.assertIn('[override] Statements.tsv: P.kept: recorded', accepted.stdout)
-        self.assertIn('[override] Definitions.tsv: P.Def: recorded', accepted.stdout)
+        self.assertIn("[override] VERITILE_FROZEN_OVERRIDE is set: 'P.kept, P.Def'", accepted.stdout)
+        self.assertIn('[override] FrozenStatements.tsv: P.kept: recorded', accepted.stdout)
+        self.assertIn('[override] FrozenDefinitions.tsv: P.Def: recorded', accepted.stdout)
+        self.commit(self.STATEMENTS, self.DEFINITIONS)
+        self.assertIn("[override] VERITILE_FROZEN_OVERRIDE is set: ''", self.check('').stdout)
+        self.assertNotIn('[override]', self.check().stdout)
+
+    def test_gate_never_inherits_the_override(self):
+        self.assertIn('\nunset VERITILE_FROZEN_OVERRIDE\n', (ROOT / 'scripts/local_gate.sh').read_text())
+
+    def test_symlinked_table_or_directory_fails(self):
+        shadow = self.tsv.with_name('Shadow.tsv')
+        shadow.write_text(self.STATEMENTS.replace(self.STATEMENTS.splitlines()[1] + '\n', ''))
+        self.tsv.unlink()
+        self.tsv.symlink_to(shadow.name)
+        self.rejects('documents/dist/FrozenStatements.tsv is a symbolic link')
+        self.tsv.unlink()
+        shadow.rename(self.tsv)
+        copy = self.repo / 'documents/copy'
+        self.tsv.parent.rename(copy)
+        (self.repo / self.TABLES).symlink_to('copy')
+        self.rejects('documents/dist is a symbolic link')
+
+    def test_fails_closed_without_main_or_merge_base(self):
+        self.rejects('no main ref found among nosuchref', main='nosuchref')
+        # A local `main` is not a candidate; this repository has no fork/main or origin/main.
+        self.rejects('no main ref found among fork/main, origin/main', main=None)
+        self.git('checkout', '-q', '--orphan', 'unrelated')
+        self.commit(self.STATEMENTS + '# unrelated history\n')  # a different tree, so not the base commit again
+        self.git('checkout', '-q', 'pr')
+        self.rejects('no merge base of HEAD and unrelated', main='unrelated')
 
 
 if __name__ == '__main__':
