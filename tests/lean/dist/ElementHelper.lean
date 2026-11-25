@@ -64,7 +64,7 @@ example (split : RegionName) (WORLD_SIZE : Nat) : ComputeKernel :=
   }
 
 /-- error: unexpected syntax -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (split : RegionName) (WORLD_SIZE : Nat) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call profile call_args [] in triton {
     splits = tl.load(split + tl.arange(0, WORLD_SIZE))
