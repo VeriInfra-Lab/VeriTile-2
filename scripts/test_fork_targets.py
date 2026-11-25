@@ -4,6 +4,7 @@
 Writes throwaway probe modules into VeriTile/Dist and VeriTile/Staging and
 removes them again; do not run it while another build uses this checkout.
 """
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -49,6 +50,29 @@ class ForkTargetGates(unittest.TestCase):
         rejected = run('check_fork_target.py', 'VeriTileDist')
         self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
         self.assertIn('AXIOM\tVeriTile/Dist/GateProbe.lean:veritileGateProbe', rejected.stderr)
+
+    def test_frozen_statement_rejects_an_importing_module(self):
+        owner = 'VeriTile.Staging.FrozenOwnerProbe'
+        importer = 'VeriTile.Staging.FrozenImportProbe'
+        name = 'frozenOwnerProbe'
+        self.probe('VeriTile/Staging/FrozenOwnerProbe.lean', f'theorem {name} : True := True.intro\n')
+        self.probe('VeriTile/Staging/FrozenImportProbe.lean', f'import {owner}\n')
+        # The elaborated type is the constant True with no universe levels or project dependencies.
+        digest = hashlib.sha256(b'(C True [])').hexdigest()
+        with tempfile.TemporaryDirectory() as temp:
+            tsv = Path(temp) / 'Statements.tsv'
+            args = ['--tsv', str(tsv), '--definitions', str(Path(temp) / 'Definitions.tsv')]
+
+            def record(module):
+                tsv.write_text(f'statement\tmodule\tsha256\tsigned\n{name}\t{module}\t{digest}\ttest\n')
+
+            record(owner)
+            accepted = run('check_frozen_statements.py', *args)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            record(importer)
+            rejected = run('check_frozen_statements.py', *args)
+            self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+            self.assertIn(f'{tsv.name}:2: {name}: recorded module {importer}, declared in {owner}', rejected.stderr)
 
     def test_frozen_statement_and_its_definitions(self):
         source = ('namespace VeriTileGateProbe\n'
