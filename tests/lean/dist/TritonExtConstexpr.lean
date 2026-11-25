@@ -266,6 +266,29 @@ def runtimePower : ComputeKernel :=
 #guard_msgs in
 def negativePower : ComputeKernel := triton { x = next_power_of_2(-1) }
 
+-- Pin the dtype chosen when a folded constexpr becomes a register.
+example : triton { x = tl.constexpr(2147483647) } =
+    triton { x = tl.cast(2147483647, tl.int32) } := rfl
+
+example : triton { x = tl.constexpr(2147483648) } =
+    triton { x = tl.cast(2147483648, tl.uint32) } := rfl
+
+example : triton { x = tl.constexpr(4294967296) } =
+    triton { x = tl.cast(4294967296, tl.int64) } := rfl
+
+example : triton { x = tl.constexpr(9223372036854775808) } =
+    triton { x = tl.cast(9223372036854775808, tl.uint64) } := rfl
+
+example : triton { x = tl.constexpr(-2147483648) } =
+    triton { x = tl.cast(-2147483648, tl.int32) } := rfl
+
+example : triton { x = tl.constexpr(-2147483649) } =
+    triton { x = tl.cast(-2147483649, tl.int64) } := rfl
+
+/-- error: folded constexpr register exceeds Triton's integer range -/
+#guard_msgs in
+example : ComputeKernel := triton { x = tl.constexpr(18446744073709551616) }
+
 /-- The last input covered by the pinned implementation. -/
 def upperPower : ComputeKernel := triton {
   tl.static_assert(next_power_of_2(18446744073709551616) == 18446744073709551616)
