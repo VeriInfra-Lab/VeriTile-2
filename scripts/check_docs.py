@@ -57,6 +57,7 @@ DERIVED_SOURCES = {
     'bench/examples/VectorAdd': ('VectorAdd.py', 'Kernels.lean'),
     'experiments/interp_gpu/smoke': ('kernels.py',),
     'experiments/floating_point/value_validation/fp4_unscaled/reference': ('original.py', 'original_jit.py'),
+    'scripts/census/fixtures': ('04-deepseek-infer-all2all.py.txt',),
     'scripts/fixtures/source_materializations': ('seeded_dropout.py.txt', 'Kernels.lean.txt'),
     'scripts/fixtures/source_control_materializations': ('layer_norm_fwd.py.txt', 'Kernels.lean.txt'),
     'scripts/fixtures/source_uniform_materializations': ('uniform_sampling.py.txt', 'Kernels.lean.txt'),

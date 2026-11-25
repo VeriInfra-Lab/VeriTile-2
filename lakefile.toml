@@ -534,6 +534,7 @@ globs = [
   "tests.lean.dist.SourceHelpers",
   "tests.lean.dist.ProcedureHelpers",
   "tests.lean.dist.ElementHelper",
+  "tests.lean.dist.PointerCasts",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
