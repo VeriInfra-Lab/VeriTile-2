@@ -59,12 +59,18 @@ private def valueName (n : Name) : Bool :=
 def tlValueName : Parser := rawIdentNoAntiquot >>
   checkStackTop (fun s => plainSpelling s && valueName s.getId) "unsupported TileLang value or attribute"
 
+-- These productions can start at an ordinary identifier without adding a
+-- keyword to Lean's global token table.
+def tlBool : Parser := nonReservedSymbol "True" true <|> nonReservedSymbol "False" true
+def tlOutputs : Parser := nonReservedSymbol "out_idx" true
+def tlConfig : Parser := nonReservedSymbol "pass_configs" true
+def tlAssert : Parser := nonReservedSymbol "assert" true
+
 syntax tlValueName : tlExpr
 syntax num : tlExpr
 syntax scientific : tlExpr
 syntax str : tlExpr
-syntax "True" : tlExpr
-syntax "False" : tlExpr
+syntax tlBool : tlExpr
 syntax "(" tlExpr ")" : tlExpr
 syntax "(" tlExpr "," tlExpr,*,? ")" : tlExpr
 syntax "[" tlExpr,*,? "]" : tlExpr
@@ -91,7 +97,7 @@ syntax:40 tlExpr:41 " if " tlExpr:41 " else " tlExpr:40 : tlExpr
 syntax tlExpr : tlArg
 syntax (name := kw) tlName "=" tlExpr : tlArg
 syntax (name := primitive) rawIdentNoAntiquot "(" tlArg,*,? ")" : tlExpr
-syntax (name := layout) "T.Layout" "(" tlExpr "," "lambda" tlName,+ ":" tlExpr ")" : tlExpr
+syntax (name := layout) rawIdentNoAntiquot "(" tlExpr "," &"lambda" tlName,+ ":" tlExpr ")" : tlExpr
 syntax "{" tlName ":" tlExpr (",")? "}" : tlExpr
 
 syntax tlName : tlPlace
@@ -100,7 +106,7 @@ syntax tlPlace : tlTarget
 syntax tlName "," tlName,+ : tlTarget
 syntax tlName : tlParam
 syntax (name := defaultParam) tlName "=" tlExpr : tlParam
-syntax tlName ":" "T.Tensor" "(" tlExpr "," tlExpr ")" : tlTensor
+syntax tlName ":" &"T.Tensor" "(" tlExpr "," tlExpr ")" : tlTensor
 syntax tlTensor : tlParam
 
 syntax (name := binding) tlTarget "=" tlExpr : tlBinding
@@ -115,9 +121,9 @@ syntax "return" tlExpr : tlStmt
 syntax (name := branch) "if" tlExpr ":" tlSuite ("else" ":" tlSuite)? : tlStmt
 syntax (name := loop) "for" tlName,+ "in" tlIter ":" tlSuite : tlStmt
 syntax (name := loopCall) rawIdentNoAntiquot "(" tlArg,*,? ")" : tlIter
-syntax (name := kernel) "with" "T.Kernel" "(" tlArg,+,? ")" "as" tlName ":" tlSuite : tlStmt
-syntax (name := grid) "with" "T.Kernel" "(" tlArg,+,? ")" "as" "(" tlName,+,? ")" ":" tlSuite : tlStmt
-syntax (name := role) "with" "T.ws" "(" tlExpr ")" ":" tlSuite : tlStmt
+syntax (name := kernel) "with" &"T.Kernel" "(" tlArg,+,? ")" "as" tlName ":" tlSuite : tlStmt
+syntax (name := grid) "with" &"T.Kernel" "(" tlArg,+,? ")" "as" "(" tlName,+,? ")" ":" tlSuite : tlStmt
+syntax (name := role) "with" &"T.ws" "(" tlExpr ")" ":" tlSuite : tlStmt
 syntax "{" sepBy1(tlStmt, ";") (";")? "}" : tlSuite
 syntax (name := helper) "@T.macro" "def" tlName "(" tlName,*,? ")" ":" tlSuite : tlMacro
 
@@ -125,9 +131,9 @@ syntax (name := helper) "@T.macro" "def" tlName "(" tlName,*,? ")" ":" tlSuite :
 -- expressions; only these binding/assert/constexpr-branch statements can run there.
 syntax tlBinding : tlStatic
 syntax (name := staticBranch) "if" tlExpr ":" "{" sepBy1(tlStatic, ";") (";")? "}" ("else" ":" "{" sepBy1(tlStatic, ";") (";")? "}")? : tlStatic
-syntax "assert" tlExpr ("," str)? : tlStatic
-syntax (name := outputs) "out_idx" "=" "[" num,+,? "]" : tlCfg
-syntax (name := config) "pass_configs" "=" "{" (str <|> rawIdentNoAntiquot) ":" ("True" <|> "False") "}" : tlCfg
+syntax tlAssert tlExpr ("," str)? : tlStatic
+syntax (name := outputs) tlOutputs "=" "[" num,+,? "]" : tlCfg
+syntax (name := config) tlConfig "=" "{" (str <|> rawIdentNoAntiquot) ":" tlBool "}" : tlCfg
 syntax (name := factory) ("@tilelang.jit" ("(" tlCfg,+,? ")")?)?
   "def" tlName "(" tlParam,*,? ")" ":" "{"
   (tlStatic ";")* (tlMacro ";")*
@@ -177,6 +183,7 @@ private def validCall (k n : Name) (args : Syntax) (macros : List (Name × Nat))
 
 private partial def checkedTree (stx : Syntax) (macros : List (Name × Nat)) : Bool := Id.run do
   let k := stx.getKind
+  if k == ``layout && !(plainSpelling stx[0] && stx[0].getId == `T.Layout) then return false
   if k == ``primitive || k == ``operation || k == ``loopCall then
     unless plainSpelling stx[0] && validCall k stx[0].getId stx[2] macros do return false
   if k == ``loop then
@@ -244,6 +251,11 @@ private partial def quoteSource (s : Syntax) : MetaM Expr := do
   | .missing => throwError "missing TileLang syntax"
 
 @[term_elab quotation] def elabTileLang : Elab.Term.TermElab := fun stx _ => quoteSource stx[2]
+
+-- Source-only identifiers must stay usable as ordinary Lean after import.
+example : True := trivial
+example : ¬ False := id
+example (pass_configs out_idx : Option Nat) : Option Nat := pass_configs <|> out_idx <|> none
 
 -- These cases exercise the public term parser. An elaborator error would
 -- accept the parse and fail these regressions.
