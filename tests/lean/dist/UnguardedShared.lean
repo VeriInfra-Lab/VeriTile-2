@@ -125,7 +125,7 @@ theorem unguardedSharedRace (s : DistState) :
   obtain ⟨f, run, done_, h⟩ := executes .all s
   exact ⟨f, run, done_, h ▸ unguardedHistoryRaces⟩
 
-/-- With tid == 0, the same two threads complete but the second segment makes no access. -/
+/-- No data race in this run: both threads complete, and the tid == 0 guard skips the second store. -/
 theorem guardedSharedNoRace (s : DistState) :
     let g := ThreadGuard.tidEq 0
     ∃ f, Run (launch g) ((launch g).initial s) [.agent t0, .agent t1] f ∧
@@ -141,6 +141,28 @@ theorem guardedSharedNoRace (s : DistState) :
   have hy' : y = occurrence (.tidEq 0) t1 := (Option.some.inj hy).symm
   subst y
   cases k <;> cases m <;> simp_all [occurrence, Occurrence.access, writes, t1, active, ThreadGuard.tidEq]
+
+-- Check the physical stores independently of the declared footprints.
+example : ViewName.address t0 (name t0) 0 = scratch := ViewName.address_name t0 scratch (by decide)
+example : ViewName.address t1 (name t1) 0 = scratch := ViewName.address_name t1 scratch (by decide)
+
+example (s : DistState) :
+    (after .all ((launch .all).initial s) t0).mem.cell scratch = VeriTile.Triton.MemCell.of .nat 1 := by
+  change (s.setView t0 ((s.view t0).writeMemTyped .nat (name t0) 0 1)).cell scratch = _
+  rw [DistState.setView_eq_setSubView, DistState.cell_setSubView_of_visible _ rfl _ scratch (by decide)]
+  simp [name, ViewName.name, scratch, VeriTile.Triton.BlockState.writeMemTyped]
+
+example (s : DistState) :
+    (after .all (after .all ((launch .all).initial s) t0) t1).mem.cell scratch =
+      VeriTile.Triton.MemCell.of .nat 1 := by
+  let s₀ := (after .all ((launch .all).initial s) t0).mem
+  change (s₀.setView t1 ((s₀.view t1).writeMemTyped .nat (name t1) 0 1)).cell scratch = _
+  rw [DistState.setView_eq_setSubView, DistState.cell_setSubView_of_visible _ rfl _ scratch (by decide)]
+  simp [name, ViewName.name, scratch, VeriTile.Triton.BlockState.writeMemTyped]
+
+-- The guarded thread runs and leaves the entire state unchanged for every input.
+example (s : DistState) : (segment (.tidEq 0) t1).run s = some s := by
+  simp [segment, active, ThreadGuard.tidEq, t1, DistState.setView_view]
 
 #print axioms unguardedSharedRace
 #print axioms guardedSharedNoRace
