@@ -14,6 +14,50 @@ SOURCE = Path(__file__).parent / 'fixtures' / '04-deepseek-infer-all2all.py.txt'
 BLOB = '25ba82233603691cebd52f96e53d6cabda8d375a'
 
 
+class Polynomial(dict):
+    """Sparse integer coefficients on sorted tuples of independent variables."""
+
+    @classmethod
+    def var(cls, name):
+        return cls({(name,): 1})
+
+    @classmethod
+    def constant(cls, n):
+        return cls({(): n}) if n else cls()
+
+    @classmethod
+    def coerce(cls, x):
+        return x if isinstance(x, cls) else cls.constant(x)
+
+    def __add__(self, other):
+        result = Polynomial(self)
+        for term, coefficient in self.coerce(other).items():
+            result[term] = result.get(term, 0) + coefficient
+            if not result[term]:
+                del result[term]
+        return result
+
+    __radd__ = __add__
+
+    def __sub__(self, other):
+        return self + (-1) * self.coerce(other)
+
+    def __mul__(self, other):
+        result = Polynomial()
+        for left, a in self.items():
+            for right, b in self.coerce(other).items():
+                term = tuple(sorted(left + right))
+                result[term] = result.get(term, 0) + a * b
+        return Polynomial((term, c) for term, c in result.items() if c)
+
+    __rmul__ = __mul__
+
+    def __floordiv__(self, divisor):
+        if not isinstance(divisor, int) or divisor <= 0 or any(c % divisor for c in self.values()):
+            raise ValueError("floor division is not exact for every symbolic valuation")
+        return Polynomial((term, c // divisor) for term, c in self.items())
+
+
 def value(expr, env):
     """Interpret only the integer operations used in the pinned offsets/count."""
     if isinstance(expr, ast.Constant):
@@ -27,7 +71,7 @@ def value(expr, env):
     if isinstance(expr, ast.Compare) and len(expr.ops) == 1 and isinstance(expr.ops[0], ast.Eq):
         return value(expr.left, env) == value(expr.comparators[0], env)
     if isinstance(expr, ast.BinOp):
-        op = {ast.Add: operator.add, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
+        op = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
         return op[type(expr.op)](value(expr.left, env), value(expr.right, env))
     raise ValueError(ast.dump(expr))
 
@@ -76,9 +120,22 @@ class T04PointerContract(unittest.TestCase):
         put = self.node(233, ast.Call)
         self.assertEqual(ast.unparse(put.args[2]),
                          'num_rows_cur_block * HIDDEN * (1 if ONLINE_QUANT_FP8 and MODE == 0 else 2)')
-        # The AST checks above bind the free N, off and row-count variables.
-        # Exercise the pinned expressions at multiples of FP8_GSIZE, including
-        # non-power-of-two widths, nonzero slab offsets and empty transfers.
+        # Derive the host count from the transmitted expert splits before
+        # using the result as the device row count in the identities below.
+        rows = self.dispatch_rows_from_split_packet()
+        groups, off = map(Polynomial.var, ('g', 'off'))
+        n = self.node(463, ast.Assign).value.value * groups
+        symbolic = {'args.N': n, 'HIDDEN': n, 'off': off, 'ntk': rows,
+                    'num_rows_cur_block': rows, 'ONLINE_QUANT_FP8': True, 'MODE': 0}
+        row_bytes = value(width, symbolic) * 2
+        first = value(selected.slice.lower, symbolic) * row_bytes
+        end = value(selected.slice.upper, symbolic) * row_bytes
+        self.assertEqual(row_bytes, n)
+        self.assertEqual(first, 2 * off * n)
+        self.assertEqual(end - first, rows * n)
+        self.assertEqual(value(put.args[2], symbolic), end - first)
+
+        # Concrete cases additionally check divmod and zero-length transfers.
         for n in (128 * groups for groups in (*range(1, 65), 127, 128)):
             for offset, rows in ((0, 0), (0, 1), (17, 3), (256, 16), (512, 255)):
                 env = {'args.N': n, 'HIDDEN': n, 'off': offset, 'ntk': rows,
@@ -90,6 +147,51 @@ class T04PointerContract(unittest.TestCase):
                 self.assertEqual(divmod(first, n), (2 * offset, 0))
                 self.assertEqual(end - first, rows * n)
                 self.assertEqual(value(put.args[2], env), end - first)
+
+    def dispatch_rows_from_split_packet(self):
+        """Host ntk sums precisely the prefix differences stored for one sender."""
+        self.stmt(143, 'EXPERTS_PER_RANK: tl.constexpr = NUM_TOT_EXPERTS // WORLD_SIZE')
+        self.stmt(146, 'exp_st = pid * EXPERTS_PER_RANK')
+        self.stmt(147, 'exp_ed = exp_st + EXPERTS_PER_RANK')
+        self.stmt(148, 'm_st = tl.load(send_splits_cumsum + exp_st)')
+        self.stmt(149, 'm_ed = tl.load(send_splits_cumsum + exp_ed)')
+        device_rows = self.stmt(150, 'num_rows_cur_block = m_ed - m_st').value
+        self.stmt(156, 'split_src_ptr = splits_src + (exp_st + pid)')
+        self.stmt(157, 'split_dst_ptr = splits_dst + act_pos * (NUM_TOT_EXPERTS + WORLD_SIZE) + rank * (EXPERTS_PER_RANK + 1)')
+        self.stmt(160, 'off0 = exp_st + tl.arange(0, EXPERTS_PER_RANK)')
+        self.stmt(161, 'off1 = exp_st + tl.arange(0, EXPERTS_PER_RANK) + 1')
+        self.stmt(162, 'cumsum_sts = tl.load(send_splits_cumsum + off0)')
+        self.stmt(163, 'cumsum_eds = tl.load(send_splits_cumsum + off1)')
+        store = self.stmt(164, 'tl.store(split_src_ptr + tl.arange(0, EXPERTS_PER_RANK), cumsum_eds - cumsum_sts)')
+        delta = store.value.args[1]
+        self.stmt(166, 'tl.store(split_src_ptr + EXPERTS_PER_RANK, m_st)')
+        self.assertEqual(ast.unparse(self.node(240, ast.If).test), 'MODE == 0')
+        self.stmt(242, 'libshmem_device.putmem_nbi_block(split_dst_ptr, split_src_ptr, (EXPERTS_PER_RANK + 1) * 4, pid)')
+        self.assertEqual(ast.unparse(self.node(455, ast.Assert).test), 'args.G % WORLD_SIZE == 0')
+        self.stmt(459, 'EXPERTS_PER_RANK = args.G // WORLD_SIZE')
+        kwargs = self.node(538, ast.Dict)
+        launch = {k.value: ast.unparse(v) for k, v in zip(kwargs.keys, kwargs.values)}
+        self.assertEqual((launch['NUM_TOT_EXPERTS'], launch['WORLD_SIZE']), ('args.G', 'WORLD_SIZE'))
+        dispatch = self.node(552, ast.Call)
+        self.assertEqual([ast.unparse(a) for a in dispatch.args[5:9]],
+                         ['split_send_buf', 'split_recv_buf', 'signal_buf', 'split_cumsum'])
+        self.stmt(572, 'split_buf_st, split_buf_size = act_pos * (args.G + WORLD_SIZE), args.G + WORLD_SIZE')
+        self.stmt(576, 'dis_splits_buf = split_recv_buf[split_buf_st:split_buf_st + split_buf_size]')
+        self.stmt(584, 'combine_send_splits = dis_splits_buf.reshape(WORLD_SIZE, -1)[:, :EXPERTS_PER_RANK].flatten()')
+        self.stmt(586, 'num_tokens_from_each_rank = combine_send_splits.reshape(WORLD_SIZE, -1).sum(dim=1).tolist()')
+        loop = self.node(589, ast.For)
+        self.assertEqual((ast.unparse(loop.target), ast.unparse(loop.iter)), ('ntk', 'num_tokens_from_each_rank'))
+
+        # Base and induction step for the host sum over any number of experts.
+        # Its kth partial sum is prefix[k] - prefix[0]. The final metadata
+        # word m_st is excluded by the host slice above.
+        start, current, following = map(Polynomial.var, ('prefix0', 'prefixK', 'prefixNext'))
+        def span(end):
+            return value(device_rows, {'m_ed': end, 'm_st': start})
+        self.assertEqual(span(start), Polynomial())
+        next_difference = value(delta, {'cumsum_sts': current, 'cumsum_eds': following})
+        self.assertEqual(span(current) + next_difference, span(following))
+        return span(Polynomial.var('prefixEnd'))
 
     def test_dispatch_dequant_combine_buffers(self):
         self.stmt(462, 'DTYPE = torch.bfloat16')
