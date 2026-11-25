@@ -122,7 +122,7 @@ example (statement : Prop) : TrustAssumption :=
 
 example (statement : Prop) : TrustAssumption :=
   semanticExample `p2p_native_atomic_supported statement
-    "PrimitiveSources.md §7 A8, the platform's P2P native atomic attribute"
+    "PrimitiveSources.md §7 A8. cudaDevP2PAttrNativeAtomicSupported is a platform condition, a property of the machine of a run, kept in the semantic-source class."
     ["K1", "K11", "K15", "K16", "K25", "K26", "K28"]
 
 example (statement : Prop) : TrustAssumption :=
@@ -130,7 +130,7 @@ example (statement : Prop) : TrustAssumption :=
     "PrimitiveSources.md §7 A9, cooperative-grid rendezvous and memory ordering"
     ["D2 all_to_all_v_2d_kernel", "D2 all_to_all_v_2d_kernel_v2",
       "D3 all_to_all_v_2d_inter_node_kernel", "D4 reduce_topk_reduce_scatter_a2a_intra_node_kernel",
-      "D5 reduce_topk_reduce_ar_intra_node_kernel", "D6 _copy_and_reset_and_barrier_all_kernel"]
+      "D5 reduce_topk_allreduce_kernel", "D6 _copy_and_reset_and_barrier_all_kernel"]
 
 example (statement : Prop) : TrustAssumption :=
   semanticExample `deepep_v1_calls_read_by_main_rows statement
