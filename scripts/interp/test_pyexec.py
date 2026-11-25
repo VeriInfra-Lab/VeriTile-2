@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["numpy==2.4.6", "ml-dtypes==0.7.0"]
 # ///
-"""NumPy carrier regressions. --with-lean also compares a real export to FPValue.run."""
+"""NumPy carrier regressions. --with-lean also compares a real export to FPValue.run and Run.runGrid."""
 from pathlib import Path
 import json
 import runpy
@@ -134,6 +134,24 @@ class NumPyCarrier(unittest.TestCase):
         lazy = node('ite', 'int', (), lit(1, 'bool'), lit(9, 'int'), invalid)
         self.assertEqual(run_store(lazy, out)[0], 9)
 
+    def test_exact_integer_divmod_beyond_int64(self):
+        big = 1 << 100
+        for dtype, storage in [('nat', 'u8'), ('int', 'i8')]:
+            with self.subTest(dtype=dtype):
+                out = np.zeros(1, dtype=storage)
+                for op, a, b, expected in [('div', big * 7, big, 7), ('mod', big + 5, big, 5)]:
+                    expr = node(op, dtype, (), lit(a, dtype), lit(b, dtype))
+                    self.assertEqual(run_store(expr, out)[0], expected)
+        # The quotient exceeds int64 even though the final remainder fits in storage.
+        quotient = node('div', 'int', (), lit(-7 * big, 'int'), lit(3, 'int'))
+        self.assertEqual(run_store(node('mod', 'int', (), quotient, lit(5, 'int')),
+                                   np.zeros(1, dtype='i8'))[0], (-7 * big // 3) % 5)
+        # Mixed signs and a zero divisor in the same tile exercise lane-wise behavior.
+        for op, expected in [('div', [2, 3, 0]), ('mod', [3, 2, 7])]:
+            expr = node(op, 'int', [3], refs('a', 'int', [3]), refs('b', 'int', [3]))
+            regs = {'a': [2 * big + 3, -3 * big + 2, 7], 'b': [big, -big, 0]}
+            np.testing.assert_array_equal(run_store(expr, np.zeros(3, dtype='i8'), regs=regs), expected)
+
     def test_dot_transpose_and_reduction(self):
         a = np.arange(6, dtype='f4').reshape(2, 3)
         b = np.arange(6, 12, dtype='f4').reshape(3, 2)
@@ -167,6 +185,7 @@ class NumPyCarrier(unittest.TestCase):
 # Both outputs are computed from the very same QKernel at test time.
 LEAN_DRIVER = r'''import VeriTile.Interp.Carrier.PyExport
 import VeriTile.Interp.Carrier.FPValue
+import VeriTile.Interp.Run.Grid
 
 open VeriTile.Interp VeriTile.Triton VeriTile.Triton.FP Lean
 
@@ -212,6 +231,30 @@ private def initial : State (FP.Value .fp32) where
   numPids _ := 1
   undef d _ _ := Structural.defaultValue d
 
+-- The same noncommutative trace and local-register probes as tests/interp/Main.lean.
+private def gridTrace : QKernel := Id.run do
+  let addr : QMemAccess .nat [] := .region "trace" (.constNat 0)
+  let digit : QOp .nat [] := .add .nat .nil (.programId 0) (.mul .nat .nil (.numPrograms 0)
+    (.add .nat .nil (.programId 1) (.mul .nat .nil (.numPrograms 1) (.programId 2))))
+  let step := QOp.add .nat .nil (.mul .nat .nil (.load .nat addr .none) (.constNat 10)) digit
+  return .mk [] ["trace"] [.store .nat [] addr (.alg step) .none]
+
+private def gridLocals : QKernel := .mk [] ["seen"] [
+  .store .nat [] (.region "seen" (.programId 0)) (.alg (.ref .nat [] "local")) .none,
+  .assign .nat [] "local" (.alg (.constNat 9))]
+
+private def gridExample (k : QKernel) (dims : List Nat) (out : RegionName) (size : Nat) :
+    IO Json := do
+  let s : State (Option (FP.Value .fp32)) := {
+    init := fun _ _ => .mk .nat 0, pids := fun _ => 0, numPids := fun _ => 1
+    undef := fun d _ _ => Structural.defaultValue d }
+  let s := s.setReg "local" .nat [] (fun _ => 7)
+  let some final := Run.runGrid (FPValue.partialAlgebra .fp32) k dims s
+    | throw (IO.userError "grid oracle failed")
+  let .ok source := Carrier.exportPython k | throw (IO.userError "grid export failed")
+  return Json.mkObj [("source", toJson source), ("grid", toJson dims), ("region", toJson out.name),
+    ("expected", toJson ((List.range size).map fun i => (final.read out i).read .nat))]
+
 def main : IO Unit := do
   let .ok source := Carrier.exportPython mirror | throw (IO.userError "export failed")
   let .ok formatSource := Carrier.exportPython formats | throw (IO.userError "mixed-format export failed")
@@ -220,14 +263,17 @@ def main : IO Unit := do
   let inputs := Json.mkObj (ins.map (fun r => (r.name,toJson (words r.name))))
   let outputs := Json.mkObj (outs.map (fun r =>
     (r.name,toJson ((List.range 8).map (fun i => ((final.read r i).read .fp32).raw)))))
-  IO.println (Json.mkObj [("source",toJson source),("formatSource",toJson formatSource),("inputs",inputs),("expected",outputs)]).compress
+  let trace ← gridExample gridTrace [2, 3, 2] "trace" 1
+  let locals ← gridExample gridLocals [3] "seen" 3
+  IO.println (Json.mkObj [("source",toJson source),("formatSource",toJson formatSource),("inputs",inputs),
+    ("expected",outputs),("grids",Json.arr #[trace, locals])]).compress
 '''
 
 
 def check_lean_export():
-    """Run the actual exported program and compare each word to the Lean bit carrier."""
+    """Compare exported programs with the Lean bit carrier and grid runner."""
     subprocess.run(['lake', 'build', 'VeriTile.Interp.Carrier.PyExport',
-                    'VeriTile.Interp.Carrier.FPValue'], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+                    'VeriTile.Interp.Carrier.FPValue', 'VeriTile.Interp.Run.Grid'], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
     with tempfile.TemporaryDirectory() as temp:
         directory = Path(temp)
         driver = directory / 'CarrierOracle.lean'
@@ -252,6 +298,13 @@ def check_lean_export():
             np.testing.assert_array_equal(actual[k].view(np.uint32), words,
                                           err_msg=f'FPValue.run disagreement on {k}')
 
+        for probe in oracle['grids']:
+            exported.write_text(probe['source'])
+            run = runpy.run_path(str(exported))['run']
+            region, expected = probe['region'], probe['expected']
+            memory = {region: np.zeros(len(expected), dtype='u8')}
+            actual = run(memory, grid=probe['grid'], registers={'local': 7})
+            np.testing.assert_array_equal(actual[region], expected, err_msg=f'Run.runGrid disagreement on {region}')
 
         exported.write_text(oracle['formatSource'])
         formats = runpy.run_path(str(exported))['run']({

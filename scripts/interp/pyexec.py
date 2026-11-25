@@ -106,13 +106,17 @@ def _integers(a):
 
 
 def _euclid(a, b, mod):
-    # Lean's div/mod use a nonnegative remainder even with a negative divisor.
-    # At zero, a/0 = 0 and a%0 = a.
-    divisor = np.where(b == 0, 1, np.abs(b))
-    remainder = np.mod(a, divisor)
-    if mod:
-        return np.where(b == 0, a, remainder)
-    return np.where(b == 0, 0, np.floor_divide(a, divisor) * np.sign(b))
+    # NumPy may narrow a scalar object result to int64. Use Python integers for each lane.
+    def lane(x, y):
+        x, y = int(x), int(y)
+        if y == 0:
+            return x if mod else 0
+        quotient, remainder = divmod(x, abs(y))
+        if mod:
+            return remainder
+        return quotient if y > 0 else -quotient
+
+    return np.frompyfunc(lane, 2, 1)(a, b)
 
 
 def _coordinates(region, offsets, active, shape):
