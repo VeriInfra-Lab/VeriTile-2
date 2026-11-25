@@ -118,9 +118,15 @@ class ForkTargetGates(unittest.TestCase):
             'tests/lean/Macro.lean': ('macro "trust" : tactic => `(tactic| admit)\n'
                                       '#guard_msgs (substring := true) in\ntheorem t : 1 = 2 := by trust\n'),
             'tests/lean/Compact.lean': '#guard_msgs(substring:=true) in\n' + quiet,
+            'tests/lean/Split.lean': '#guard_msgs\n  (substring\n   := true) in\n' + quiet,
             'tests/lean/WarningSeverity.lean': '#guard_msgs (warning, substring := true) in\n' + quiet,
             'tests/lean/AllSeverity.lean': '#guard_msgs (all, substring := true) in\n' + quiet,
             'tests/lean/ErrorAndWarning.lean': '#guard_msgs (error, warning, substring := true) in\n' + quiet,
+            # Round 6: Lean reads a comment in the guard header as whitespace.
+            'tests/lean/BlockBefore.lean': '#guard_msgs /- x -/ (substring := true) in\n' + quiet,
+            'tests/lean/LineBefore.lean': '#guard_msgs -- x\n  (substring := true) in\n' + quiet,
+            'tests/lean/BlockInside.lean': '#guard_msgs (/- ) -/ substring := true) in\n' + quiet,
+            'tests/lean/LineInside.lean': '#guard_msgs (substring := true -- x\n  ) in\n' + quiet,
         }
         for case, text in hiding.items():
             relative = 'lakefile.toml' if case == 'nested lakefile' else case

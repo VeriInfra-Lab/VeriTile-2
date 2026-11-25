@@ -25,7 +25,10 @@ hidden, not the ways of hiding it. It fails on
   names `warning` or `all`. A substring guard captures every message of its
   command, the `sorry` warning included, as soon as its docstring is a
   substring of the output, so `(error, substring := true)` is the only safe
-  form: the warning then passes through to the log scan. Such a line passes
+  form: the warning then passes through to the log scan. The guard header
+  (from the keyword to its `in`, across lines) may not contain a comment,
+  since Lean reads a comment as whitespace and it would hide the filter from
+  this check. Such a line passes
   only if its file is allowlisted and the line, or for a guard the next line,
   names the allowlisted declaration.
 """
@@ -66,8 +69,21 @@ LAKEFILE_WORDS = re.compile(r'\bsorry\b')
 TEST_WORDS = re.compile(r'\bsorry(?:Ax)?\b|\bdrop\s+(?:warning|all)\b')
 # Tactic position only, outside `--` comments: `admit` and `stop` are also English words and names.
 TACTICS = re.compile(r'(?:^|\bby\b|<;>|;|\(|·)\s*admit\b|(?:\bby\b|<;>|;|·)\s*stop\b|^\s*stop\s*$')
-# A docstring directly before `#guard_msgs` holds the messages it expects.
-GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*)?#guard_msgs\b\s*(?:\(([^)]*)\))?', re.DOTALL)
+# A guard command starts a line or follows its docstring, which holds the messages it expects.
+GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*|^[ \t]*)#guard_msgs\b', re.DOTALL | re.MULTILINE)
+GUARD_END = re.compile(r'\bin\b')
+
+
+def guard_header(text, start):
+    """The text from just after `#guard_msgs` to its `in`."""
+    end = GUARD_END.search(text, start)
+    return text[start:end.start() if end else len(text)]
+
+
+def guard_options(header):
+    """The filter options of a comment-free guard header, or None."""
+    flat = ' '.join(header.split())
+    return flat[1:flat.index(')')] if flat.startswith('(') and ')' in flat else None
 
 
 def captures_warnings(options):
@@ -105,8 +121,11 @@ def tripwires(root, accepted):
                 continue
             if match.group(1) and re.search(r'\bwarning\b', match.group(1), re.IGNORECASE):
                 hits.append(f'{file}:{number}: #guard_msgs expecting a warning')
-            if captures_warnings(match.group(2)):
-                hits.append(f'{file}:{number}: #guard_msgs ({match.group(2)}) can swallow warnings; '
+            header = guard_header(text, match.end())
+            if '/-' in header or '--' in header:
+                hits.append(f'{file}:{number}: comment in a #guard_msgs header')
+            elif captures_warnings(guard_options(header)):
+                hits.append(f'{file}:{number}: #guard_msgs ({guard_options(header)}) can swallow warnings; '
                             'name the severities, e.g. (error, substring := true)')
     return hits
 
