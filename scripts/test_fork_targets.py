@@ -5,6 +5,7 @@ Writes throwaway probe modules into VeriTile/Dist and VeriTile/Staging and
 removes them again; do not run it while another build uses this checkout.
 """
 import hashlib
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SORRY = 'theorem veritileGateProbe (n : Nat) : n + 0 = n := sorry\n'
 
 
-def run(script, *args):
+def run(script, *args, env=None):
     return subprocess.run([sys.executable, str(ROOT / 'scripts' / script), *args],
-                          cwd=ROOT, text=True, capture_output=True)
+                          cwd=ROOT, text=True, capture_output=True, env=env)
 
 
 class ForkTargetGates(unittest.TestCase):
@@ -126,6 +127,73 @@ class ForkTargetGates(unittest.TestCase):
             self.assertNotEqual(check('--accept-definitions').returncode, 0)
             self.assertEqual(check('--fill', '--accept-definitions').returncode, 0)
             self.assertEqual(check().returncode, 0)
+
+
+class FrozenTablesAgainstBase(unittest.TestCase):
+    """check_frozen_base.py on a throwaway repository whose `main` holds the recorded tables."""
+    STATEMENTS = ('statement\tmodule\tsha256\tsigned\n'
+                  f'P.kept\tM.kept\t{"a" * 64}\tbase\nP.other\tM.other\t{"b" * 64}\tbase\n')
+    DEFINITIONS = f'definition\tsha256\nP.Def\t{"d" * 64}\n'
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.repo = Path(temp.name)
+        self.tsv, self.definitions = self.repo / 'Statements.tsv', self.repo / 'Definitions.tsv'
+        self.tsv.write_text(self.STATEMENTS)
+        self.definitions.write_text(self.DEFINITIONS)
+        for command in (['init', '-q', '-b', 'main'], ['add', '.'],
+                        ['-c', 'user.name=gate', '-c', 'user.email=gate@example.invalid',
+                         '-c', 'commit.gpgsign=false', 'commit', '-qm', 'base']):
+            subprocess.run(['git', *command], cwd=self.repo, check=True, capture_output=True)
+
+    def check(self, override=None):
+        env = {k: v for k, v in os.environ.items() if k != 'VERITILE_FROZEN_OVERRIDE'}
+        if override is not None:
+            env['VERITILE_FROZEN_OVERRIDE'] = override
+        return run('check_frozen_base.py', '--main', 'main', '--tsv', str(self.tsv),
+                   '--definitions', str(self.definitions), env=env)
+
+    def test_deleted_row_fails(self):
+        self.tsv.write_text(self.STATEMENTS.replace(self.STATEMENTS.splitlines()[2] + '\n', ''))
+        rejected = self.check()
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn('Statements.tsv: P.other: recorded M.other ' + 'b' * 64 + ', now deleted', rejected.stderr)
+
+    def test_changed_fingerprint_fails(self):
+        self.tsv.write_text(self.STATEMENTS.replace('a' * 64, 'c' * 64))
+        rejected = self.check()
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn(f'P.kept: recorded M.kept {"a" * 64}, now M.kept {"c" * 64}', rejected.stderr)
+        # What --accept-definitions would do to a recorded definition.
+        self.tsv.write_text(self.STATEMENTS)
+        self.definitions.write_text(self.DEFINITIONS.replace('d' * 64, 'e' * 64))
+        rejected = self.check()
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn(f'Definitions.tsv: P.Def: recorded {"d" * 64}, now {"e" * 64}', rejected.stderr)
+
+    def test_changed_module_fails(self):
+        self.tsv.write_text(self.STATEMENTS.replace('M.kept', 'M.moved'))
+        rejected = self.check()
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn(f'P.kept: recorded M.kept {"a" * 64}, now M.moved {"a" * 64}', rejected.stderr)
+
+    def test_added_unfilled_row_passes(self):
+        self.tsv.write_text(self.STATEMENTS + 'P.new\tM.new\t-\tnew\n')
+        accepted = self.check()
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertIn('(2 Statements.tsv row(s), 1 new; 1 Definitions.tsv row(s), 0 new)', accepted.stdout)
+
+    def test_override_allows_exactly_the_named_rows(self):
+        self.tsv.write_text(self.STATEMENTS.replace('a' * 64, 'c' * 64))
+        self.definitions.write_text(self.DEFINITIONS.replace('d' * 64, 'e' * 64))
+        self.assertNotEqual(self.check().returncode, 0)
+        self.assertNotEqual(self.check('P.kept').returncode, 0)  # P.Def is still not named
+        self.assertNotEqual(self.check('P.kept,P.Def,P.other').returncode, 0)  # P.other did not change
+        accepted = self.check('P.kept, P.Def')
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertIn('[override] Statements.tsv: P.kept: recorded', accepted.stdout)
+        self.assertIn('[override] Definitions.tsv: P.Def: recorded', accepted.stdout)
 
 
 if __name__ == '__main__':

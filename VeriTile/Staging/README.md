@@ -37,6 +37,7 @@ python3 scripts/check_fork_target.py VeriTileDist            # build; no sorry, 
 python3 scripts/check_fork_target.py VeriTileDist --replay   # also comparator and trust gates (Linux judge host)
 python3 scripts/check_fork_target.py VeriTileStaging         # build only
 python3 scripts/check_frozen_statements.py                   # signed statements and the definitions under them are unchanged
+python3 scripts/check_frozen_base.py                         # no row recorded on main was deleted or changed
 python3 scripts/test_fork_targets.py                         # the gates reject deliberate violations
 ```
 
@@ -72,3 +73,27 @@ never replaces a fingerprint that is already recorded:
 - **A statement is signed again together with a definition it rests on.** Mark
   its fingerprint `-` and run the check with `--fill --accept-definitions` in
   one run; each flag alone refuses while the other table still differs.
+
+## Rows recorded on main
+
+`--fill` and `--accept-definitions` rewrite the tables of the branch they run
+on, so `check_frozen_statements.py` alone cannot tell a reviewed sign-off from
+an author accepting their own change. `scripts/check_frozen_base.py` reads
+both tables at `git merge-base HEAD <main>` (`--main`, default `fork/main`,
+then `origin/main`, then `main`) and fails when a row recorded there was
+deleted or its fingerprint or module changed. New rows pass it; the
+fingerprint check above accepts them only with `-` or with the computed
+fingerprint.
+
+The coordinator's sign-off and re-sign batches name the rows they change,
+and only those, in an environment variable for that one run:
+
+```sh
+VERITILE_FROZEN_OVERRIDE=VeriTile.Dist.foo,VeriTile.Dist.Bar bash scripts/local_gate.sh
+```
+
+Names are first-column entries of either table; every named row must actually
+differ, and the check prints each overridden row. `scripts/local_gate.sh`
+never sets the variable, so an author's branch that deletes or changes a
+recorded row, including moving a statement to another module, fails the
+standard gate until the coordinator signs it.

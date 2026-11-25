@@ -27,7 +27,9 @@ python3 -c 'import tomllib' 2>/dev/null || profile_python="uv run --no-project -
 commands=("python3 scripts/check_docs.py"
           "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
-          "python3 -B -m unittest scripts.test_fork_replay")
+          "python3 -B -m unittest scripts.test_fork_replay"
+          # Never with VERITILE_FROZEN_OVERRIDE here: only a coordinator sign-off sets it.
+          "python3 scripts/check_frozen_base.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done

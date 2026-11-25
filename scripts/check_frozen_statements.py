@@ -27,6 +27,10 @@ the reviewed, deliberate way to accept a definition that changed or was
 filled in after the freeze.
 Re-signing a statement whose definitions changed with it needs both flags in
 one run: each alone refuses while the other table still differs.
+
+Neither flag can change a row recorded on the main branch unnoticed:
+check_frozen_base.py rejects a deleted or changed row unless the coordinator's
+sign-off names it in VERITILE_FROZEN_OVERRIDE.
 """
 import argparse
 import hashlib
@@ -107,9 +111,11 @@ elab "#frozenStatements " "[" names:str,* "]" : command => do
 '''
 
 
-def read(path, header):
-    """Lines of a table and its data rows, keyed by line index."""
-    lines = path.read_text().splitlines() if path.exists() else ['\t'.join(header)]
+def read(path, header, text=None):
+    """Lines of a table (from `text` if given) and its data rows, keyed by line index."""
+    if text is None:
+        text = path.read_text() if path.exists() else '\t'.join(header)
+    lines = text.splitlines()
     rows = {}
     for index, line in enumerate(lines):
         if not line.strip() or line.startswith('#'):
