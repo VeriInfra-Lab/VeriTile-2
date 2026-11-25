@@ -3,6 +3,7 @@ interpreter target. The host binary32 fragment serves these two entries
 until the general-purpose carriers are registered. -/
 import VeriTile.Interp.Reflect
 import VeriTile.Interp.Run.Main
+import VeriTile.Interp.Run.GridOrder
 import bench.examples.VectorAdd.Kernels
 import bench.examples.OnlineSoftmax.Kernels
 
@@ -78,6 +79,15 @@ private def programs (dims : List Nat) : Except String Nat := do
 private def gridProbeState : State (Option Float32) := {
   init := fun _ _ => .mk .nat 0, pids := fun _ => 0, numPids := fun _ => 1
   undef := fun d _ _ => FP.Structural.defaultValue d }
+
+-- Literal schedules check both padding and axis order independently of the index formula.
+example : launchOrder [2, 3] =
+    [(0, 0, 0), (0, 1, 0), (0, 2, 0), (1, 0, 0), (1, 1, 0), (1, 2, 0)] := by decide
+example : launchOrder [2, 2, 2] =
+    [(0, 0, 0), (0, 0, 1), (0, 1, 0), (0, 1, 1),
+     (1, 0, 0), (1, 0, 1), (1, 1, 0), (1, 1, 1)] := by decide
+example : launchOrder [3] = [(0, 0, 0), (1, 0, 0), (2, 0, 0)] := by decide
+example : launchOrder [2, 0, 3] = [] := by decide
 
 -- Check the three-dimensional schedule against a noncommutative accumulation
 -- of the eight linearized program ids. A different order or lost predecessor memory fails.

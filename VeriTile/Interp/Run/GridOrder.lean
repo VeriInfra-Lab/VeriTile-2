@@ -11,6 +11,69 @@ def launchOrder (dims : List Nat) : List (Nat × Nat × Nat) :=
     (List.range (dims.getD 1 1)).flatMap fun y =>
       (List.range (dims.getD 2 1)).map fun z => (x, y, z)
 
+/-- Each row has the same width, so the first `rows` rows occupy `rows * width` slots. -/
+private theorem length_range_flatMap {α : Type} (row : Nat → List α) (rows width : Nat)
+    (size : ∀ x, (row x).length = width) :
+    ((List.range rows).flatMap row).length = rows * width := by
+  simp [List.length_flatMap, size]
+
+/-- Split just before row `i / width`, leaving offset `i % width` inside that row. -/
+private theorem getElem?_range_flatMap {α : Type} (row : Nat → List α) {rows width i : Nat}
+    (size : ∀ x, (row x).length = width) (hi : i < rows * width) :
+    ((List.range rows).flatMap row)[i]? = (row (i / width))[i % width]? := by
+  have hw := Nat.pos_of_mul_pos_left (Nat.zero_lt_of_lt hi)
+  let q := i / width
+  have hq : q < rows := (Nat.div_lt_iff_lt_mul hw).2 hi
+  have split : List.range rows =
+      List.range q ++ [q] ++ ((List.range (rows - (q + 1))).map (q + 1 + ·)) := by
+    calc
+      _ = List.range ((q + 1) + (rows - (q + 1))) := by congr 1; omega
+      _ = _ := by rw [List.range_add, List.range_succ]
+  rw [split, List.flatMap_append, List.flatMap_append, List.flatMap_singleton, List.append_assoc]
+  have prefixLength := length_range_flatMap row q width size
+  rw [List.getElem?_append_right (by rw [prefixLength]; exact Nat.div_mul_le_self _ _),
+    prefixLength, show i - q * width = i % width from Nat.mod_eq_sub_div_mul.symm,
+    List.getElem?_append_left (by rw [size]; exact Nat.mod_lt _ hw)]
+
+/-- Row-major coordinates of a three-axis launch. The z coordinate changes fastest. -/
+theorem launchOrder_rank3 (X Y Z : Nat) :
+    (launchOrder [X, Y, Z]).length = X * Y * Z ∧
+    ∀ i < X * Y * Z,
+      (launchOrder [X, Y, Z])[i]? = some (i / (Y * Z), i / Z % Y, i % Z) := by
+  constructor
+  · change ((List.range X).flatMap _).length = _
+    rw [Nat.mul_assoc]
+    apply length_range_flatMap
+    intro x
+    apply length_range_flatMap
+    intro y
+    simp
+  · intro i hi
+    change ((List.range X).flatMap fun x =>
+      (List.range Y).flatMap fun y => (List.range Z).map fun z => (x, y, z))[i]? = _
+    rw [Nat.mul_assoc] at hi
+    have hYZ := Nat.pos_of_mul_pos_left (Nat.zero_lt_of_lt hi)
+    refine (getElem?_range_flatMap _ (width := Y * Z) ?_ hi).trans ?_
+    · intro x
+      exact length_range_flatMap _ Y Z (fun y => by simp)
+    refine (getElem?_range_flatMap _ (width := Z) ?_ (Nat.mod_lt i hYZ)).trans ?_
+    · intro y
+      simp
+    simp [List.getElem?_range (Nat.mod_lt _ (Nat.pos_of_mul_pos_left hYZ)), Nat.mod_mul_left_div_self]
+
+/-- `getD` pads the missing z extent to one in a two-axis launch. -/
+theorem launchOrder_rank2 (X Y : Nat) :
+    (launchOrder [X, Y]).length = X * Y ∧
+    ∀ i < X * Y, (launchOrder [X, Y])[i]? = some (i / Y, i % Y, 0) := by
+  rw [show launchOrder [X, Y] = launchOrder [X, Y, 1] from rfl]
+  simpa [Nat.mod_one] using launchOrder_rank3 X Y 1
+
+/-- `getD` pads both missing extents to one in a one-axis launch. -/
+theorem launchOrder_rank1 (X : Nat) :
+    (launchOrder [X]).length = X ∧ ∀ i < X, (launchOrder [X])[i]? = some (i, 0, 0) := by
+  rw [show launchOrder [X] = launchOrder [X, 1] from rfl]
+  simpa [Nat.mod_one] using launchOrder_rank2 X 1
+
 /-- One launch step starts with the initial registers and the memory returned
 by the previous program. Axes above z have program ID zero. -/
 def interpAt {α : Type} [Inhabited α] (model : CAlgebra α) (kernel : QKernel)
