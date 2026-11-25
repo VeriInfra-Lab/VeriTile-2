@@ -80,6 +80,41 @@ example (tile m n : Int) (G : Nat) :
          col = vt_helper_9
      } := rfl
 
+-- This port appears only in the signature. The lexical caller must still
+-- reserve its name while expanding the tuple on the true branch.
+private def hiddenABI : CallSignature where
+  pointers := [("vt_helper_0", .i32)]
+  scalars := [("tile", .integer), ("m", .integer), ("n", .integer)]
+  constexpr := ["G"]
+
+set_option linter.unusedVariables false in
+example (vt_helper_0 : RegionName) (tile m n : Int) (G : Nat) :
+    (with_local_jit_helpers in with_triton_call hiddenABI call_args [tile := tile, m := m, n := n] in triton {
+       if tile > 0:
+         row, col, group = swizzle_2d_by_group_n(tile, m, n, G)
+     } : ComputeKernel) =
+    with_triton_call hiddenABI call_args [tile := tile, m := m, n := n] in triton {
+       if tile > 0:
+         vt_helper_1 = tile
+         vt_helper_2 = m
+         vt_helper_3 = n
+         vt_helper_4 = G * vt_helper_2
+         vt_helper_5 = vt_helper_1 // vt_helper_4
+         vt_helper_6 = vt_helper_1 - vt_helper_5 * vt_helper_4
+         vt_helper_7 = vt_helper_6 // G
+         vt_helper_8 = vt_helper_6 % G + vt_helper_5 * G
+         row = vt_helper_7
+         col = vt_helper_8
+         group = vt_helper_5
+     } := rfl
+
+/-- error: local helper: positional argument after keyword -/
+#guard_msgs (substring := true) in
+example (rows width : Int) : ComputeKernel :=
+  with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
+    count = ceil_div(a=rows, width)
+  }
+
 -- Stored tutorial bodies go through the early range seam before procedure validation.
 private def storedCeil : SourceProcedure :=
   with_local_jit_helpers in triton_source_procedure (rows, width) constexpr_args [] fp32_constants [] {
