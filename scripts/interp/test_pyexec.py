@@ -59,7 +59,7 @@ class NumPyCarrier(unittest.TestCase):
                 self.assertEqual(output.dtype, dtype)
                 self.assertEqual(float(output[0]), 1.0)
 
-    def test_fp8_overflow_in_literals_and_arithmetic(self):
+    def test_fp8_overflow_in_literals_arithmetic_and_casts(self):
         formats = [('f8e4', 448, 464, 465), ('f8e5', 57344, 61439, 61440)]
         for name, largest, last_rounding_to_finite, first_overflow in formats:
             dtype = pyexec.DTYPES[name]
@@ -73,7 +73,9 @@ class NumPyCarrier(unittest.TestCase):
                 }
                 overflow = {
                     'first overflowing literal': lit(sign * first_overflow, name),
+                    'far overflowing literal': lit(sign * 4 * largest, name),
                     'overflowing sum': node('add', name, [], edge, edge),
+                    'overflowing fp32 cast': node('cast', name, [], lit(sign * first_overflow, 'fp32')),
                 }
                 for case, expr in finite.items():
                     with self.subTest(dtype=name, sign=sign, case=case):

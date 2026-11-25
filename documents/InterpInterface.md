@@ -252,17 +252,17 @@ The GPU protocol, section 9, pins neither SymPy nor mpmath.
 ## NumPy runner
 
 `Carrier.exportPython` emits a module whose `run` entry point evaluates the typed
-kernel through the NumPy carrier. The runner rounds floating literals and
-arithmetic results to the operation's declared dtype. For FP8 it uses
+kernel through the NumPy carrier. The runner rounds floating literals, arithmetic
+results and casts to the operation's declared dtype. For FP8 it uses
 non-saturating round-to-nearest-even overflow.
 
 | Format | Largest finite magnitude | First overflowing positive integer | Overflow result |
 | --- | ---: | ---: | --- |
 | E4M3FN (`f8e4`) | 448 | 465 (464 rounds to 448) | NaN |
-| E5M2 (`f8e5`) | 57,344 | 61,440 (61,439 rounds to 57,344) | Infinity with the input sign |
+| E5M2 (`f8e5`) | 57,344 | 61,440 (61,439 rounds to 57,344) | Infinity with the sign of the exact result |
 
 The bounds apply symmetrically to negative values. The public runner tests
-exercise both signs, rational literals and addition of representable operands.
+exercise both signs for rational literals, addition of representable operands and FP32-to-FP8 casts.
 Lean's bit-level `FPValue` reference covers FP32 and BF16. FP8 overflow agreement
 with the project's GPU remains unverified. On the project's H800, the pinned
 Triton implementation selects finite saturation for default FP32-to-FP8 casts,
