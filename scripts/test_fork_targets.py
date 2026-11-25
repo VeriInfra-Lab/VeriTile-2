@@ -80,24 +80,54 @@ class ForkTargetGates(unittest.TestCase):
             self.assertIn(f'SORRY\t{relative}\texample\t({relative}:2:0)', rejected.stderr)
 
     def test_sources_that_hide_sorry_warnings_fail(self):
-        hiding = {'lakefile.toml': '[[lean_lib]]\nname = "FinalRegressions"\nleanOptions = { warn.sorry = false }\n',
-                  'library/lakefile.toml': 'moreLeanArgs = ["-Dwarn.sorry=false"]\n',
-                  'tests/lean/Quiet.lean': 'set_option warn.sorry false in\ntheorem t : 1 = 2 := sorry\n',
-                  'tests/lean/Guarded.lean': '/-- warning: declaration uses `sorry` -/\n#guard_msgs in\n'
-                                             'example : 1 = 2 := sorry\n'}
-        for relative, text in hiding.items():
+        # Each of these silenced the warning in a real build or `lake env lean` run (PR #605 reviews).
+        admit = 'example : 1 = 2 := by admit\n'
+        hiding = {
+            'lakefile.toml': '[[lean_lib]]\nname = "FinalRegressions"\nleanOptions = { warn.sorry = false }\n',
+            'library/lakefile.toml': 'moreLeanArgs = ["-Dwarn.sorry=false"]\n',
+            'tests/lean/Quiet.lean': 'set_option warn.sorry false in\ntheorem t : 1 = 2 := sorry\n',
+            'tests/lean/Guarded.lean': '/-- warning: declaration uses `sorry` -/\n#guard_msgs in\n' + admit,
+            # Round 3: one-token variants of the same hides.
+            'tests/lean/DropWarning.lean': '#guard_msgs (drop warning) in\n' + admit,
+            'tests/lean/DropAll.lean': '#guard_msgs (drop all) in\n' + admit,
+            'tests/lean/QuotedOption.lean': 'set_option warn.«sorry» false in\ntheorem t : 1 = 2 := by admit\n',
+            'tests/lean/LaxGuard.lean': ('/-- warning: declaration\nuses `sorry` -/\n'
+                                         '#guard_msgs (whitespace := lax) in\n' + admit),
+            'tests/lean/SorryAx.lean': 'example : 1 = 2 := sorryAx _ false\n',
+            'nested lakefile': '[[lean_lib]]\nname = "FinalRegressions"\nleanOptions = { warn = { sorry = false } }\n',
+        }
+        for case, text in hiding.items():
+            relative = 'lakefile.toml' if case == 'nested lakefile' else case
             with tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 (root / 'tests/lean').mkdir(parents=True)
-                (root / 'tests/lean/Clean.lean').write_text('theorem t : True := trivial\n')
-                (root / 'lakefile.toml').write_text('name = "veritile"\n')
-                clean = run('check_test_sorry.py', '--sources', '--root', str(root))
+                (root / 'tests/lean/Clean.lean').write_text('theorem t : True := trivial  -- admit nothing\n')
+                # The word in a comment line of a lakefile is fine.
+                (root / 'lakefile.toml').write_text('name = "veritile"\n# no sorry here\n')
+                allowlist = root / 'allowlist.txt'
+                allowlist.write_text('')
+                check = ['check_test_sorry.py', '--sources', '--root', str(root), '--allowlist', str(allowlist)]
+                clean = run(*check)
                 self.assertEqual(clean.returncode, 0, clean.stderr)
                 (root / relative).parent.mkdir(parents=True, exist_ok=True)
                 (root / relative).write_text(text)
-                rejected = run('check_test_sorry.py', '--sources', '--root', str(root))
-                self.assertNotEqual(rejected.returncode, 0, relative)
+                rejected = run(*check)
+                self.assertNotEqual(rejected.returncode, 0, case)
                 self.assertIn(f'{relative}:', rejected.stderr)
+        # An allowlisted declaration may use sorry on a line that names it; other lines may not.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'tests/lean').mkdir(parents=True)
+            (root / 'tests/lean/Owed.lean').write_text('theorem owed : 1 = 2 := sorry\n')
+            allowlist = root / 'allowlist.txt'
+            allowlist.write_text('tests/lean/Owed.lean\towed\tproof owed by a ticket\n')
+            check = ['check_test_sorry.py', '--sources', '--root', str(root), '--allowlist', str(allowlist)]
+            accepted = run(*check)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            (root / 'tests/lean/Owed.lean').write_text('theorem owed : 1 = 2 := sorry\ntheorem owed2 : 1 = 2 := sorry\n')
+            rejected = run(*check)
+            self.assertIn('tests/lean/Owed.lean:2: sorry', rejected.stderr)
+            self.assertNotIn('Owed.lean:1:', rejected.stderr)
         accepted = run('check_test_sorry.py', '--sources')  # this checkout
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
 

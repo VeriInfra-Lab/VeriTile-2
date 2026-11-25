@@ -5,5 +5,6 @@
 #   tests/lean/File.lean	declaration	one-line reason
 #
 # The declaration is the word at the reported position: a theorem or
-# definition name, or `example`. Keep this list short; a certificate that
-# uses `sorry` certifies nothing.
+# definition name, or `example`. A line of that file that uses `sorry` passes
+# check_test_sorry.py --sources only if it names the declaration. Keep this
+# list short; a certificate that uses `sorry` certifies nothing.

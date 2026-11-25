@@ -12,11 +12,14 @@ scripts/test-sorry-allowlist.txt lists the accepted cases, one per line:
 `file<TAB>declaration<TAB>reason`. The declaration is the word at the reported
 position: the name of a theorem or definition, or `example`.
 
-The scan only sees warnings that Lean prints. `--sources` (one gate command)
-fails when `warn.sorry` appears in lakefile.toml, library/lakefile.toml or a
-tests/lean source, since that option turns the warning off, or when
-`declaration uses` appears in a tests/lean source, since `#guard_msgs` can
-swallow the warning.
+The scan only sees warnings that Lean prints, and options and `#guard_msgs`
+can hide them. `--sources` (one gate command) therefore matches what is being
+hidden, not the ways of hiding it. It fails on
+- the word `sorry` outside `#` comment lines of lakefile.toml and
+  library/lakefile.toml (any spelling of the `warn.sorry` option);
+- the words `sorry` and `sorryAx` (also inside «») and the `#guard_msgs`
+  filters `drop warning` and `drop all` in a tests/lean source, unless the
+  file is allowlisted and the line names the allowlisted declaration.
 """
 import argparse
 from pathlib import Path
@@ -51,16 +54,25 @@ def declaration(file, line, column):
     return word.group(0) if word else '?'
 
 
-def tripwires(root):
-    """Source lines that could hide a `sorry` warning from the scan."""
+LAKEFILE_WORDS = re.compile(r'\bsorry\b')
+TEST_WORDS = re.compile(r'\bsorry(?:Ax)?\b|\bdrop\s+(?:warning|all)\b')
+
+
+def tripwires(root, accepted):
+    """Source lines that use or could hide a `sorry` outside the allowlist."""
     hits = []
-    sources = [(root / name, ('warn.sorry',)) for name in ('lakefile.toml', 'library/lakefile.toml')]
-    sources += [(path, ('warn.sorry', 'declaration uses')) for path in sorted((root / 'tests/lean').rglob('*.lean'))]
-    for path, words in sources:
-        if not path.is_file():
-            continue
+    for name in ('lakefile.toml', 'library/lakefile.toml'):
+        path = root / name
+        lines = path.read_text(errors='replace').splitlines() if path.is_file() else []
+        hits += [f'{name}:{number}: {match.group(0)}' for number, line in enumerate(lines, 1)
+                 if not line.lstrip().startswith('#') for match in LAKEFILE_WORDS.finditer(line)]
+    for path in sorted((root / 'tests/lean').rglob('*.lean')):
+        file = path.relative_to(root).as_posix()
+        names = {name for f, name in accepted if f == file}
         for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
-            hits += [f'{path.relative_to(root)}:{number}: {word}' for word in words if word in line]
+            if any(re.search(r'(?<![\w.])' + re.escape(name) + r'(?![\w.])', line) for name in names):
+                continue
+            hits += [f'{file}:{number}: {match.group(0)}' for match in TEST_WORDS.finditer(line)]
     return hits
 
 
@@ -72,10 +84,10 @@ def main():
     parser.add_argument('--root', type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sources:
-        hits = tripwires(args.root)
+        hits = tripwires(args.root, allowed(args.allowlist))
         if hits:
-            raise ValueError('a source can hide `declaration uses sorry` from the gate:\n' + '\n'.join(hits))
-        print('[ok] no lakefile or tests/lean source mentions warn.sorry or `declaration uses`')
+            raise ValueError('a source uses or can hide sorry outside the allowlist:\n' + '\n'.join(hits))
+        print('[ok] no lakefile or tests/lean source uses or hides sorry outside the allowlist')
     accepted = allowed(args.allowlist)
     found = set()
     for log in args.logs:
