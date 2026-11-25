@@ -27,6 +27,21 @@ At the [exporter merge](https://github.com/VeriInfra-Lab/VeriTile-2/commit/89d59
 
 To locate the growth, a separate run used the same B1 and C1 kernels and inputs, one warm-up and five repetitions. It timed `Array.interp` and the subsequent scalar readback and validation separately. At N=64 and 256, B1 execution medians were 3.60 and 48.23 ms and C1 execution medians were 41.84 and 663.03 ms. All four scalar readback medians were below 0.031 ms. The growth occurs during interpreter execution. In B1 the dot visits each inner index and both reshaped inputs select that index from a row-major list. For C1 the split measures the register assignment and both reductions together. [Binary64 dot and reductions](../VeriTile/Interp/Carrier/Float.lean) · [Reshape index lookup](../VeriTile/Triton/Core/Reshape.lean)
 
+## Row-major reshape lookup (#609)
+
+The array interpreter now computes the row-major offset from the output coordinates and splits it into input coordinates using the strides. Each lookup takes a fixed number of arithmetic operations per axis, independent of the number of elements at a given rank. A Lean equality covers every valid index and lets the compiler use this calculation in place of the enumerated lookup. [Implementation and proof](../VeriTile/Interp/Reshape.lean)
+
+Median Lean execution and result readback, in milliseconds, using the unchanged recipe below. The baseline is the [#601 run](https://github.com/VeriInfra-Lab/VeriTile-2/issues/587#issuecomment-7169862190).
+
+| N | B1 before | B1 after | C1 before | C1 after |
+| ---: | ---: | ---: | ---: | ---: |
+| 16 | 0.385 | 0.194 | 2.837 | 2.858 |
+| 64 | 3.729 | 0.716 | 42.444 | 43.055 |
+| 256 | 50.138 | 2.799 | 664.270 | 677.434 |
+| 1024 | 765.083 | 11.159 | 10,567.450 | 10,775.578 |
+
+B1 now takes about four times as long for each fourfold size increase from N=64 to N=1024. C1 uses no reshape and still shows its previous growth. All 3,196 Lean binary64 output words, all 24 exported NumPy programs and all 24 maximum absolute errors matched the baseline exactly. The batch policy retains N=256 for B1.
+
 ## Reproduce the comparison
 
 Check out [89d5996c1](https://github.com/VeriInfra-Lab/VeriTile-2/commit/89d5996c1aec4dffaac9506fbe9f2c315ad6ea59), the merge of the NumPy exporter into `main`. This revision contains both interpreters and the two drivers printed below. Use its Lean toolchain. In the checkout root put the first block in `Bench118.lean` and the second in `compare118.py`, install NumPy 2.4.6 and ml_dtypes 0.7.0 in a Python 3.11 virtual environment, then run:
