@@ -211,7 +211,8 @@ private def distinctParams (xs : Syntax) : Bool := Id.run do
   return names.toList.Nodup && (ps.extract withoutDefault.size ps.size).all (·.isOfKind ``defaultParam)
 
 private def validOuter (s : Syntax) : Bool := Id.run do
-  unless validConfigs s && distinctParams s[4] && validDefaults s[4] && checkedTree s[4] [] do return false
+  let params := if s.isOfKind ``eager then s[5] else s[4]
+  unless validConfigs s && distinctParams params && validDefaults params && checkedTree params [] do return false
   if s.isOfKind ``eager then
     return (s[8].find? (fun x => x.isOfKind ``kernel || x.isOfKind ``grid)).isSome && checkedTree s []
   -- Factory child nodes follow the production above: outer bindings and
@@ -265,6 +266,12 @@ run_cmd
     "for i, j in range(n): {T.clear(X)}", "X, Y += 1"] do
     if (Parser.runParserCategory env `term (sample body)).isOk then
       throwError "accepted outside TileLang syntax: {body}"
+
+  for params in ["X, X", "n=1, X", "X=T.alloc_shared([1], T.float16)"] do
+    let source := "tilelang { @tilelang.jit def demo(" ++ params ++
+      "): {with T.Kernel(1) as b: {T.clear(X)}} }"
+    if (Parser.runParserCategory env `term source).isOk then
+      throwError "accepted invalid eager parameters: {params}"
 
 /-- A declaration and use retain the formal arguments and both constexpr arms. -/
 private def factoryExample : Source := tilelang {
