@@ -109,7 +109,7 @@ example (vt_helper_0 : RegionName) (tile m n : Int) (G : Nat) :
      } := rfl
 
 /-- error: local helper: positional argument after keyword -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (rows width : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
     count = ceil_div(a=rows, width)
@@ -156,47 +156,47 @@ example (tile m n : Int) (G : Nat) :
     instantiate_source_procedure expandedN signature tiles procedure_args [tile := tile, m := m, n := n, G := G] := rfl
 
 /-- error: local helper: repeated argument a -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (rows width : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
     x = ceil_div(rows, a=width)
   }
 
 /-- error: nested ceil_div requires two scalar names -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (rows width : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
     x = ceil_div(rows, width + 1)
   }
 
 /-- error: local helper expects a caller constexpr -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (tile m n : Int) (G : Nat) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call tiles call_args [tile := tile, m := m, n := n] in triton {
     a, b = swizzle_2d(tile, m, n, n)
   }
 
 /-- error: local helper _is_cta_master requires the SIMT tid binding (#81) -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (rows width : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
     x = _is_cta_master()
   }
 
 /-- error: unexpected syntax -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (rows width : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
     x = misspelled_helper(rows, width)
   }
 /-- error: local helper: unknown keyword wrong -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (rows width : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call counts call_args [rows := rows, width := width] in triton {
     x = ceil_div(b=width, wrong=rows)
   }
 /-- error: local helper: return arity mismatch -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (tile m n : Int) (G : Nat) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call tiles call_args [tile := tile, m := m, n := n] in triton {
     a,b,c = swizzle_2d(tile,m,n,G)
@@ -214,21 +214,21 @@ example (tile m n : Int) (G : Nat) : ComputeKernel :=
 private def archived : CallSignature where pointers := [("ptr",.i32)]; scalars := [("token",.integer)]
 
 /-- error: unexpected syntax -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (ptr : RegionName) (token : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call archived call_args [token := token] in triton {
     sync_warp()
   }
 
 /-- error: unexpected syntax -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (ptr : RegionName) (token : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call archived call_args [token := token] in triton {
     remote = consume_token(token, ptr)
   }
 
 /-- error: unexpected syntax -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 example (ptr : RegionName) (token : Int) : ComputeKernel :=
   with_local_jit_helpers in with_triton_call archived call_args [token := token] in triton {
     count, start = unpack_b32_v2(token)

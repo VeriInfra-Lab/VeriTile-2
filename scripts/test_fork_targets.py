@@ -99,15 +99,28 @@ class ForkTargetGates(unittest.TestCase):
             # Round 4: a substring guard swallows the warning of an `admit` or `stop`.
             'tests/lean/SubstringWarning.lean': '/-- warning -/\n#guard_msgs (substring := true) in\n'
                                                 'theorem t : 1 = 2 := by admit\n',
+            # These two guards pass the substring rule, so only the warning-docstring rule catches them.
             'tests/lean/MultiLineWarning.lean': '/-- info: ok\n---\nWarning: declaration\n-/\n'
-                                                '#guard_msgs (substring := true) in\nexample : True := trivial\n',
-            'tests/lean/SubstringGuard.lean': '/-- warning: declaration uses -/\n#guard_msgs (substring := true) in\n'
+                                                '#guard_msgs (whitespace := lax) in\nexample : True := trivial\n',
+            'tests/lean/SubstringGuard.lean': '/-- warning: declaration uses -/\n#guard_msgs (error, substring := true) in\n'
                                               'example : True := trivial\n',
             'tests/lean/ThenAdmit.lean': 'theorem t : 1 = 2 ∧ 1 = 2 := by constructor <;> admit\n',
             'tests/lean/BulletAdmit.lean': 'theorem t : 1 = 2 := by\n  · admit\n',
             'tests/lean/LineAdmit.lean': 'theorem t : 1 = 2 := by\n  admit\n',
             'tests/lean/Stop.lean': 'theorem t : 1 = 2 := by stop\n  simp\n',
             'tests/lean/LineStop.lean': 'theorem t : 1 = 2 := by\n  stop\n  simp\n',
+            # Round 5: a substring guard that captures warnings, whatever produces the sorry.
+            'tests/lean/AllGoals.lean': '#guard_msgs (substring := true) in\ntheorem t : 1 = 2 := by all_goals admit\n',
+            'tests/lean/Try.lean': '#guard_msgs (substring := true) in\ntheorem t : 1 = 2 := by try admit\n',
+            'tests/lean/First.lean': '#guard_msgs (substring := true) in\ntheorem t : 1 = 2 := by first | admit\n',
+            'tests/lean/Case.lean': ('#guard_msgs (substring := true) in\ntheorem t : 1 = 2 ∧ 1 = 2 := by\n'
+                                     '  constructor\n  case left => admit\n  case right => admit\n'),
+            'tests/lean/Macro.lean': ('macro "trust" : tactic => `(tactic| admit)\n'
+                                      '#guard_msgs (substring := true) in\ntheorem t : 1 = 2 := by trust\n'),
+            'tests/lean/Compact.lean': '#guard_msgs(substring:=true) in\n' + quiet,
+            'tests/lean/WarningSeverity.lean': '#guard_msgs (warning, substring := true) in\n' + quiet,
+            'tests/lean/AllSeverity.lean': '#guard_msgs (all, substring := true) in\n' + quiet,
+            'tests/lean/ErrorAndWarning.lean': '#guard_msgs (error, warning, substring := true) in\n' + quiet,
         }
         for case, text in hiding.items():
             relative = 'lakefile.toml' if case == 'nested lakefile' else case
@@ -121,7 +134,11 @@ class ForkTargetGates(unittest.TestCase):
                     'def f (x : Nat) := x.admit (stop := 1)\n'
                     'stop = tl.num_programs(0)\n'
                     '/-- info: 1 -/\n#guard_msgs in\n#eval 1\n'
-                    '/-- error: no -/\n#guard_msgs (substring := true) in\n#eval f\n')
+                    '/-- error: no -/\n#guard_msgs (error, substring := true) in\n#eval f\n'
+                    '/-- info: 1 -/\n#guard_msgs (info, substring := true) in\n#eval 1\n'
+                    '/-- error: no -/\n#guard_msgs (error, drop info, substring := true) in\n#eval f\n'
+                    # Checked with lake env lean: a `drop info` substring guard lets the warning through.
+                    '#guard_msgs (drop info, substring := true) in\n#eval 1\n')
                 # The word in a comment line of a lakefile is fine.
                 (root / 'lakefile.toml').write_text('name = "veritile"\n# no sorry here\n')
                 allowlist = root / 'allowlist.txt'
@@ -150,6 +167,24 @@ class ForkTargetGates(unittest.TestCase):
             self.assertNotIn('Owed.lean:1:', rejected.stderr)
         accepted = run('check_test_sorry.py', '--sources')  # this checkout
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+    def test_severity_substring_guards_let_the_warning_through(self):
+        # The only substring guards --sources allows; the log scan must still see the sorry.
+        relative = 'tests/lean/GateGuardProbe.lean'
+        self.probe(relative, '#guard_msgs (error, substring := true) in\n'
+                             'theorem veritileErrorGuardProbe : 1 = 2 := by all_goals admit\n'
+                             '#guard_msgs (info, substring := true) in\n'
+                             'theorem veritileInfoGuardProbe : 1 = 2 := by all_goals admit\n')
+        ran = subprocess.run(['lake', 'env', 'lean', relative], cwd=ROOT, text=True, capture_output=True)
+        self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+        with tempfile.TemporaryDirectory() as temp:
+            log, allowlist = Path(temp) / 'command.log', Path(temp) / 'allowlist.txt'
+            log.write_text(ran.stdout + ran.stderr)
+            allowlist.write_text('')
+            rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
+            self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+            self.assertIn(f'SORRY\t{relative}\tveritileErrorGuardProbe', rejected.stderr)
+            self.assertIn(f'SORRY\t{relative}\tveritileInfoGuardProbe', rejected.stderr)
 
     def test_frozen_statement_rejects_an_importing_module(self):
         owner = 'VeriTile.Staging.FrozenOwnerProbe'

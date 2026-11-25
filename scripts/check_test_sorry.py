@@ -19,11 +19,15 @@ hidden, not the ways of hiding it. It fails on
   library/lakefile.toml (any spelling of the `warn.sorry` option);
 - in a tests/lean source: the words `sorry` and `sorryAx` (also inside «»);
   `admit` and `stop` (which is `repeat sorry`) in tactic position; the
-  `#guard_msgs` filters `drop warning` and `drop all`; and a `#guard_msgs`
-  whose expected-message docstring contains the word `warning` (a
-  `substring := true` guard can then swallow the `sorry` warning). Such a line
-  passes only if its file is allowlisted and the line, or for a guard the
-  next line, names the allowlisted declaration.
+  `#guard_msgs` filters `drop warning` and `drop all`; a `#guard_msgs` whose
+  expected-message docstring contains the word `warning`; and a
+  `substring := true` guard whose filter does not name its severities, or
+  names `warning` or `all`. A substring guard captures every message of its
+  command, the `sorry` warning included, as soon as its docstring is a
+  substring of the output, so `(error, substring := true)` is the only safe
+  form: the warning then passes through to the log scan. Such a line passes
+  only if its file is allowlisted and the line, or for a guard the next line,
+  names the allowlisted declaration.
 """
 import argparse
 from pathlib import Path
@@ -63,7 +67,16 @@ TEST_WORDS = re.compile(r'\bsorry(?:Ax)?\b|\bdrop\s+(?:warning|all)\b')
 # Tactic position only, outside `--` comments: `admit` and `stop` are also English words and names.
 TACTICS = re.compile(r'(?:^|\bby\b|<;>|;|\(|·)\s*admit\b|(?:\bby\b|<;>|;|·)\s*stop\b|^\s*stop\s*$')
 # A docstring directly before `#guard_msgs` holds the messages it expects.
-GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*)?#guard_msgs\b', re.DOTALL)
+GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*)?#guard_msgs\b\s*(?:\(([^)]*)\))?', re.DOTALL)
+
+
+def captures_warnings(options):
+    """Whether a substring guard with these filter options can swallow a warning."""
+    items = [item.strip() for item in (options or '').split(',')]
+    if not any(re.fullmatch(r'substring\s*:=\s*true', item) for item in items):
+        return False
+    severities = [item for item in items if item and ':=' not in item]
+    return not severities or any(re.search(r'\b(?:warning|all)\b', item) for item in severities)
 
 
 def tripwires(root, accepted):
@@ -88,9 +101,13 @@ def tripwires(root, accepted):
                          [*TEST_WORDS.finditer(line), *TACTICS.finditer(line.split('--')[0])]]
         for match in GUARD.finditer(text):
             number = text.count('\n', 0, match.end()) + 1
-            if match.group(1) and re.search(r'\bwarning\b', match.group(1), re.IGNORECASE) and \
-                    not named(*lines[number - 1:number + 1]):
+            if named(*lines[number - 1:number + 1]):
+                continue
+            if match.group(1) and re.search(r'\bwarning\b', match.group(1), re.IGNORECASE):
                 hits.append(f'{file}:{number}: #guard_msgs expecting a warning')
+            if captures_warnings(match.group(2)):
+                hits.append(f'{file}:{number}: #guard_msgs ({match.group(2)}) can swallow warnings; '
+                            'name the severities, e.g. (error, substring := true)')
     return hits
 
 
