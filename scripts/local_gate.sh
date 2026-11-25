@@ -77,7 +77,8 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.FetchAddObservation"
              "lake build tests.lean.dist.WordCounterCheck"
              "lake build tests.lean.dist.DeepEPChannel"
-             "lake build tests.lean.dist.Tutorial01")
+             "lake build tests.lean.dist.Tutorial01"
+             "lake build tests.lean.dist.StorePublication")
 fi
 
 log=$(mktemp -d)

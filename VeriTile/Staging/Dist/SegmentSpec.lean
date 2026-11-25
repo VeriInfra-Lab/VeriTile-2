@@ -30,9 +30,10 @@ declaration of part 2 or an `Event`.
   flat body as one program (`AgentProgram.ofBody`, `slice`) and the statements
   about them.
 
-Each theorem is a statement with `sorry`. The ticket named in a docstring moves
-that declaration to `VeriTile/Dist/` under the same name and type, proves it
-and deletes it here in the same change. `EventControlFlow.md` below is
+Each theorem is a statement with `sorry`, except `slice_noSync` and
+`slice_sync`, which are proved from the definition of `slice`. The ticket named
+in a docstring moves that declaration to `VeriTile/Dist/` under the same name
+and type, proves it and deletes it here in the same change. `EventControlFlow.md` below is
 `documents/dist/EventControlFlow.md`; K1 to K28 are its kernel rows.
 
 Decisions (user decision, 2026-11-13, recorded on #43):

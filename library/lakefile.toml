@@ -515,6 +515,7 @@ globs = [
   "tests.lean.dist.WordCounterCheck",
   "tests.lean.dist.DeepEPChannel",
   "tests.lean.dist.Tutorial01",
+  "tests.lean.dist.StorePublication",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
