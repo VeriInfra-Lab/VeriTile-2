@@ -29,7 +29,8 @@ def nextAction (a : Agent) (encode : List Instr → P) : List Instr → Next P
       | [some v] => encode (store dst v :: rest)
       | _ => encode []
 
-private def idleSegment (a : Agent) : Segment := ⟨a, some, fun _ => ∅, fun _ => ∅⟩
+/-- Protocol action boundaries run an identity segment owned by the participant. -/
+def idleSegment (a : Agent) : Segment := ⟨a, some, fun _ => ∅, fun _ => ∅⟩
 
 /-- A copy's second instruction uses the value observed at its first, even
 when another agent could write the source between these choices. -/
@@ -198,18 +199,18 @@ def Initialized (q : RingQueue) (s : DistState) : Prop :=
 /-- UNSIGNED. S6.2/#61. The producer releases full after writing the slot;
 the consumer releases empty after copying it. The second handshake orders the
 previous read before the next overwrite, including across a parity wrap. -/
-theorem correct (q : RingQueue) (l : Launch P) (s : DistState)
+theorem ringQueue_correct (q : RingQueue) (l : Launch P) (s : DistState)
     (code : Realizes l q.body) (accessible : q.AccessibleIn l.symm)
     (init : q.Initialized s) (reuse : q.WaitsOnReuse) (bits : q.UsesEpochBit) :
     Outcome l s (fun final => final = q.sequential l.cells s) := by
   sorry
 
-/-- Three slots and seven items reach item six (slot zero, epoch two).
+/-- Three slots and ten items reach the fourth use of slot zero.
 Physical regions differ by role and each offset identifies its index. -/
 def threeStage : RingQueue where
   stages := 3
   stages_pos := by decide
-  items := 7
+  items := 10
   producer := .thread ⟨0, [0]⟩ 0 0
   consumer := .thread ⟨0, [0]⟩ 0 1
   different := by decide
@@ -239,7 +240,7 @@ theorem threeStage_accessible (symm : VeriTile.Triton.RegionName → Bool) :
   cases c <;> simp [threeStage, AccessibleAt, Accessible, Agent.within, Agent.cta?, Agent.rankOf]
 
 /-- Initialize only the two flag regions to one. Payload and output cells
-start at zero. The client exercises two reuses of slot zero. -/
+start at zero. The client exercises three reuses of slot zero. -/
 def threeStageInitial : DistState :=
   { exampleState with cell := fun p =>
       if p.region = ⟨"full"⟩ ∨ p.region = ⟨"empty"⟩ then .of .nat 1 else .of .nat 0 }
@@ -247,18 +248,18 @@ def threeStageInitial : DistState :=
 example :
     let l := launch (exampleEnv writes) threeStage.body
     Outcome l threeStageInitial (fun final => final = threeStage.sequential l.cells threeStageInitial) :=
-  threeStage.correct _ _ (launch_realizes _ _) (threeStage_accessible _)
+  threeStage.ringQueue_correct _ _ (launch_realizes _ _) (threeStage_accessible _)
     (fun _ => ⟨rfl, rfl⟩) threeStage_reuse threeStage_bits
 
 example :
-    (threeStage.body threeStage.producer).map List.length = some 18 ∧
-    (threeStage.body threeStage.consumer).map List.length = some 21 := by decide
+    (threeStage.body threeStage.producer).map List.length = some 27 ∧
+    (threeStage.body threeStage.consumer).map List.length = some 30 := by decide
 
 example :
     let final := threeStage.sequential writes threeStageInitial
     (final.cell (threeStage.address (.output ⟨0, by decide⟩))).readAs .nat = some 10 ∧
-    (final.cell (threeStage.address (.output ⟨6, by decide⟩))).readAs .nat = some 16 ∧
-    (final.cell (threeStage.address (.slot ⟨0, by decide⟩))).readAs .nat = some 16 := by
+    (final.cell (threeStage.address (.output ⟨9, by decide⟩))).readAs .nat = some 19 ∧
+    (final.cell (threeStage.address (.slot ⟨0, by decide⟩))).readAs .nat = some 19 := by
   exact ⟨rfl, rfl, rfl⟩
 
 /-- Change only the producer's wait policy. Item three returns to slot zero,
@@ -275,7 +276,7 @@ def stageModulus : RingQueue := { threeStage with phase := fun e => e % threeSta
 
 theorem stageModulus_rejected : ¬ stageModulus.UsesEpochBit := by
   intro h
-  have bad := h (⟨6, by decide⟩ : Fin 7)
+  have bad := h (⟨6, by decide⟩ : Fin 10)
   norm_num [stageModulus, threeStage, epoch] at bad
 
 example : (threeStage.produce ⟨3, by decide⟩).length = 3 ∧
@@ -287,6 +288,181 @@ private def observedFullBit : List Instr → Option Nat
 
 example : observedFullBit (threeStage.consume ⟨6, by decide⟩) = some 0 ∧
     observedFullBit (stageModulus.consume ⟨6, by decide⟩) = some 2 := by decide
+
+/- The two actors can be poised at adjacent, unordered accesses. Replay the
+concrete prefix with S4.1 steps. This checker covers just the singleton load,
+store, SET and equality wait used by this ring. -/
+namespace ParityRace
+open Examples
+private abbrev lch := launch (exampleEnv writes) stageModulus.body
+private abbrev initial := lch.initial threeStageInitial
+
+private structure Prefix where
+  cfg : Config (List Instr)
+  pending : cfg.pending = []
+  clean : ∀ x ∈ cfg.trace, ∀ t, x.2 ≠ .initiate t
+
+private theorem Prefix.free (s : Prefix) (p : Addr) : ¬ InFlight s.cfg.trace p := by
+  rintro ⟨t, pos, _⟩
+  have hz : s.cfg.trace.countP (fun x => decide (x.2 = .initiate t)) = 0 := by
+    apply List.countP_eq_zero.mpr
+    intro x hx
+    simp [s.clean x hx t]
+  simp [Transfer.pending, hz] at pos
+
+private def start : Prefix := ⟨initial, rfl, by simp [Machine.trace, initial, Launch.initial]⟩
+
+private abbrev advance (s : Prefix) (a : Agent) :=
+  Σ' t : Prefix, step lch s.cfg (.agent a) t.cfg
+
+private def enter (s : Prefix) (a : Agent) (pc : List Instr)
+    (h : s.cfg.pc a = some (.ready pc)) : advance s a := by
+  let t : Config (List Instr) := { s.cfg with
+    history := s.cfg.history ++ [.segment a ∅ ∅]
+    pc := Function.update s.cfg.pc a ((nextAction a id pc).cursor) }
+  refine ⟨⟨t, s.pending, ?_⟩, ?_⟩
+  · simpa [t, Machine.trace, Occurrence.event?, List.filterMap_append] using s.clean
+  · exact step.segment (seg := idleSegment a) h rfl rfl (by simp [idleSegment]) rfl
+
+private def issue (s : Prefix) (a : Agent) (e : Event) (d : AccessValue)
+    (k : List (Option MemCell) → List Instr) (mem : DistState) (v : Option MemCell)
+    (cursor : s.cfg.pc a = some (.waiting ⟨a,e,d⟩ [] k))
+    (owned : a.within a) (accessible : e.AccessibleBy lch.symm a)
+    (plain : ∀ t, e ≠ .initiate t) (fire : Fire lch s.cfg.toMachine ⟨a,e,d⟩ mem s.cfg.pending v) :
+    advance s a := by
+  let m : Machine := ⟨mem, s.cfg.history ++ [.issued a ⟨a,e,d⟩], s.cfg.pending⟩
+  let t : Config (List Instr) := { m with pc := Function.update s.cfg.pc a (some (.ready (k [v]))) }
+  refine ⟨⟨t, s.pending, ?_⟩, ?_⟩
+  · intro x hx
+    simp [t, m, Machine.trace, List.filterMap_append, Occurrence.event?] at hx
+    rcases hx with prev | rfl
+    · exact s.clean x (List.mem_filterMap.mpr prev)
+    · exact plain
+  · apply step.fire (final := m) (values := [v]) cursor
+    · simpa using owned
+    · refine .cons accessible (fun _ p _ _ => s.free p) ?_ fire (.nil _)
+      rintro ⟨prior, member, _⟩
+      simp [s.pending] at member
+
+/-- Consume the actual program cursor, including the real load continuation.
+A bad guard, an inaccessible address, or an unexpected event rejects the replay. -/
+private def tick (s : Prefix) (a : Agent) : Option (advance s a) := do
+  match h : s.cfg.pc a with
+  | some (.ready pc) => return enter s a pc h
+  | some (.waiting ⟨actor,e,d⟩ [] k) =>
+    if ha : actor = a then
+      if ho : a.within a then
+        if accessible : e.accesses.all (fun (_,p,_) => decide (AccessibleAt lch.symm a p)) then
+          have access : e.AccessibleBy lch.symm a := fun k p m member =>
+            of_decide_eq_true (List.all_eq_true.mp accessible (k,p,m) member)
+          match e, d, h, access with
+          | .access .store p .plain, .store v, h, acc =>
+            return issue s a _ _ k _ _ (ha ▸ h) ho acc
+              (by intro t bad; cases bad) (.store a p _ v)
+          | .access .load p .plain, .noValue, h, acc =>
+            return issue s a _ _ k _ _ (ha ▸ h) ho acc
+              (by intro t bad; cases bad) (.load a p _)
+          | .bump ⟨.word p,.set,n,m⟩, .noValue, h, acc =>
+            return issue s a _ _ k _ _ (ha ▸ h) ho acc
+              (by intro t bad; cases bad) (.bump a _ 0 (by intro bad; cases bad))
+          | .wait (.word p) .eq n m, .noValue, h, acc =>
+            if hn : (s.cfg.mem.cell p).readAs .nat = some n then
+              return issue s a _ _ k _ _ (ha ▸ h) ho acc
+                (by intro t bad; cases bad) (.wait a (.word p) .eq n m n hn rfl)
+            else none
+          | _, _, _, _ => none
+        else none
+      else none
+    else none
+  | _ => none
+
+private def replay (s : Prefix) : (agents : List Agent) →
+    Option (Σ' t : Prefix, Run lch s.cfg (agents.map Choice.agent) t.cfg)
+  | [] => some ⟨s, .nil _⟩
+  | a :: as => do
+    let ⟨next, h⟩ ← tick s a
+    let ⟨final, rest⟩ ← replay next as
+    return ⟨final, .cons h rest⟩
+
+private abbrev producer := stageModulus.producer
+private abbrev consumer := stageModulus.consumer
+private abbrev slot0 := stageModulus.address (.slot ⟨0, by decide⟩)
+private abbrev overwrite : Occurrence :=
+  .issued producer ⟨producer, .access .store slot0 .plain, .store (.of .nat 19)⟩
+private abbrev readSlot : Occurrence :=
+  .issued consumer ⟨consumer, .access .load slot0 .plain, .noValue⟩
+
+/-- Finish items 0–5 in order. Produce 6–8. Before the consumer retires 6,
+the bad wait for item 9 already sees the empty bit from item 3. Position both
+actors at their memory events, then fire the overwrite and load consecutively.
+A singleton emission takes two choices (enter, fire); a copy takes four. -/
+private def choices : List Agent :=
+  let p := fun n => List.replicate n producer
+  let c := fun n => List.replicate n consumer
+  (List.replicate 3 (p 4 ++ c 8)).flatten ++
+    (List.replicate 3 (p 6 ++ c 8)).flatten ++ p 18 ++ p 2 ++ c 2 ++
+    [producer, consumer, producer, consumer]
+
+private theorem directIncreasing {h : History} {i j} (e : DirectHB lch h slot0 i j) : i < j :=
+  by
+  obtain ⟨_, _, _, _, lt, _⟩ := e
+  exact lt
+
+private theorem hbIncreasing {h : History} {i j} (e : HB lch h slot0 i j) : i < j := by
+  induction e with
+  | single e => exact directIncreasing e
+  | tail _ e ih => exact lt_trans ih (directIncreasing e)
+
+private theorem adjacentRace (h : History) (i : Nat)
+    (left : h[i]? = some overwrite) (right : h[i+1]? = some readSlot) :
+    DataRace lch h := by
+  refine ⟨i,i+1,overwrite,readSlot,slot0,.store,.load,.plain,.plain,by omega,
+    left,right,by simp [Occurrence.access, Event.accesses],
+    by simp [Occurrence.access, Event.accesses],Or.inl rfl,by simp [Mode.AtomicFor],?_⟩
+  intro chain
+  cases chain with
+  | tail earlier last => have := hbIncreasing earlier; have := directIncreasing last; omega
+  | single e =>
+    obtain ⟨_,_,hx,hy,_,po | barrier | delivery | sync | count⟩ := e
+    all_goals rw [left] at hx; rw [right] at hy; cases hx; cases hy
+    · obtain ⟨a,ha,hb⟩ := po
+      simp [Occurrence.program?] at ha hb
+      have := ha.trans hb.symm
+      contradiction
+    · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,obs,_⟩ := barrier
+      simp [right, Occurrence.event?] at obs
+    · obtain ⟨_,_,_,bad⟩ := delivery; cases bad
+    · obtain ⟨a,b,_,_,ha,hb,_,_,pair⟩ := sync
+      simp [Occurrence.event?] at ha hb
+      subst a; subst b
+      simp [SyncEdge, Event.releaseOf?, Event.acquireOf?, Mode.Pairs, AccessKind.writes,
+        AccessKind.reads] at pair
+    · obtain ⟨_,_,_,_,_,_,_,_,_,_,_,obs,_⟩ := count
+      simp [right, Occurrence.event?] at obs
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 4000000 in
+/-- A reachable data race in the ten-item program, independent of the
+unsigned protocol theorem. Item 9 writes 19 before item 6 can collect 16. -/
+theorem stageModulus_races :
+    let l := launch (exampleEnv writes) stageModulus.body
+    ∃ sched final, Run l (l.initial threeStageInitial) sched final ∧ DataRace l final.history := by
+  dsimp only
+  let result := replay start choices
+  have ok : result.isSome := by decide +revert
+  let witness := result.get ok
+  refine ⟨_, witness.1.cfg, witness.2, adjacentRace _ 102 ?_ ?_⟩ <;> rfl
+
+/- Advance the consumer through its resulting store. Item 6 actually
+receives item 9's payload (19), whereas its sequential value is 16. -/
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 4000000 in
+example :
+    ((replay start (choices ++ [consumer, consumer])).bind fun result =>
+      (result.1.cfg.mem.cell (stageModulus.address (.output ⟨6, by decide⟩))).readAs .nat) =
+      some 19 ∧ (stageModulus.value ⟨6, by decide⟩).readAs .nat = some 16 := ⟨rfl, rfl⟩
+
+end ParityRace
 
 end RingQueue
 
@@ -346,7 +522,7 @@ structure Valid (f : OneShotFlag) (l : Launch P) (s : DistState) : Prop where
 
 /-- UNSIGNED. S6.3/#62. Each reader observes the published chunk. The single flag
 write or completion separates its producer's stores from the reader's copies. -/
-theorem correct (f : OneShotFlag) (l : Launch P) (s : DistState)
+theorem oneShotFlag_correct (f : OneShotFlag) (l : Launch P) (s : DistState)
     (valid : f.Valid l s) (program : Realizes l f.body) :
     Outcome l s (fun final => final =
       f.sequentialWrites.foldl (fun mem pv => l.cells.put mem pv.1 pv.2) s) := by
@@ -407,7 +583,7 @@ structure Valid (b : PhaseBarrier) (l : Launch P) : Prop where
 
 /-- UNSIGNED. S6.4/#63. With the exact roster, the kth arrival of each member
 precedes each kth successful wait. No post-barrier copy reads a future phase. -/
-theorem correct (b : PhaseBarrier) (l : Launch P) (s : DistState)
+theorem phaseBarrier_correct (b : PhaseBarrier) (l : Launch P) (s : DistState)
     (valid : b.Valid l) (program : Realizes l b.body) :
     Outcome l s (fun final => final =
       b.sequentialWrites.foldl (fun mem pv => l.cells.put mem pv.1 pv.2) s) := by
@@ -450,7 +626,7 @@ private theorem flagValid (viaPut : Bool) : (flagExample viaPut).Valid (flagLaun
 
 example (viaPut : Bool) : Outcome (flagLaunch viaPut) exampleState (fun final => final =
     (flagExample viaPut).sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2) exampleState) :=
-  (flagExample viaPut).correct _ _ (flagValid viaPut) (launch_realizes _ _)
+  (flagExample viaPut).oneShotFlag_correct _ _ (flagValid viaPut) (launch_realizes _ _)
 
 example (viaPut : Bool) : (((flagExample viaPut).sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2)
     exampleState).cell (syncCell 4)).readAs .nat = some 47 := by cases viaPut <;> rfl
@@ -505,7 +681,7 @@ private theorem phaseValid : phaseExample.Valid phaseLaunch := by
 
 example : Outcome phaseLaunch exampleState (fun final => final =
     phaseExample.sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2) exampleState) :=
-  phaseExample.correct _ _ phaseValid (launch_realizes _ _)
+  phaseExample.phaseBarrier_correct _ _ phaseValid (launch_realizes _ _)
 
 example : ((phaseExample.sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2)
     exampleState).cell (syncCell 6)).readAs .nat = some 12 := rfl
@@ -582,7 +758,7 @@ theorem add_swap (initial x y : ℝ) :
 
 /-- UNSIGNED. S6.5. Every complete schedule leaves the canonical sequential
 sum in the target and preserves all other memory, local contexts and geometry. -/
-theorem sound {P : Type} (q : AtomicAccumulation) (l : Launch P) (s : DistState)
+theorem atomicAccumulation_correct {P : Type} (q : AtomicAccumulation) (l : Launch P) (s : DistState)
     (initial : ℝ) (typed : s.cell q.target = .real initial)
     (access : ∀ a ∈ q.agents, AccessibleAt l.symm a q.target)
     (writes : l.cells.put = DistState.putCell) (programs : Realizes l q.body) :
@@ -623,7 +799,7 @@ example :
     Outcome l s (fun final => final = s.putCell twoCTAs.target (.real 5)) := by
   dsimp only
   rw [← twoCTAs_total]
-  exact twoCTAs.sound _ _ 0 (DistState.cell_putCell ..)
+  exact twoCTAs.atomicAccumulation_correct _ _ 0 (DistState.cell_putCell ..)
     (twoCTAs_access _) rfl (launch_realizes ..)
 
 /-- The lost-update interleaving reads the same initial cell twice, then writes
