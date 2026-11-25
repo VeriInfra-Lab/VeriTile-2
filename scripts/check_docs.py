@@ -49,22 +49,122 @@ def check_links(root, documents):
     return errors
 
 
-# Register each source pattern with its language's line-comment marker.
-DERIVED_SOURCES = {'tests/dist_litmus/**/*.py': '#'}
-SOURCE_SITE = r'[\w.-]+/[\w.-]+@[0-9a-f]{40} [^:;]+:\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*'
+# Mixed directories select only the files actually derived from outside code.
+DERIVED_SOURCES = {
+    'tests/dist_litmus': ('**/*.py',),
+    'VeriTile/Dist/Frontend/TritonExt': ('Swizzle.lean',),
+    'tests/lean/dist': ('SwizzleSource.lean',),
+    'bench/examples/VectorAdd': ('VectorAdd.py', 'Kernels.lean'),
+    'experiments/interp_gpu/smoke': ('kernels.py',),
+    'experiments/floating_point/value_validation/fp4_unscaled/reference': ('original.py', 'original_jit.py'),
+    'scripts/fixtures/source_materializations': ('seeded_dropout.py.txt', 'Kernels.lean.txt'),
+    'scripts/fixtures/source_control_materializations': ('layer_norm_fwd.py.txt', 'Kernels.lean.txt'),
+    'scripts/fixtures/source_uniform_materializations': ('uniform_sampling.py.txt', 'Kernels.lean.txt'),
+    'VeriTile/Examples': ('AttentionForwardClosedForm.lean',),
+    'VeriTile/Triton/DSL': ('UniformJitFunctions.lean',),
+    'VeriTile/Triton/Random': ('Philox.lean',),
+    'tests/lean': ('PhiloxRandom.lean',),
+    'site/src/lib': ('vector-add-record.json',),
+    '.': ('README.md',),
+}
+FROZEN_FP4 = Path('experiments/floating_point/value_validation/fp4_unscaled/reference')
+SOURCE_SITE = re.compile(r'([\w.-]+/[\w.-]+)@([0-9a-f]{40}) ([^\s:;]+):\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*')
+NOTICE_TABLE = '| File identifiers | Pinned source files |'
+LICENCE_HEADING = re.compile(r'### Sources under `([^`]+)`')
+PINNED_BLOB = re.compile(r'https://github\.com/([\w.-]+/[\w.-]+)/blob/([0-9a-f]{40})/([^\s)#]+)')
+CHANGES = re.compile(r'(?:transcribed to Lean|rewritten as a minimal example|unmodified copy)(?:[;,] .+)?')
+
+
+def attribution_records(notices, errors):
+    records = {}
+    table = False
+    section = ''
+    licence = ''
+    for line in notices.splitlines():
+        if line.startswith('## '):
+            section = line.removeprefix('## ')
+            licence = ''
+        elif line.startswith('### '):
+            heading = LICENCE_HEADING.fullmatch(line)
+            licence = heading[1] if heading else ''
+        if line == NOTICE_TABLE:
+            if not licence:
+                errors.append(f'THIRD_PARTY_NOTICES.md: missing SPDX subsection above table in {section}')
+            table = True
+            continue
+        if not line.startswith('|'):
+            table = False
+        if not table or line.startswith('| ---'):
+            continue
+        columns = [cell.strip() for cell in line.strip('|').split('|')]
+        if len(columns) != 2:
+            errors.append(f'THIRD_PARTY_NOTICES.md: malformed attribution row in {section}')
+            continue
+        identifiers = re.findall(r'`([^`]+)`', columns[0])
+        sites = set(PINNED_BLOB.findall(columns[1]))
+        if not identifiers or not sites:
+            errors.append(f'THIRD_PARTY_NOTICES.md: missing identifiers or pinned source in {section}')
+        for identifier in identifiers:
+            if identifier in records:
+                errors.append(f'{identifier}: appears more than once in the notices ({records[identifier][0]}, {section})')
+            records[identifier] = section, licence, sites
+    return records
+
+
+def check_source_header(source, path, record):
+    section, licence, sites = record
+    if path.parent == FROZEN_FP4 or path.suffix in {'.txt', '.json'}:
+        source = source.with_name(source.name + '.attribution')
+        if not source.is_file():
+            return [f'{path}: missing attribution sidecar']
+    prefix, suffix = {'.attribution': ('# ', ''), '.py': ('# ', ''),
+                      '.lean': ('-- ', ''), '.md': ('<!-- ', ' -->')}[source.suffix]
+    lines = source.read_text().splitlines()[:3]
+    fields = {}
+    errors = []
+    for i, key in enumerate(('Source', 'Licence', 'Changes')):
+        start = prefix + key + ': '
+        if i >= len(lines) or not lines[i].startswith(start) or not lines[i].endswith(suffix):
+            errors.append(f'{path}:{i+1}: expected {key} header')
+        else:
+            fields[key] = lines[i].removeprefix(start).removesuffix(suffix)
+    declared = set()
+    for site in fields.get('Source', '').split('; '):
+        match = SOURCE_SITE.fullmatch(site)
+        if not match:
+            errors.append(f'{path}: invalid Source location {site!r}')
+        else:
+            declared.add(match.groups())
+    if declared != sites:
+        errors.append(f'{path}: Source repository, pin or path differs from the verified files in {section}')
+    if fields.get('Licence') != licence:
+        errors.append(f'{path}: expected Licence: {licence} from {section}')
+    if not CHANGES.fullmatch(fields.get('Changes', '')):
+        errors.append(f'{path}: invalid Changes header')
+    return errors
 
 
 def check_attribution(root):
+    notices = root / 'THIRD_PARTY_NOTICES.md'
+    if not notices.is_file():
+        return ['missing THIRD_PARTY_NOTICES.md']
     errors = []
-    for pattern, marker in DERIVED_SOURCES.items():
-        for source in sorted(root.glob(pattern)):
-            lines = source.read_text().splitlines()[:3]
-            formats = (rf'Source: {SOURCE_SITE}(?:; {SOURCE_SITE})*',
-                       r'Licence: [\w.+()-]+(?: [\w.+()-]+)*',
-                       r'Changes: (?:transcribed to Lean|rewritten as a minimal example|unmodified copy)(?:[;,] .+)?')
-            for i, fmt in enumerate(formats):
-                if i >= len(lines) or not re.fullmatch(re.escape(marker) + ' ' + fmt, lines[i]):
-                    errors.append(f'{source.relative_to(root)}:{i + 1}: expected {fmt.split(":")[0]} header')
+    records = attribution_records(notices.read_text(), errors)
+    seen = set()
+    for directory, patterns in DERIVED_SOURCES.items():
+        sources = (file for pattern in patterns for file in (root / directory).glob(pattern))
+        for source in sorted(sources):
+            path = source.relative_to(root)
+            identifier = source.stem.split('_', 1)[0] if directory == 'tests/dist_litmus' else path.as_posix()
+            if identifier in seen:
+                errors.append(f'{path}: duplicate attribution identifier {identifier}')
+            seen.add(identifier)
+            if identifier in records:
+                errors.extend(check_source_header(source, path, records[identifier]))
+            else:
+                errors.append(f'{path}: {identifier} missing from notices')
+    errors.extend(f'{identifier}: listed in notices but missing from registered derived sources'
+                  for identifier in sorted(records.keys() - seen))
     return errors
 
 

@@ -1,3 +1,6 @@
+-- Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/triton/language/standard.py:77-114
+-- Licence: MIT
+-- Changes: transcribed to Lean; state the grouped coordinate formula and prove it for the expanded program
 import VeriTile.Dist.Frontend.TritonExt.Swizzle
 import VeriTile.Triton.Float.Structural
 import VeriTile.Triton.Semantics.Step

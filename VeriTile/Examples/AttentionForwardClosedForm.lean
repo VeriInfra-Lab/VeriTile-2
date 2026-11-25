@@ -1,3 +1,6 @@
+-- Source: thunlp/TritonBench@603e28a5050e8c268f6883a69709d477a272d49a data/TritonBench_G_v1/attention_forward_triton.py:6-79; thu-ml/SageAttention@1d8f5314f0a6ec6d5f9a63bf0e60a0b55da80dac sageattention/attn_qk_int8_per_block_h96.py:6-80; VeriInfra-Lab/VeriTile-2@f71dffb1dc5bcf20f6680f318a83d852dd1e921f bench/tritonbench_g/attention_forward_triton/AttentionForwardTriton.lean:136-196
+-- Licence: Apache-2.0 AND BSD-3-Clause AND MIT
+-- Changes: transcribed to Lean; copy the historical Lean surface kernel unchanged and add the local closed-form proof
 import VeriTile.Triton.Core
 import VeriTile.Triton.Semantics
 import VeriTile.Triton.Float

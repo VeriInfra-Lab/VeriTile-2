@@ -3,7 +3,7 @@
 # Changes: rewritten as a minimal example; Two ranks complete a non-blocking put before signalling
 # LIT-c06. A non-blocking put, a quiet, then the signal.
 # Context: NVSHMEM 3.6.5, "Remote Memory Access" (nvshmem_put_nbi), "Memory
-# Ordering" (nvshmem_quiet) and "Signaling Operations".
+# Ordering" (nvshmem_quiet) and the example at the head of "Signaling Operations".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.
 # Launch: ranks 0 and 1, grid 1. Each buffer has NBYTES symmetric bytes (rank

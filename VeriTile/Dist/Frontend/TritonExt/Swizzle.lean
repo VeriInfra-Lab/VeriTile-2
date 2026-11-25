@@ -1,3 +1,6 @@
+-- Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/triton/language/standard.py:77-114
+-- Licence: MIT
+-- Changes: transcribed to Lean; expand the grouped coordinate calculation with fresh integer registers
 import VeriTile.Triton.DSL.SourceProcedures
 import VeriTile.Triton.DSL.PythonFullConstructors
 
