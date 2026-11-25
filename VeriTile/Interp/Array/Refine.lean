@@ -260,4 +260,17 @@ theorem interp_refines (M : CAlgebra α) (kq : QKernel) (s : State α) :
   cases kq with
   | mk _ _ code => exact run_refines M code s
 
+private def storeSeven : QKernel :=
+  .mk [] [] [.alg (.store .nat [] (.region "out" (.constNat 0)) (.constNat 7) .none)]
+
+/-- After storing 7, `interp_refines` gives equal observable states. Comparing the
+representations directly fails: their hash-map patch counts are zero and one. -/
+example (M : CAlgebra α) (s : State α) :
+    (Array.interp M storeSeven s).map State.view ≠ Interp.interp M storeSeven s.view := by
+  intro h
+  have sizes := congrArg (Option.map fun t : Interp.State α => t.cells.size) h
+  simp [storeSeven, Array.interp, Array.run, Array.step, Array.stepAlg, Array.store, Array.scatter,
+    Interp.interp, Interp.exec, Interp.run, Interp.step, Interp.stepAlg, Interp.store,
+    Interp.State.scatter, Interp.State.write, State.view, Interp.evalOp, Std.HashMap.size_insert] at sizes
+
 end VeriTile.Interp.Array
