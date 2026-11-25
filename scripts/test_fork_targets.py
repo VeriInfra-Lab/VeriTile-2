@@ -81,27 +81,47 @@ class ForkTargetGates(unittest.TestCase):
 
     def test_sources_that_hide_sorry_warnings_fail(self):
         # Each of these silenced the warning in a real build or `lake env lean` run (PR #605 reviews).
-        admit = 'example : 1 = 2 := by admit\n'
+        # A body without any sorry source, so that each case depends only on its own rule.
+        quiet = 'example : True := trivial\n'
         hiding = {
             'lakefile.toml': '[[lean_lib]]\nname = "FinalRegressions"\nleanOptions = { warn.sorry = false }\n',
             'library/lakefile.toml': 'moreLeanArgs = ["-Dwarn.sorry=false"]\n',
             'tests/lean/Quiet.lean': 'set_option warn.sorry false in\ntheorem t : 1 = 2 := sorry\n',
-            'tests/lean/Guarded.lean': '/-- warning: declaration uses `sorry` -/\n#guard_msgs in\n' + admit,
+            'tests/lean/Guarded.lean': '/-- warning: declaration uses `sorry` -/\n#guard_msgs in\n' + quiet,
             # Round 3: one-token variants of the same hides.
-            'tests/lean/DropWarning.lean': '#guard_msgs (drop warning) in\n' + admit,
-            'tests/lean/DropAll.lean': '#guard_msgs (drop all) in\n' + admit,
-            'tests/lean/QuotedOption.lean': 'set_option warn.«sorry» false in\ntheorem t : 1 = 2 := by admit\n',
+            'tests/lean/DropWarning.lean': '#guard_msgs (drop warning) in\n' + quiet,
+            'tests/lean/DropAll.lean': '#guard_msgs (drop all) in\n' + quiet,
+            'tests/lean/QuotedOption.lean': 'set_option warn.«sorry» false in\n' + quiet,
             'tests/lean/LaxGuard.lean': ('/-- warning: declaration\nuses `sorry` -/\n'
-                                         '#guard_msgs (whitespace := lax) in\n' + admit),
+                                         '#guard_msgs (whitespace := lax) in\n' + quiet),
             'tests/lean/SorryAx.lean': 'example : 1 = 2 := sorryAx _ false\n',
             'nested lakefile': '[[lean_lib]]\nname = "FinalRegressions"\nleanOptions = { warn = { sorry = false } }\n',
+            # Round 4: a substring guard swallows the warning of an `admit` or `stop`.
+            'tests/lean/SubstringWarning.lean': '/-- warning -/\n#guard_msgs (substring := true) in\n'
+                                                'theorem t : 1 = 2 := by admit\n',
+            'tests/lean/MultiLineWarning.lean': '/-- info: ok\n---\nWarning: declaration\n-/\n'
+                                                '#guard_msgs (substring := true) in\nexample : True := trivial\n',
+            'tests/lean/SubstringGuard.lean': '/-- warning: declaration uses -/\n#guard_msgs (substring := true) in\n'
+                                              'example : True := trivial\n',
+            'tests/lean/ThenAdmit.lean': 'theorem t : 1 = 2 ∧ 1 = 2 := by constructor <;> admit\n',
+            'tests/lean/BulletAdmit.lean': 'theorem t : 1 = 2 := by\n  · admit\n',
+            'tests/lean/LineAdmit.lean': 'theorem t : 1 = 2 := by\n  admit\n',
+            'tests/lean/Stop.lean': 'theorem t : 1 = 2 := by stop\n  simp\n',
+            'tests/lean/LineStop.lean': 'theorem t : 1 = 2 := by\n  stop\n  simp\n',
         }
         for case, text in hiding.items():
             relative = 'lakefile.toml' if case == 'nested lakefile' else case
             with tempfile.TemporaryDirectory() as temp:
                 root = Path(temp)
                 (root / 'tests/lean').mkdir(parents=True)
-                (root / 'tests/lean/Clean.lean').write_text('theorem t : True := trivial  -- admit nothing\n')
+                # Names, English and other guards that must stay allowed.
+                (root / 'tests/lean/Clean.lean').write_text(
+                    'theorem t : True := trivial  -- admit nothing; stop here\n'
+                    'theorem admit (stop : Nat) : stop = stop := rfl\n'
+                    'def f (x : Nat) := x.admit (stop := 1)\n'
+                    'stop = tl.num_programs(0)\n'
+                    '/-- info: 1 -/\n#guard_msgs in\n#eval 1\n'
+                    '/-- error: no -/\n#guard_msgs (substring := true) in\n#eval f\n')
                 # The word in a comment line of a lakefile is fine.
                 (root / 'lakefile.toml').write_text('name = "veritile"\n# no sorry here\n')
                 allowlist = root / 'allowlist.txt'

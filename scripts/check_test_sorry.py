@@ -17,9 +17,13 @@ can hide them. `--sources` (one gate command) therefore matches what is being
 hidden, not the ways of hiding it. It fails on
 - the word `sorry` outside `#` comment lines of lakefile.toml and
   library/lakefile.toml (any spelling of the `warn.sorry` option);
-- the words `sorry` and `sorryAx` (also inside «») and the `#guard_msgs`
-  filters `drop warning` and `drop all` in a tests/lean source, unless the
-  file is allowlisted and the line names the allowlisted declaration.
+- in a tests/lean source: the words `sorry` and `sorryAx` (also inside «»);
+  `admit` and `stop` (which is `repeat sorry`) in tactic position; the
+  `#guard_msgs` filters `drop warning` and `drop all`; and a `#guard_msgs`
+  whose expected-message docstring contains the word `warning` (a
+  `substring := true` guard can then swallow the `sorry` warning). Such a line
+  passes only if its file is allowlisted and the line, or for a guard the
+  next line, names the allowlisted declaration.
 """
 import argparse
 from pathlib import Path
@@ -56,6 +60,10 @@ def declaration(file, line, column):
 
 LAKEFILE_WORDS = re.compile(r'\bsorry\b')
 TEST_WORDS = re.compile(r'\bsorry(?:Ax)?\b|\bdrop\s+(?:warning|all)\b')
+# Tactic position only, outside `--` comments: `admit` and `stop` are also English words and names.
+TACTICS = re.compile(r'(?:^|\bby\b|<;>|;|\(|·)\s*admit\b|(?:\bby\b|<;>|;|·)\s*stop\b|^\s*stop\s*$')
+# A docstring directly before `#guard_msgs` holds the messages it expects.
+GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*)?#guard_msgs\b', re.DOTALL)
 
 
 def tripwires(root, accepted):
@@ -69,10 +77,20 @@ def tripwires(root, accepted):
     for path in sorted((root / 'tests/lean').rglob('*.lean')):
         file = path.relative_to(root).as_posix()
         names = {name for f, name in accepted if f == file}
-        for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
-            if any(re.search(r'(?<![\w.])' + re.escape(name) + r'(?![\w.])', line) for name in names):
-                continue
-            hits += [f'{file}:{number}: {match.group(0)}' for match in TEST_WORDS.finditer(line)]
+        text = path.read_text(errors='replace')
+        lines = text.splitlines()
+
+        def named(*texts):
+            return any(re.search(r'(?<![\w.])' + re.escape(name) + r'(?![\w.])', t) for name in names for t in texts)
+        for number, line in enumerate(lines, 1):
+            if not named(line):
+                hits += [f'{file}:{number}: {match.group(0).strip()}' for match in
+                         [*TEST_WORDS.finditer(line), *TACTICS.finditer(line.split('--')[0])]]
+        for match in GUARD.finditer(text):
+            number = text.count('\n', 0, match.end()) + 1
+            if match.group(1) and re.search(r'\bwarning\b', match.group(1), re.IGNORECASE) and \
+                    not named(*lines[number - 1:number + 1]):
+                hits.append(f'{file}:{number}: #guard_msgs expecting a warning')
     return hits
 
 
