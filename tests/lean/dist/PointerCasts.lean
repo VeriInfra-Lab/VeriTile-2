@@ -67,15 +67,14 @@ example : (with_pointer_views aliased in triton {
     tl.store(narrow, x)
   }) = .error "pointer view: mixed access widths or incorrect launch unit for this buffer" := rfl
 
--- The two NVSHMEM put helpers cast each endpoint to void. Counts and addresses
--- for the two physical buffers use their respective cell units.
-example : (with_pointer_views (args .bf16 .f8e4) in triton {
+-- Signed transfers preserve the dtype and number of cells through both void casts.
+example : (with_pointer_views (args .bf16 .bf16) in triton {
     src = tl.cast(p, tl.pointer_type(tl.void), _semantic=_semantic)
     dst = tl.cast(destination, tl.pointer_type(tl.void), _semantic=_semantic)
     libshmem_device.putmem_nbi_block(dst, src, 8, 1)
     libshmem_device.getmem_block(dst, src, 8, 1)
-  }) = .ok [.put (cells "other" 1 0 4) (cells "scratch" 0 0 8),
-    .get (cells "other" 0 0 4) (cells "scratch" 1 0 8)] := rfl
+  }) = .ok [.put (cells "other" 1 0 4) (cells "scratch" 0 0 4),
+    .get (cells "other" 0 0 4) (cells "scratch" 1 0 4)] := rfl
 
 example : (with_pointer_views (args .bf16 .bf16) in triton {
     libshmem_device.putmem_block(destination, p, 3, 1)
@@ -84,6 +83,20 @@ example : (with_pointer_views (args .bf16 .bf16) in triton {
 example : (with_pointer_views (args .bf16 .bf16) in triton {
     libshmem_device.getmem_block(destination, p, 3, 1)
   }) = .error "pointer view: byte count is not divisible by the buffer unit" := rfl
+
+-- A raw byte copy between distinct cell formats is outside cell-to-cell Transfer.
+example : (with_pointer_views (args .bf16 .f8e4) in triton {
+    libshmem_device.putmem_nbi_block(destination, p, 8, 1)
+  }) = .error "pointer view: cell transfers require the same dtype at both endpoints" := rfl
+
+example : (with_pointer_views (args .bf16 .f8e4) in triton {
+    libshmem_device.getmem_block(destination, p, 8, 1)
+  }) = .error "pointer view: cell transfers require the same dtype at both endpoints" := rfl
+
+-- Equal byte counts and equal numbers of cells still require matching dtype tags.
+example : (with_pointer_views (args .fp16 .fp16) in triton {
+    libshmem_device.putmem_block(destination, p, 8, 1)
+  }) = .error "pointer view: cell transfers require the same dtype at both endpoints" := rfl
 
 -- The typed uint64 pointer identity checked in the unsigned-wrapper branches.
 example : (with_pointer_views (args .u64 .u64) in triton {
@@ -94,6 +107,42 @@ example : (with_pointer_views (args .u64 .u64) in triton {
 example : (with_pointer_views (args .i64 .i64) in triton {
     q = tl.cast(p, pi_u64_t, _semantic=_semantic)
   }) = .error "pointer view: signed signal-word reinterpretation belongs to #549" := rfl
+
+-- An access must match the allocation dtype even after erasing the pointee,
+-- recovering a pointer from an aligned integer or accepting its declared type.
+example : (with_pointer_views (args .i64 .i64) in triton {
+    v = tl.cast(p, tl.pointer_type(tl.void))
+    q = tl.cast(v, pi_u64_t, _semantic=_semantic)
+    x = tl.load(q)
+  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+
+example : (with_pointer_views (args .i64 .i64) in triton {
+    q = tl.cast(4104, pi_u64_t, _semantic=_semantic)
+    x = tl.load(q)
+  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+
+example : (with_pointer_views (args .u64 .i64) in triton {
+    x = tl.load(p)
+  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+
+example : (with_pointer_views (args .bf16 .bf16) in triton {
+    q = tl.cast(p, tl.pointer_type(tl.float16))
+    tl.store(q, 0)
+  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+
+example : (with_pointer_views (args .bf16 .f8e4) in triton {
+    x = tl.load(p)
+  }) = .error "pointer view: mixed access widths or incorrect launch unit for this buffer" := rfl
+
+private def withSecond (base extent : Nat) : Launch := { pointers := [
+  ⟨"a", scratch .f8e4, .bf16⟩,
+  ⟨"b", { other with baseByte := base, extentBytes := extent }, .bf16⟩] }
+
+example : (with_pointer_views (withSecond 4098 2) in triton {})
+  = .error "pointer view: distinct allocations overlap in one address space" := rfl
+-- Half-open intervals permit adjacent allocations and empty storage.
+example : (with_pointer_views (withSecond 12288 2) in triton {}) = .ok [] := rfl
+example : (with_pointer_views (withSecond 4098 0) in triton {}) = .ok [] := rfl
 
 example : (with_pointer_views (args .i8 .i8) in triton {
     q = tl.cast(1, tl.pointer_type(tl.int8))

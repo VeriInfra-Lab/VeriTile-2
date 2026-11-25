@@ -2,7 +2,7 @@ import VeriTile.Dist.SymmHeap
 import VeriTile.Triton.DSL.PythonFullConstructors
 
 /-! Kernel-level typed pointer views (#548). The launch binding supplies allocation
-provenance, extent, base alignment and the **single actual access width** of each
+provenance, extent, base alignment and the **actual cell dtype** of each
 physical buffer. Pointer formation need not dereference the declared pointee.
 Changing that access unit between device launches requires that no device read
 observe the previous contents. For T04 the byte-exact host gather is an additional
@@ -107,8 +107,10 @@ private def Pointer.range (p : Pointer) (bytes : Nat) : Except String CellRange 
 private def Pointer.dereference (p : Pointer) : Except String (SourceDType × CellRange) := do
   let some dtype := p.pointee | throw "pointer view: cannot dereference a void pointer"
   let width ← byteWidth dtype
-  unless width == (← byteWidth p.allocation.unit) do
-    throw "pointer view: mixed access widths or incorrect launch unit for this buffer"
+  unless dtype == p.allocation.unit do
+    if width != (← byteWidth p.allocation.unit) then
+      throw "pointer view: mixed access widths or incorrect launch unit for this buffer"
+    throw "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549"
   return (dtype, ← p.range width)
 
 private def indexValue : Operand → Except String Int
@@ -171,6 +173,9 @@ def project (launch : Launch) (code : List Instruction) : Except String (List Ac
       throw "pointer view: allocation is not aligned to its cell unit"
     if allocations.any (fun b => b != a && b.space == a.space && b.region == a.region) then
       throw "pointer view: inconsistent allocation for aliased arguments"
+    if allocations.any (fun b => b != a && b.space == a.space &&
+        max a.baseByte b.baseByte < min (a.baseByte + a.extentBytes) (b.baseByte + b.extentBytes)) then
+      throw "pointer view: distinct allocations overlap in one address space"
   for arg in launch.pointers do
     let p : Pointer := ⟨arg.allocation, 0, some arg.declared⟩
     env := (arg.name, .pointer (← p.checkAlignment)) :: env
@@ -194,6 +199,8 @@ def project (launch : Launch) (code : List Instruction) : Except String (List Ac
     | .transfer put d s n rank =>
       let dst ← ptr d
       let src ← ptr s
+      unless dst.allocation.unit == src.allocation.unit do
+        throw "pointer view: cell transfers require the same dtype at both endpoints"
       let bytes ← natIndex (← indexValue (← value n))
       let peer ← natIndex (← indexValue (← value rank))
       let dr ← dst.range bytes
