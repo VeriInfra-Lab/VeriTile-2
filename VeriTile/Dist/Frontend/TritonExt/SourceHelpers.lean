@@ -1,6 +1,7 @@
--- Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/allgather_group_gemm.py:534-541; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/moe_reduce_ar.py:47-57; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/moe_reduce_rs.py:124-134; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/04-deepseek-infer-all2all.py:78-79; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/common_ops.py:53-57
+-- Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/allgather_group_gemm.py:534-541; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/moe_reduce_ar.py:47-57; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/moe_reduce_rs.py:124-134; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/04-deepseek-infer-all2all.py:78-79; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/common_ops.py:53-57; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/all_to_all_single_2d.py:35-39
 -- Licence: MIT
 -- Changes: transcribed to Lean; instantiate the pinned scalar and tuple results at their lexical call sites
+import VeriTile.Dist.Frontend.TritonExt.SignedSum
 import VeriTile.Dist.Frontend.TritonExt.Range
 import VeriTile.Triton.DSL.StatementJitFunctions
 
@@ -192,10 +193,21 @@ def signatureNames (signature : Syntax) : TermElabM (List Name × List Name) := 
   let parsed ← match Parser.runParserCategory (← getEnv) `term ("triton {\n" ++ source ++ "\n}") with
     | .ok body => pure body
     | .error e => throwErrorAt raw "{e}"
+  let parsed ← if caller.isOfKind ``CallSignature.withCall &&
+      (source.contains "get_element_at" || source.contains "tl.cumsum" || source.contains "tl.sum") then do
+    let (next, _) ← SignedSum.prepare caller[1] parsed fun arg => do
+      let some (name, args) := call? arg | return none
+      unless name == `get_element_at do return none
+      let bindings ← bindActuals ["tensor", "idx"] args
+      return (Prod.mk <$> bindings.lookup "tensor" <*> bindings.lookup "idx")
+    pure next
+  else pure parsed
   let (expanded, _) ← (lower parsed constants).run ((ids parsed ++ occupied ++ constants).eraseDups)
   let `(triton { $body:tritonStmt* }) := expanded[0]! | throwError "invalid expanded caller"
   let text := String.intercalate "\n" (body.toList.map (PythonFullConstructors.render ·.raw))
   let repl := Syntax.atom raw.getHeadInfo ("{\n" ++ text ++ "\n}")
   elabTerm (caller.setArgs (caller.getArgs.set! (caller.getArgs.size - 1) repl)) expected
+
+@[term_elab VeriTile.Triton.DSL.CallSignature.withCall] def elaborateSigned : TermElab := SignedSum.elaborate
 
 end VeriTile.Dist.Frontend.TritonExt.SourceHelpers
