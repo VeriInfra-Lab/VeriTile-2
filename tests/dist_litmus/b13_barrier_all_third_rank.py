@@ -1,6 +1,9 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/01-distributed-notify-wait.py:165-168
+# Licence: MIT
+# Changes: rewritten as a minimal example; A store to rank 1 before a barrier over all ranks; ranks 1 and 2 read it after the barrier
 # LIT-b13. A store to rank 1 before a barrier over all ranks; ranks 1 and 2
 # read it after the barrier.
-# Source: NVSHMEM 3.6.5, "Collective Communication" (nvshmem_barrier_all) and
+# Context: NVSHMEM 3.6.5, "Collective Communication" (nvshmem_barrier_all) and
 # "Memory Model", "Visibility Guarantees";
 # tutorials/01-distributed-notify-wait.py:165-168 (the host form).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

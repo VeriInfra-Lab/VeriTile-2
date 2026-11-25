@@ -6,27 +6,31 @@ import bench.examples.Welford.Kernels
 namespace VeriTile.Interp.FiniteBridge.Tests
 open VeriTile.Triton VeriTile.Triton.FP
 
-private def inputs (rs : List RegionName) : Layout where
-  reads r d := r ∈ rs ∧ d = .real
+def inputs (rs : List RegionName) (bf16 : Option RegionName := none) : Layout where
+  reads r d := if bf16 = some r then d = .bf16 else r ∈ rs ∧ d = .real
+  pointerRegion r := r ∈ rs
   bytes _ := False
 
 -- Follow the transcribed kernel's syntax, including its loop body exactly once.
-local macro "finite_code" : tactic => `(tactic|
+scoped macro "finite_code" : tactic => `(tactic|
   repeat' first
-    | apply Code.assign | apply Code.store | apply Code.atomic | apply Code.cond | apply Code.branches
+    | refine Code.assignUntracked (by decide) (by trivial) ?_ ?_
+    | apply Code.assign | apply Code.store | apply Code.storePtr | apply Code.atomic | apply Code.cond | apply Code.branches
     | apply Code.loop | exact Code.nil
-    | apply FiniteExpr.alg | apply FiniteExpr.typed | apply FiniteExpr.load
+    | apply FiniteExpr.alg | apply FiniteExpr.typed | apply FiniteExpr.fill
     | apply FiniteExpr.fp32 | apply FiniteOp.masked | apply FiniteOp.maskedOther
+    | apply FiniteOp.ptrRead | apply FiniteOp.base | apply FiniteOp.ptrAdd | apply FiniteOp.neg
     | apply FiniteOp.load | apply FiniteOp.maximum | apply FiniteOp.maxFloat | apply FiniteOp.minFloat
     | apply FiniteOp.reduceMax | apply FiniteOp.exp | apply FiniteOp.log
     | apply FiniteOp.libdeviceExp | apply FiniteOp.libdeviceLog | apply FiniteOp.sigmoid | apply FiniteOp.sqrt
     | apply FiniteOp.broadcast | apply FiniteOp.full
+    | apply FiniteOp.expand | apply FiniteOp.transpose | apply FiniteOp.dot
     | apply FiniteOp.cast | apply FiniteOp.sum | apply FiniteOp.select | apply FiniteOp.bool | apply FiniteOp.int
     | apply FiniteOp.nat | apply FiniteOp.reg | apply FiniteOp.literal | apply FiniteOp.fromNat
     | apply FiniteOp.add | apply FiniteOp.sub | apply FiniteOp.mul | apply FiniteOp.div
     | apply FiniteOp.precision | apply FiniteOp.bf16 | trivial)
 
-local macro "check_sites" : tactic => `(tactic|
+scoped macro "check_sites" : tactic => `(tactic|
   (try simp only [CheckedExpr, CheckedMask, ComputeExpr.toAlgorithm?, ComputeOp.toAlgorithm?, Except.ok.injEq,
      forall_eq', forall_eq, ComputeDType.eraseDType, Op.natToUnsigned]
    repeat' apply And.intro
@@ -35,7 +39,7 @@ local macro "check_sites" : tactic => `(tactic|
      simp only [AllNodes.eq_def]
      repeat' apply And.intro
      all_goals first | trivial | apply allowed <;> simp [StaticSite, StructuralNode, NonEmptyArgMax, ReshapeSameSize,
-       DecodeSite, ReadSite, inputs, Region.cast]))
+       DecodeSite, ReadSite, inputs, Region.cast] <;> first | apply FiniteOp.reg; trivial | assumption))
 
 theorem vectorAdd (x y out : RegionName) (n : Nat) (s) (hs : Invariant (inputs [x,y]) s) :
     BridgePre (Bench.Examples.VectorAdd.Kernels.addKernel x y out n) s := by
@@ -63,7 +67,7 @@ private def witness : Structural.State (WithBot ℝ) where
   pids _ := 0
   numPids _ := 1
   undef d _ _ := match d with
-    | .real => (1 : ℝ)
+    | .real | .bf16 => (1 : ℝ)
     | d => Structural.defaultValue d
 
 theorem witnessInvariant (rs) : Invariant (inputs rs) witness := by
@@ -78,6 +82,58 @@ theorem witnessInvariant (rs) : Invariant (inputs rs) witness := by
     simp [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue, witness]
     rfl
   · simp [inputs]
+
+-- Both exponentials map an evaluated bottom lane to the finite real zero.
+theorem exponentialsCertifyBottom (L : Layout) :
+    FiniteOp L (.exp .negInf) ∧ FiniteOp L (.libdeviceExp .negInf) :=
+  ⟨.exp _, .libdeviceExp _⟩
+
+private def scratchState (scratch : RegionName) : Structural.State (WithBot ℝ) :=
+  { witness with
+    mem := fun r _ => if r = scratch then .mk .bf16 (1 : ℝ) else .mk .real (1 : ℝ) }
+
+/-- A bf16 scratch region and real inputs have a simultaneous witness, for any
+choice of tracked registers, including the register predicate used by the census. -/
+theorem scratchLayoutSatisfiable (rs : List RegionName) (scratch : RegionName)
+    (tracked : RegName → Prop := fun _ => True) :
+    ∃ s, Invariant { inputs rs (some scratch) with finiteReg := tracked } s := by
+  refine ⟨scratchState scratch, ?_⟩
+  constructor
+  · intro r d hr o
+    by_cases h : r = scratch
+    · subst r
+      have hd : d = .bf16 := by simpa [inputs] using hr
+      subst d
+      exact ⟨_, by simp [scratchState], 1, rfl⟩
+    · have hd : r ∈ rs ∧ d = .real := by simpa [inputs, Ne.symm h] using hr
+      rcases hd with ⟨_, rfl⟩
+      exact ⟨_, by simp [scratchState, h], 1, rfl⟩
+  · simp [scratchState, witness]
+  · intro r d hr o
+    by_cases h : r = scratch
+    · subst r
+      have hd : d = .bf16 := by simpa [inputs] using hr
+      subst d
+      have fl : ¬ (∀ f : FloatDType, f.toTileDType ≠ .bf16) := fun h => h .bf16 rfl
+      simp [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue, scratchState, witness]
+      rfl
+    · have hd : r ∈ rs ∧ d = .real := by simpa [inputs, Ne.symm h] using hr
+      rcases hd with ⟨_, rfl⟩
+      have fl : ¬ (∀ f : FloatDType, f.toTileDType ≠ .real) := fun h => h .real rfl
+      simp [UndefAgrees, fl, toCarrier, BlockState.unspecifiedValue, scratchState, witness]
+      rfl
+  · simp [inputs]
+
+theorem scratchInputsSatisfiable (rs : List RegionName) (r : RegionName) :
+    ∃ s, Invariant (inputs rs (some r)) s :=
+  scratchLayoutSatisfiable rs r
+
+-- A prebound pointer cannot manufacture provenance for a foreign region.
+example : ¬ Invariant (inputs ["x"])
+    (witness.setReg "p" .ptr [] (fun _ => ("outside", 7))) := by
+  intro inv
+  have target := inv.registers .ptr [] "p" _ (by trivial) (Structural.State.setReg_same ..) PUnit.unit
+  simp [FiniteValue, inputs] at target
 
 theorem welfordBridge (n stride : Nat) :
     let ck := Bench.Examples.Welford.Kernels.onlineWelfordKernel "x" "mean" "var" n stride
@@ -158,12 +214,65 @@ private theorem finiteExpr_not_bottom {L d sh} {e : ComputeExpr d sh} (h : Finit
     storesBottom e = Bool.false := by
   cases h with
   | alg hp => exact noBottomLiteral hp
-  | typed | load | fp32 => rfl
+  | typed | fill | fp32 => rfl
 
 example (L : Layout) : ¬ Code L negInfBody := by
   intro hc
   cases hc with
   | store _ _ _ hf _ _ => exact Bool.noConfusion (finiteExpr_not_bottom hf)
+
+private def refTracked (L : Layout) : {d : TileDType} → {sh : TileShape} → Op d sh → Prop
+  | .real, _, .ref _ _ n => L.finiteReg n
+  | _, _, _ => True
+
+private theorem FiniteOp.refTracked {L d sh} {e : Op d sh} (h : FiniteOp L e) : refTracked L e := by
+  cases h <;> first | trivial | assumption | (cases d <;> trivial)
+                      | (rename_i dst _ _; cases dst <;> trivial)
+
+private def exprRefTracked (L : Layout) : {d : TileDType} → {sh : TileShape} → ComputeExpr d sh → Prop
+  | _, _, .alg e => refTracked L e
+  | _, _, _ => True
+
+private theorem FiniteExpr.refTracked {L d sh} {e : ComputeExpr d sh} (h : FiniteExpr L e) :
+    exprRefTracked L e := by
+  cases h with
+  | alg h => exact FiniteOp.refTracked h
+  | typed | fill | fp32 => trivial
+
+/-- Copying bottom through a register cannot evade the D1 store check. -/
+theorem rejectsLaunderedBottom (L : Layout) : ¬ Code L [
+    .assign .real [] "m" (.alg .negInf),
+    .store .real [] (.region ⟨"x"⟩ (.constNat 0)) (.alg (.ref .real [] "m")) .none,
+    .assign .real [] "y" (.alg (.load .real (.region ⟨"x"⟩ (.constNat 0)) .none))] := by
+  intro code
+  cases code with
+  | assign hf _ _ => exact Bool.noConfusion (finiteExpr_not_bottom hf)
+  | assignUntracked untracked _ _ tail =>
+    cases tail with
+    | store _ _ _ hf _ _ =>
+      exact untracked (FiniteExpr.refTracked hf)
+
+private def ptrX : MemAccess .real [] := .ptr (.ptrBase (⟨"x"⟩ : Region .real))
+
+/-- Direct pointer stores of bottom fail independently of every layout choice. -/
+theorem rejectsPointerBottom (L : Layout) : ¬ Code L [
+    .store .real [] ptrX (.alg .negInf) .none,
+    .assign .real [] "y" (.alg (.load .real (.region ⟨"x"⟩ (.constNat 0)) .none))] := by
+  intro code
+  cases code with
+  | storePtr _ _ hf _ _ => exact Bool.noConfusion (finiteExpr_not_bottom hf)
+
+/-- An untracked assignment cannot launder bottom through a pointer store. -/
+theorem rejectsLaunderedPointerBottom (L : Layout) : ¬ Code L [
+    .assign .real [] "m" (.alg .negInf),
+    .store .real [] ptrX (.alg (.ref .real [] "m")) .none,
+    .assign .real [] "y" (.alg (.load .real (.region ⟨"x"⟩ (.constNat 0)) .none))] := by
+  intro code
+  cases code with
+  | assign hf _ _ => exact Bool.noConfusion (finiteExpr_not_bottom hf)
+  | assignUntracked untracked _ _ tail =>
+    cases tail with
+    | storePtr _ _ hf _ _ => exact untracked (FiniteExpr.refTracked hf)
 
 example (s : Structural.State (WithBot ℝ)) :
     let ck := ComputeKernel.mk [] ["x"] negInfBody

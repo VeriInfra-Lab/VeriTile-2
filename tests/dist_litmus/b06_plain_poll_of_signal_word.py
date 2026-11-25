@@ -1,8 +1,11 @@
+# Source: VeriInfra-Lab/VeriTile-2@51419efee8944c00d6d6a8296bf708ad2956b1d7 documents/dist/LitmusTable.md:653-672
+# Licence: MIT
+# Changes: rewritten as a minimal example; Two ranks transfer data and poll the signal with an ordinary load
 # LIT-b06. The receiver polls the flag with an ordinary load.
-# Source: NVSHMEM 3.6.5, "Troubleshooting And FAQs" ("Why is the receive
+# Context: NVSHMEM 3.6.5, "Troubleshooting And FAQs" ("Why is the receive
 # buffer not updated with remote data even after synchronization with a
-# flag?"); "Memory Model", "Atomicity Guarantees"; the sender is the example
-# at the head of "Signaling Operations".
+# flag?"); "Memory Model", "Atomicity Guarantees";
+# the sender follows the example at the head of "Signaling Operations".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.
 # Launch: ranks 0 and 1, grid 1. buf has NBYTES symmetric bytes (rank 0 holds

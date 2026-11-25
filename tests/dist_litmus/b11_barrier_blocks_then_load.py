@@ -1,6 +1,9 @@
+# Source: tile-ai/tilescale@71e71457d40ed6e6a2dad297936bfdbff21d104b tilelang/language/distributed/sync.py:155-173
+# Licence: MIT
+# Changes: rewritten as a minimal example; A store to the peer before T.barrier_blocks and a load by the peer after it
 # LIT-b11. A store to the peer before T.barrier_blocks and a load by the peer
 # after it.
-# Source: docstrings of barrier_blocks and sync_blocks,
+# Context: docstrings of barrier_blocks and sync_blocks,
 # tilelang/language/distributed/sync.py:155-173 (TS-SYNC).
 # Table: documents/dist/LitmusTable.md. Front end: TileScale 71e7145.
 # A source for later tickets: not run here, and nothing imports it.

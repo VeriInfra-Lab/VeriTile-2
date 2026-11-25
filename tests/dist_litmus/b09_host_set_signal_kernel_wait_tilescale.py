@@ -1,6 +1,9 @@
+# Source: tile-ai/tilescale@71e71457d40ed6e6a2dad297936bfdbff21d104b examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py:101-104,172-184
+# Licence: MIT
+# Changes: rewritten as a minimal example; isolate the host signal and TileScale waiting kernel
 # LIT-b09. The host copies and sets a signal on a stream while a kernel waits
 # on it with T.wait_eq.
-# Source: docs/distributed_api_reference.md, "Host Utilities" and "Wait and
+# Context: docs/distributed_api_reference.md, "Host Utilities" and "Wait and
 # Barrier Operations" (TS-API);
 # examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py:101-104
 # (the wait) and 172-184 (the copy and the stream write, which the example

@@ -1,7 +1,10 @@
+# Source: tile-ai/tilescale@9ba8a605d347f600a95d0275e2639cb00122c084 examples/distributed/deepseek_deepep/intranode/dispatch.py:314,431-435
+# Licence: MIT
+# Changes: rewritten as a minimal example; The sender publishes an offset as -value-1 with a relaxed store; the receiver waits until the word is not 0 and reads it again with a volatile load
 # LIT-b12. The sender publishes an offset as -value-1 with a relaxed store;
 # the receiver waits until the word is not 0 and reads it again with a
 # volatile load.
-# Source: examples/distributed/deepseek_deepep/deepep.md:189-190 at TileScale
+# Context: examples/distributed/deepseek_deepep/deepep.md:189-190 at TileScale
 # 9ba8a605 ("Negative offset encoding", "Queue semantics");
 # intranode/dispatch.py:314 and 431-435 there (the form of the calls);
 # docs/distributed_api_reference.md, "Wait and Barrier Operations" (TS-API).

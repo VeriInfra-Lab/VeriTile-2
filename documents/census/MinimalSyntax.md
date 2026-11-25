@@ -4,8 +4,8 @@ Ticket A0.2 (#74). This page lists the kernel source files that the map (#1)
 targets and, per front end, the constructs their kernels use. The list of
 files is `scripts/census/targets.tsv`. Everything below the marker line near
 the middle of this page is written by `scripts/census/report.py`; the part
-above it is written by hand and was last checked against the report on
-2026-11-11.
+above it is written by hand. Counts were rechecked on 2026-11-23; the macro
+comparison below records the implementation examined on 2026-11-11.
 
 The report is a census of source text. It says what the kernels use, not what
 they mean, and nothing here is a proved result.
@@ -63,7 +63,7 @@ so the four K-N rows that would reuse its tasks have no path.
 
 ## Targets without a file
 
-The manifest has 80 rows: 55 with a path (53 distinct files, since tutorial 04
+The manifest has 74 rows: 49 with a path (47 distinct files, since tutorial 04
 and TileLang `examples/gemm/example_gemm.py` are each named by two families)
 and 25 without. The generated table "Rows without a file" lists the 25 with
 their reasons. By reason:
@@ -72,19 +72,19 @@ their reasons. By reason:
 | --- | --- | --- |
 | No kernel exists | 7 | nanoGPT parts that the plan says are to be written in Triton and TileLang: embedding, GELU, residual add and dropout, generation, and the TileLang side of cross-entropy, AdamW and gradient clipping |
 | No file at the pin | 8 | the six TileScale ports of the K-M kernels; Triton causal attention for nanoGPT (the FA-1 material is Lean only); inter-node dispatch and combine on `wt/deepep-internode` |
-| Source undecided | 5 | the TileScale DeepEP port (next paragraph); four nanoGPT parts whose Triton candidates live in the unpinned benchmark repository |
+| Source undecided | 4 | four nanoGPT parts whose Triton candidates live in the unpinned benchmark repository |
+| Source selected | 1 | records the selected DeepEP variant and its three intranode kernel files (next paragraph) |
 | Not selected | 5 | TileLang counterparts (K-L.1 and K-L.6 have not chosen them); TileLang LayerNorm for nanoGPT; the TileLang softmax of V3.6; V3.1 to V3.4 and V3.9, which name no source |
 
-**The TileScale DeepEP source is undecided.** The GPUs available are Hopper
-only (H800, sm_90). The README of the port on the pinned branch
-`deepep-v2-intranode` says the port is scoped to Blackwell (SM100). A DeepEP
-port that runs on H800 is therefore still to be chosen or made (user decision
-of 2026-11-12). The proofs do not depend on the GPU generation. The manifest
-keeps the files of both pinned branches as candidates, so that the report shows
-what each would require; in the TileScale section they are the kernels whose
-source is `tilescale@c0f80cc5a5e3` or `tilescale@9ba8a605d347`.
+**The DeepEP proof target is version 1 normal mode**, the TileScale port at
+`9ba8a605d347f600a95d0275e2639cb00122c084`, under
+`examples/distributed/deepseek_deepep/intranode/`. The user chose the port on
+2026-11-12 and confirmed its scope on 2026-11-21. The coordinator accepted
+the H800 run in [#457](https://github.com/VeriInfra-Lab/VeriTile-2/issues/457).
+The version 2 and internode rows remain in the census for comparison. The
+proofs are independent of the GPU generation.
 
-Facts for that choice, from a text search of each K-D and K-M file (the
+Architecture mentions, from a text search of each K-D and K-M file (the
 pattern is in the header of `targets.tsv`; it looks for `sm_100` and later
 architectures, Blackwell, B200, `tcgen05`, tensor memory and cluster launch
 control):
@@ -112,12 +112,12 @@ finds mentions, not requirements.
   not followed: its name appears as a call and its body is counted only if
   its file has a row. Two files are listed for that reason, because the
   tutorials reach them from host code: `common_ops.py` and
-  `reduce_scatter.py`. Three kernel files that K-D and K-M kernels call into
-  are not listed: `gemm_rs_threadblock_swizzle.py`, `moe_utils.py` and
-  `memory_ops.py`, all under `python/triton_dist/kernels/nvidia/`.
+  `reduce_scatter.py`. Calls to `warp_prefix_sum_kernel` and
+  `reduce_topk_non_tma_kernel` appear as imported names;
+  `gemm_rs_threadblock_swizzle.py` and `moe_utils.py` have no manifest row.
 - A call name that starts with a dot and contains a second dot, such as
   `.common_ops.barrier_on_this_grid`, comes from a relative import. The same
-  function then appears under two names, in two rows of the table.
+  function can then have separate rows for the two spellings.
   A name with a single leading dot, such as `.to`, is a method call.
 - Attribute uses that are not calls (`tl.constexpr` as an annotation, dtype
   names, enum values), operators, subscripts and the values of keyword
@@ -133,8 +133,7 @@ finds mentions, not requirements.
 This table covers the calls of `triton.language`, the Python builtins, the
 method calls and the statement kinds that the kernels of the Triton and
 Triton-distributed sections use. The two count columns are numbers of kernels,
-out of 23 and 119. Kernel counts for single keywords were taken from the same
-scan and are not in the generated tables.
+out of 23 and 78. Single-keyword counts use the same per-kernel scan. A zero-count row retains the historical syntax comparison.
 
 The answers come from reading, not from running the macro:
 `documents/TritonSubset.md` ("doc" below) and the `syntax` rules and
@@ -154,67 +153,67 @@ declared outside that directory.
 
 | Construct | Triton | Triton-dist. | Accepted | Basis |
 | --- | --- | --- | --- | --- |
-| `Assign` | 23 | 116 | yes | `name = e` and `name := e`, `Syntax.lean:398-399`; doc, "Register assignment". Other assignment targets were not compared |
-| `Expr` (a call as a statement) | 23 | 109 | follows the call | `tl.store`, `tl.atomic_add` and `tl.static_assert` are statement rules, `Syntax.lean:404-407, 421` |
-| `tl.program_id` | 23 | 82 | yes | `Syntax.lean:41-42`, also `axis=`; doc |
-| `tl.load` | 23 | 72 | partly | `Syntax.lean:230-237`; doc. `mask` and `other` are recognised. `volatile=`, used by 4 kernels, is rejected as an unknown keyword, `Expansion/Memory.lean:183`; the doc lists `volatile` as unsupported |
-| `For` | 3 | 88 | yes | over `range(...)` and `tl.static_range(...)`, `Syntax.lean:425-431`. Over `tl.range(...)`: no, see that row |
-| `tl.arange` | 22 | 63 | yes | `Syntax.lean:45-46`; doc |
-| `tl.store` | 23 | 62 | yes | `Syntax.lean:404-406`, `mask` recognised; doc |
-| `range` | 3 | 80 | partly | one to three positional arguments, `Syntax.lean:425-429`. The keyword `step=`, used by 1 kernel, has no rule |
-| `If` | 0 | 82 | yes | `if`, `elif`, `else`, `Syntax.lean:439-452`; doc, "Conditionals", scalar condition only |
-| `.to` | 13 | 44 | yes | `.to(dtype)`, `Syntax.lean:132-150`; doc. With `tl.pointer_type(...)` as argument: no, see that row |
-| `tl.cdiv` | 0 | 55 | yes | `Syntax.lean:102`; doc |
-| `tl.num_programs` | 0 | 46 | yes | `Syntax.lean:43-44`, also `axis=`; doc |
-| `AugAssign` | 0 | 44 | yes | `+=`, `-=`, `*=`, `/=` on a name, `Syntax.lean:400-403`; the doc does not mention it |
-| `Return` | 0 | 43 | yes | `Syntax.lean:422`, `StatementJitFunctions.lean:26`; the doc does not mention it |
-| `tl.cast` | 0 | 39 | partly | `tl.cast(x, dtype)`, `Syntax.lean:115`; doc. No rule takes `bitcast=` (10 kernels), `dtype=` (10) or `_semantic=` (3); the bit-cast spellings that have a rule are `tl.bitcast(x, dtype)` and `x.to(dtype, bitcast=True)`, `Syntax.lean:119-122` |
-| `tl.pointer_type` | 0 | 32 | no | no rule; the doc says pointer casts are not modelled |
-| `AnnAssign` | 0 | 30 | partly | only `name : tl.constexpr = e`, `SourceDType.lean:16` |
-| `While` | 0 | 29 | yes | `RawBodyControl.lean:5`; the doc does not mention `while` |
-| `tl.constexpr(...)` as a call | 0 | 26 | no | no rule for the call; only the annotation of the `AnnAssign` row |
-| `tl.static_assert` | 0 | 26 | yes | `Syntax.lean:421`; the doc does not mention it |
+| `Assign` | 23 | 75 | yes | `name = e` and `name := e`, `Syntax.lean:398-399`; doc, "Register assignment". Other assignment targets were not compared |
+| `Expr` (a call as a statement) | 23 | 68 | follows the call | `tl.store`, `tl.atomic_add` and `tl.static_assert` are statement rules, `Syntax.lean:404-407, 421` |
+| `tl.program_id` | 23 | 57 | yes | `Syntax.lean:41-42`, also `axis=`; doc |
+| `tl.load` | 23 | 41 | partly | `Syntax.lean:230-237`; doc. `mask` and `other` are recognised. `volatile=`, used by zero current targets, is rejected as an unknown keyword, `Expansion/Memory.lean:183`; the doc lists `volatile` as unsupported |
+| `For` | 3 | 51 | yes | over `range(...)` and `tl.static_range(...)`, `Syntax.lean:425-431`. Over `tl.range(...)`: no, see that row |
+| `tl.arange` | 22 | 40 | yes | `Syntax.lean:45-46`; doc |
+| `tl.store` | 23 | 39 | yes | `Syntax.lean:404-406`, `mask` recognised; doc |
+| `range` | 3 | 43 | partly | one to three positional arguments, `Syntax.lean:425-429`. The keyword `step=`, used by 1 kernel, has no rule |
+| `If` | 0 | 47 | yes | `if`, `elif`, `else`, `Syntax.lean:439-452`; doc, "Conditionals", scalar condition only |
+| `.to` | 13 | 25 | yes | `.to(dtype)`, `Syntax.lean:132-150`; doc. With `tl.pointer_type(...)` as argument: no, see that row |
+| `tl.cdiv` | 0 | 39 | yes | `Syntax.lean:102`; doc |
+| `tl.num_programs` | 0 | 30 | yes | `Syntax.lean:43-44`, also `axis=`; doc |
+| `AugAssign` | 0 | 30 | yes | `+=`, `-=`, `*=`, `/=` on a name, `Syntax.lean:400-403`; the doc does not mention it |
+| `Return` | 0 | 32 | yes | `Syntax.lean:422`, `StatementJitFunctions.lean:26`; the doc does not mention it |
+| `tl.cast` | 0 | 21 | partly | `tl.cast(x, dtype)`, `Syntax.lean:115`; doc. No rule takes `bitcast=` (6 kernels), `dtype=` (0) or `_semantic=` (0); the bit-cast spellings that have a rule are `tl.bitcast(x, dtype)` and `x.to(dtype, bitcast=True)`, `Syntax.lean:119-122` |
+| `tl.pointer_type` | 0 | 14 | no | no rule; the doc says pointer casts are not modelled |
+| `AnnAssign` | 0 | 14 | partly | only `name : tl.constexpr = e`, `SourceDType.lean:16` |
+| `While` | 0 | 12 | yes | `RawBodyControl.lean:5`; the doc does not mention `while` |
+| `tl.constexpr(...)` as a call | 0 | 18 | no | no rule for the call; only the annotation of the `AnnAssign` row |
+| `tl.static_assert` | 0 | 10 | yes | `Syntax.lean:421`; the doc does not mention it |
 | call of a `@triton.jit` function of the same file | 0 | 25 | not determined | bound source helpers exist (`StatementJitFunctions.lean:23`, `SourceProcedures.lean:19-24`) and need a binding outside the block; whether the kernels' calls fit was not checked. The doc lists general JIT semantics as unsupported |
-| `tl.zeros` | 0 | 24 | yes | `Syntax.lean:290-293`, `dtype=` recognised (`Expansion/Main.lean:2257`); doc |
-| `tl.dot` | 0 | 22 | yes | `Syntax.lean:181-184`; doc |
-| `min` | 0 | 21 | yes | two arguments, `Syntax.lean:104` |
-| `tl.where` | 1 | 17 | yes | `Syntax.lean:112`; doc |
-| `tl.sum` | 9 | 8 | yes | `Syntax.lean:214`, `axis=` with a literal; doc |
-| call of a `@triton_dist.jit` function of the same file | 0 | 15 | not determined | as for `@triton.jit`; the callee also uses the primitives of the next section |
-| `.record` | 0 | 15 | no | the only method rules are `.to` and `.round_to`. It is the Triton-distributed profiler |
-| `Pass` | 0 | 15 | not determined | a `pass` rule exists for the category `controlSourceStmt` (`ControlSource.lean:61`) and none for `tritonStmt` |
-| `tl.full` | 5 | 10 | yes | `Syntax.lean:280-289`, `dtype=` recognised (`Expansion/Main.lean:2197`); doc |
-| `tl.inline_asm_elementwise` | 0 | 14 | no | one fixed form only: a pure `add.u32` with two inputs, `InlineAsmWordAdd.lean:10-27`; any other assembly is rejected there. The map keeps inline assembly out of scope |
-| call of a `core.extern` function of the same file | 0 | 9 | not determined | such a function builds inline assembly through `_semantic`; no rule was found for it and no binding was looked for |
-| `With` | 0 | 9 | no | no statement rule starts with `with`; the kernels use it for `dl.simt_exec_region()` |
+| `tl.zeros` | 0 | 16 | yes | `Syntax.lean:290-293`, `dtype=` recognised (`Expansion/Main.lean:2257`); doc |
+| `tl.dot` | 0 | 15 | yes | `Syntax.lean:181-184`; doc |
+| `min` | 0 | 13 | yes | two arguments, `Syntax.lean:104` |
+| `tl.where` | 1 | 16 | yes | `Syntax.lean:112`; doc |
+| `tl.sum` | 9 | 4 | yes | `Syntax.lean:214`, `axis=` with a literal; doc |
+| call of a `@triton_dist.jit` function of the same file | 0 | 3 | not determined | as for `@triton.jit`; the callee also uses the primitives of the next section |
+| `.record` | 0 | 3 | no | the only method rules are `.to` and `.round_to`. It is the Triton-distributed profiler |
+| `Pass` | 0 | 9 | not determined | a `pass` rule exists for the category `controlSourceStmt` (`ControlSource.lean:61`) and none for `tritonStmt` |
+| `tl.full` | 5 | 4 | yes | `Syntax.lean:280-289`, `dtype=` recognised (`Expansion/Main.lean:2197`); doc |
+| `tl.inline_asm_elementwise` | 0 | 5 | no | one fixed form only: a pure `add.u32` with two inputs, `InlineAsmWordAdd.lean:10-27`; any other assembly is rejected there. The map keeps inline assembly out of scope |
+| call of a `core.extern` function of the same file | 0 | 0 | not determined | such a function builds inline assembly through `_semantic`; no rule was found for it and no binding was looked for |
+| `With` | 0 | 8 | no | no statement rule starts with `with`; the kernels use it for `dl.simt_exec_region()` |
 | `tl.range` | 0 | 9 | no | no rule; the doc has only `tl.static_range` |
-| `tl.atomic_add` | 0 | 8 | partly | statement rule, `Syntax.lean:407`; doc, "Limited". `mask` is recognised; `scope=` and `sem=`, used by 3 kernels, are rejected as unknown keywords, `Expansion/Memory.lean:527`. No expression rule: a kernel that uses the returned value has no rule to parse it |
-| `tl.max` | 5 | 3 | yes | `Syntax.lean:219-221`, `axis=`; doc. `keep_dims=True`, used by 3 kernels: not determined, the rules spell the values `true` and `false`, `Syntax.lean:203-204` |
-| `tl.multiple_of` | 0 | 8 | yes | `Syntax.lean:151`; doc |
-| `tl.cumsum` | 0 | 6 | yes | `Syntax.lean:223`, `axis=` with a literal; doc |
+| `tl.atomic_add` | 0 | 2 | partly | statement rule, `Syntax.lean:407`; doc, "Limited". `mask` is recognised; `scope=` and `sem=`, used by 2 kernels, are rejected as unknown keywords, `Expansion/Memory.lean:527`. No expression rule: a kernel that uses the returned value has no rule to parse it |
+| `tl.max` | 5 | 2 | yes | `Syntax.lean:219-221`, `axis=`; doc. `keep_dims=True`, used by 2 distributed kernels: not determined, the rules spell the values `true` and `false`, `Syntax.lean:203-204` |
+| `tl.multiple_of` | 0 | 6 | yes | `Syntax.lean:151`; doc |
+| `tl.cumsum` | 0 | 3 | yes | `Syntax.lean:223`, `axis=` with a literal; doc |
 | `tl.extra.cuda.libdevice.exp` | 6 | 0 | yes | `Syntax.lean:62-63`; the doc lists only `libdevice.erf` |
-| `tl.interleave` | 0 | 6 | yes | `Syntax.lean:272`; the doc does not mention it |
+| `tl.interleave` | 0 | 0 | yes | `Syntax.lean:272`; the doc does not mention it |
 | `tl.minimum` | 0 | 6 | yes | `Syntax.lean:106`; doc |
-| `tl.reshape` | 0 | 6 | yes | `Syntax.lean:266`; doc |
+| `tl.reshape` | 0 | 5 | yes | `Syntax.lean:266`; doc |
 | `tl.make_tensor_descriptor` | 0 | 5 | no | no rule; the doc says TMA behaviour is not modelled |
 | `.load`, `.store` of a tensor descriptor | 0 | 5, 4 | no | no method rule |
 | `tl.maximum` | 1 | 4 | yes | `Syntax.lean:105`; doc |
-| `tl.swizzle2d` | 0 | 5 | no | no rule |
+| `tl.swizzle2d` | 0 | 0 | no | no rule |
 | `len` | 0 | 4 | no | no rule |
-| `tl.abs` | 1 | 3 | yes | `Syntax.lean:98`; doc |
+| `tl.abs` | 1 | 2 | yes | `Syntax.lean:98`; doc |
 | `tl.sigmoid` | 4 | 0 | yes | `Syntax.lean:76`; doc |
-| `tl.extra.cuda.num_warps`, `tl.extra.cuda.utils.num_warps` | 0 | 3, 3 | no | no rule |
+| `tl.extra.cuda.num_warps`, `tl.extra.cuda.utils.num_warps` | 0 | 0, 2 | no | no rule |
 | `tl.static_range` | 0 | 3 | yes | `Syntax.lean:430-431`, with a literal or `$(n)` bound; doc |
-| `float` | 1 | 1 | partly | only `float("inf")`, `float("-inf")` and `float(0)`, `Expansion/Main.lean:1779-1804` |
+| `float` | 1 | 0 | partly | only `float("inf")`, `float("-inf")` and `float(0)`, `Expansion/Main.lean:1779-1804` |
 | `tl.log` | 2 | 0 | yes | `Syntax.lean:73`; doc |
 | `tl.sqrt` | 2 | 0 | yes | `Syntax.lean:79`; doc |
 | `tl.permute` | 0 | 2 | yes | `Syntax.lean:265`; doc |
 | `tl.split` | 0 | 2 | yes | `Syntax.lean:273`; doc, projection form |
 | `tl.trans` | 0 | 2 | yes | `Syntax.lean:264`; doc |
-| `triton.next_power_of_2` | 0 | 2 | no | no rule; of the `triton.` names only `triton.cdiv` has one, `PackedIntegerPromotion.lean:12` |
-| `tl.extra.cuda.num_threads` | 0 | 1 | no | no rule |
+| `triton.next_power_of_2` | 0 | 0 | no | no rule; of the `triton.` names only `triton.cdiv` has one, `PackedIntegerPromotion.lean:12` |
+| `tl.extra.cuda.num_threads` | 0 | 0 | no | no rule |
 | `bin`, `.bit_length`, call of a `triton.constexpr_function` | 0 | 1 each | no | no rule; compile-time Python |
-| `.sum` | 0 | 1 | no | no method rule; the function form `tl.sum` has one |
+| `.sum` | 0 | 0 | no | no method rule; the function form `tl.sum` has one |
 
 The statement kinds `Break` and `Continue`, which the doc lists as
 unsupported, do not occur in any listed kernel.
@@ -225,17 +224,17 @@ No macro accepts them. No `syntax` rule under `VeriTile/` names `dl.`,
 `libshmem_device`, `language_extra`, `tid(` or `__syncthreads`
 (`grep -rlE 'syntax.*"(dl\.|libshmem|tid\(|__syncthreads)' VeriTile`), and
 `VeriTile/Dist/` holds only a README at this commit. The report's
-Triton-distributed section lists 53 call names under `triton_dist.language`,
+Triton-distributed section lists 41 call names under `triton_dist.language`,
 which are the requirement for the Triton-distributed front end (epic A2), and
-21 names of kernels and tools imported from other files of the package.
+11 names of kernels and tools imported from other files of the package.
 
 ### TileLang and TileScale
 
 No macro exists yet: `VeriTile/TileLang/` holds only a README at this commit.
 The calls and statement kinds of the TileLang and TileScale sections below are
 the requirement for the `tilelang { }` front end (epic A3) and its TileScale
-extension (epic A4). For TileScale, the constructs used only by kernels of the
-two DeepEP branches depend on the choice of the DeepEP source.
+extension (epic A4). Only the version 1 normal-mode intranode kernels
+of DeepEP are proof targets.
 
 <!-- generated by scripts/census/report.py: do not edit below this line -->
 
@@ -256,7 +255,7 @@ two DeepEP branches depend on the choice of the DeepEP source.
 | family | front end | source | reason |
 | --- | --- | --- | --- |
 | K-D | TileScale | `tilescale@9ba8a605d347` | no file at the pin: inter-node dispatch and combine kernels; `examples/distributed/deepseek_deepep/deepep.md` lists "Internode Normal Mode" and "Low-latency Mode" as not done, and `examples/distributed/deepseek_deepep/internode/` holds only `get_dispatch_layout.py` |
-| K-D | TileScale | none | source undecided: the GPUs available are Hopper only (H800, sm_90), and the README of the port on the pinned branch `deepep-v2-intranode` says it is scoped to Blackwell (SM100), so a DeepEP port that runs on H800 is still to be chosen or made (user decision of 2026-11-12); the proofs do not depend on the GPU generation; the TileScale K-D rows with a path are candidates scanned as facts for that choice |
+| K-D | TileScale | none | selected proof target: DeepEP version 1 normal mode, the TileScale intranode port at 9ba8a605 (user decisions 2026-11-12 and 2026-11-21; H800 run #457); the version 2 and internode rows below remain census evidence |
 | K-L | TileLang | `tilelang@35850c06875b` | not selected: one TileLang kernel per `tritonbench_g` task family (K-L.6 #233); the families come from I10.1 |
 | K-L | TileLang | `tilelang@35850c06875b` | not selected: the TileLang counterparts of the nine K-L Triton rows; K-L.1 (#228) names an upstream example or "written by us" for each |
 | K-M | TileScale | `tilescale@71e71457d40e` | no file at the pin: the TileScale port of `all_to_all_single_2d` is to be written (K-M.14 #193) |

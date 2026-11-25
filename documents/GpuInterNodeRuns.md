@@ -2,13 +2,13 @@
 
 # Single-host coverage of inter-node programs
 
-Issue: [#353](https://github.com/VeriInfra-Lab/VeriTile-2/issues/353). Inspection date: 2026-11-10; logical-node launcher added on 2026-11-12; first logical-node result and the requests for tutorials 03 and 06 recorded on 2026-11-12; their results and the two requests with four GPUs recorded on 2026-11-13. Status: source inspection complete. The launcher that starts two logical nodes on the one host has run on the GPU side: `internode-logical-env-002` returned on 2026-11-12 and was judged pass (two logical nodes come up and a put between them lands). The requests for tutorials 03 and 06, `internode-logical-ag03-001` and `internode-logical-rs06-001`, ran on 2026-11-12 with two logical nodes of one rank and were judged pass on 2026-11-13. Of the two outcomes the issue allows, the first will not hold (decision below). The second, a recorded check that the inter-node code paths run on the one host, holds for the launch, for one put and for the `nnodes > 1` branches of tutorials 03 and 06 that one rank per logical node reaches. With two ranks per logical node, tutorial 03 passed (#466). Tutorial 06 awaits the NVSHMEM barrier variant (#478).
+Issue: [#353](https://github.com/VeriInfra-Lab/VeriTile-2/issues/353). Inspection date: 2026-11-10; logical-node launcher added on 2026-11-12; first logical-node result and the requests for tutorials 03 and 06 recorded on 2026-11-12; their results and the two requests with four GPUs recorded on 2026-11-13. Status: source inspection complete. The launcher that starts two logical nodes on the one host has run on the GPU side: `internode-logical-env-002` returned on 2026-11-12 and was judged pass (two logical nodes come up and a put between them lands). The requests for tutorials 03 and 06, `internode-logical-ag03-001` and `internode-logical-rs06-001`, ran on 2026-11-12 with two logical nodes of one rank and were judged pass on 2026-11-13. Of the two outcomes the issue allows, the first will not hold (decision below). The second, a recorded check that the inter-node code paths run on the one host, holds for the launch, for one put and for the `nnodes > 1` branches of tutorials 03 and 06 that one rank per logical node reaches. With two ranks per logical node, tutorial 03 passed (#466). Tutorial 06 passed on 2026-11-24 with the global NVSHMEM barrier. [Four-rank verdict](https://github.com/VeriInfra-Lab/VeriTile-2/issues/511#issuecomment-7124128151).
 
 **Decision (user, 2026-11-12).** No second physical node will be arranged: the collaborator's cluster is no longer available. Inter-node programs are tested only as logical nodes on the one host. Transport between hosts (network cards, RDMA) is outside the scope of the project: the model has ranks and scopes, not nodes or links, so a proof does not depend on it. If logical nodes cannot be made to run, the inter-node code paths are proved and reported as not run.
 
 ## Hardware and scope
 
-The inspected host exposes six H800 PCIe GPUs, all compute capability 9.0. NVLink pairs are 0–1, 2–3 and 4–5. Only two GPUs are intended for each distributed request, with one exception: the two requests `internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-002` use four, two NVLink pairs (user decision, 2026-11-13). Two pairs are connected to each other over PCIe only. The local environment checks used the then-idle 4–5 pair. A device selection is not a resource reservation and occupancy must be rechecked before a run.
+The inspected host exposes six H800 PCIe GPUs, all compute capability 9.0. NVLink pairs are 0–1, 2–3 and 4–5. Only two GPUs are intended for each distributed request, with one exception: the two requests `internode-logical-ag03-2x2-001` and `internode-logical-rs06-2x2-002` use four, two NVLink pairs (user decision, 2026-11-13). Two pairs are connected to each other over PCIe only. The local environment checks used the then-idle 4–5 pair. A device selection is not a resource reservation and occupancy must be rechecked before a run. The user granted a batch-specific exception on 2026-11-24 for the four-rank tutorial 06 run to share devices 0, 1, 2 and 3 with other workloads. The run measured correctness only.
 
 All source observations below refer to [Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`](https://github.com/ByteDance-Seed/Triton-distributed/tree/7908e4ea9010bb2238f9f05b28c904fd4b71c60a). They establish control-flow and configuration constraints, not successful execution or numerical correctness.
 
@@ -32,7 +32,7 @@ Do not falsify topology by changing only `LOCAL_WORLD_SIZE`: initialization maps
 
 ## Logical nodes on the one host
 
-Added on 2026-11-12. Of this section, the launcher and one put between two logical nodes have run on a GPU (`internode-logical-env-002`, subsection "First request and its result"); no tutorial kernel has run under the launcher. The launcher is also tested on the development host, which has no GPU, against a stand-in for the pinned script. Every statement about torchrun, NVSHMEM or NCCL is read in the cited source or inferred from it, and says which; the subsection "What only a run on the GPU side can settle" says which of them that run has since confirmed.
+Added on 2026-11-12. Of this section, the launcher and one put between two logical nodes have run on a GPU (`internode-logical-env-002`, subsection "First request and its result"); the later tutorial runs are recorded below. The launcher is also tested on the development host, which has no GPU, against a stand-in for the pinned script. Every statement about torchrun, NVSHMEM or NCCL is read in the cited source or inferred from it, and says which; the subsection "What only a run on the GPU side can settle" says which of them that run has since confirmed.
 
 ### Launcher
 
@@ -121,11 +121,11 @@ Added with the tutorial requests:
 9. Whether Triton's JIT compiles a kernel of tutorial 03 from a module that holds only the definitions of the file, which is how the harness avoids running the tutorial's program. On the development host this is tested only as far as `inspect.getsourcelines`, which the JIT reads the kernel with, returning the text of the file. **Settled:** all four tests of `internode-logical-ag03-001` compiled their kernel that way.
 10. What NVSHMEM's node team reports under logical nodes (expected from source: all ranks of the host), and whether the intra-node barrier of tutorial 06, which uses it, completes across the two logical nodes. **Settled:** under both launchers rank r reported local rank r of a node team of 2 and native atomics 1, and the barrier completed.
 
-Added with the requests with four ranks (subsection "The requests with two logical nodes of two ranks"), all open:
+Added with the requests with four ranks (subsection "The requests with two logical nodes of two ranks"):
 
 11. Whether NVSHMEM reaches a GPU of the other NVLink pair and maps its memory: through `cudaDeviceCanAccessPeer` where the GPU is visible (`one_node`), through the NVML status of the two devices where it is hidden (`logical_nodes`). If it does not, initialization stops with `Peer GPU … is not accessible` in every test of both requests.
 12. Whether NCCL forms the process group over four ranks, under one launcher group of four and under two groups of two.
-13. What two GPUs of different pairs report for native atomic operations. The hardware description implies 0; nothing read here states it. Every rank of `internode-logical-rs06-2x2-002` prints the answer for each pair of its visible devices.
+13. **Observed in #511.** Under `one_node`, every rank reported native atomics as `0-1:1 0-2:0 0-3:0 1-2:0 1-3:0 2-3:1`. Every pair spanning the two NVLink pairs reported 0. Under `logical_nodes`, each rank saw its own pair and reported `0-1:1`.
 14. What the compare-and-swap kernel of tutorial 06's barrier does on memory reached over a link that reports no native atomic operations: it completes, it hangs, or the GPU reports an error. No document read here says which.
 15. Whether a host-side copy into the tensor of a rank on the other pair arrives (`one_node/harness_context` of the tutorial 06 request: every rank scatters to three ranks, two of them on the other pair).
 16. Whether the receive-then-forward branch of tutorial 03 and the scatter followed by the inter-node put of tutorial 06 return the expected tensors.
@@ -278,16 +278,16 @@ Not reached by this request: `has_fullmesh_nvlink()`. Tutorial 06 imports only `
 
 Inferred: if PCIe peer access between the pairs is available, everything tutorial 03 does and every NVSHMEM operation of tutorial 06 (the put of its inter-node kernel, the barriers of NVSHMEM) needs load and store only, and is expected to work between the pairs through the same mapping as inside a pair, without a NIC. The one operation that needs more is the compare-and-swap of tutorial 06's own barrier kernel, which does not go through NVSHMEM's transport choice: it takes the mapped address (`dl.symm_at`, `CO:161`) and issues the atomic operation itself.
 
-**Replacement batch (decision of 2026-11-21, #478).** `internode-logical-rs06-2x2-002` keeps the harness-built context and sets its barrier constructor argument `is_intra_node=False`. At the pin, this skips the node-team fields and allocation (CO:234–243). The call at T06:344 takes CO:254–255, the global NVSHMEM stream barrier. In the load/store transport mode described above it signals by plain stores. Every successful rank reports `[-1, -1, 2]` from the context (no local rank or size, global barrier). A CAS report uses code 1 and the judge flags it. The variant exercises the peer scatter at T06:279,288–294 and, in the first of two logical-node passes, the inter-node put at T06:364–374. It gives no runtime evidence for the tutorial’s atomic barrier. Only the run can establish completion of the global barrier, the peer copies and puts, actual topology and link reports, and exact reduced rows in both repeats under each launcher. This is a single-host test.
+**Replacement batch (decision of 2026-11-21, #478).** `internode-logical-rs06-2x2-002` keeps the harness-built context and sets its barrier constructor argument `is_intra_node=False`. At the pin, this skips the node-team fields and allocation (CO:234–243). The call at T06:344 takes CO:254–255, the global NVSHMEM stream barrier. In the load/store transport mode described above it signals by plain stores. Every successful rank reports `[-1, -1, 2]` from the context (no local rank or size, global barrier). A CAS report uses code 1 and the judge flags it. The variant exercises the peer scatter at T06:279,288–294 and, in the first of two logical-node passes, the inter-node put at T06:364–374. It gives no runtime evidence for the tutorial’s atomic barrier. The observed outputs are recorded below. This is a single-host test.
 
-**Expected outcomes.**
+**Expected and observed outcomes.**
 
-| Request | Expected | If not |
+| Request | Expected | Result or diagnostic |
 | --- | --- | --- |
 | `internode-logical-ag03-2x2-001` | Every test `ok` and `equal`: every rank returns the 64 input bytes. | `runtime_error` in every test with `Peer GPU … is not accessible`: NVSHMEM cannot map across the pairs, and neither request can run with four GPUs. A difference in one segment: the table of programs above says which route delivered it. |
-| `internode-logical-rs06-2x2-002` | Both tests should return the exact reduced rows and barrier report `[-1, -1, 2]` from each rank. | A different barrier report, missing output, timeout or CUDA failure requires inspection. |
+| `internode-logical-rs06-2x2-002` | Exact reduced rows and a global-barrier report on every rank. | Passed on 2026-11-24 (#511). Under both launchers, in both repeats, each of the four ranks returned its exact 256 reduced rows and `[-1, -1, 2]`. |
 
-Tutorial 03 passed with four ranks (#466). Its result does not settle the tutorial 06 scatter, barrier or reduction.
+Tutorial 03 passed with four ranks (#466). In #511, unchanged tutorial 06 completed the peer scatter, inter-node P2P kernel and ring reduction with two logical nodes of two ranks on one host. The harness selected the global NVSHMEM barrier. The tutorial’s atomic barrier and the `putmem_on_stream` path guarded by `has_fullmesh_nvlink()` remain unverified. [Verdict](https://github.com/VeriInfra-Lab/VeriTile-2/issues/511#issuecomment-7124128151) · [Result bundle](https://github.com/VeriInfra-Lab/VeriTile-2/tree/73a5723130934b1e59d93c5750b4d9d0e9cccd7d/results/internode-logical-rs06-2x2-002).
 
 ## Affected requests and completion gate
 
@@ -306,8 +306,8 @@ The table records the current disposition of each request.
 | `internode-logical-rs06-001` | Tutorial 06 under the same launcher: `kernel_inter_node_p2p_for_same_local_rank` and the reduction over two nodes; with the same tests under `triton-dist` as the control | Ran on 2026-11-12 (#435); judged pass on 2026-11-13, with `logical_nodes/tutorial_context` failing as predicted. Logical-node coverage only. |
 | `internode-logical-ag03-2x2-001` | Tutorial 03, two logical nodes of two ranks: the wait before the intra-node forwarding; with the same tests on one node of four ranks as the control | Judged pass in #466. |
 | `internode-logical-rs06-2x2-001` | Tutorial 06, two logical nodes of two ranks: scatter to another local rank, then the P2P kernel; with the same test on one node of four ranks as the control | Withdrawn before announcement. |
-| `internode-logical-rs06-2x2-002` | Same test and control, global NVSHMEM barrier. | Prepared, awaiting coordinator announcement after merge. |
+| `internode-logical-rs06-2x2-002` | Same test and control, global NVSHMEM barrier. | Ran on 2026-11-24 (#511) and was judged pass. |
 
 Requests requiring two physical nodes remain `skipped_env` under protocol v1. A logical-node run must not be reported as a two-physical-node result; its `meta.json` carries the label `"topology": "logical-nodes"`.
 
-Issue #353 awaits the judged four-rank tutorial 06 result.
+The four-rank tutorial 06 pass in #511 completes the last requested run for #353.

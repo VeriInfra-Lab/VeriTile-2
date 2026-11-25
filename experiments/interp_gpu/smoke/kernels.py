@@ -1,3 +1,6 @@
+# Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/tutorials/01-vector-add.py:29-53
+# Licence: MIT
+# Changes: rewritten as a minimal example; use a masked add with a sentinel tail in the local smoke harness
 """Launch harnesses of the first smoke batch.
 
 The `copy` and `half_write` entries use torch only: they exercise the path

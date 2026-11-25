@@ -137,7 +137,7 @@ The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, signed
 on 2026-11-13; it is no longer a parameter.
 -/
 import VeriTile.Triton.Semantics.Step
-import VeriTile.Dist.Agent
+import VeriTile.Dist.State
 import VeriTile.Staging.Dist.LocationSpec
 import VeriTile.Staging.Dist.EventSpec
 
@@ -147,37 +147,7 @@ open VeriTile.Triton (BlockState MemCell Stmt Kernel stepStmts exec)
 
 /-! # Part 1: segments, footprint soundness, the bridge for one segment -/
 
-/-! ## State access that the statements need (stubs for S1.5 and S1.6) -/
-
-/-- Stub (S1.5), under signed statements. Part 1. The content of cell `p` in the distributed
-state. -/
-noncomputable opaque DistState.cell : DistState → Addr → MemCell := fun _ _ => MemCell.real 0
-
-/-- Stub (S1.5), under signed statements. Part 1. `σ.setBlock r pid b` writes the upstream
-state `b` back as the state of the CTA with program ids `pid` on rank `r`: the
-memory that this CTA can reach and its registers. It is the inverse direction
-of `DistState.block`. -/
-opaque DistState.setBlock : DistState → Rank → List Nat → BlockState → DistState :=
-  fun σ _ _ _ => σ
-
-/-- Stub (S1.6), under signed statements. Part 1. The upstream state that a group or a thread
-`a` executes on: the memory that `a` can reach and the registers that are its
-own. A `local` cell is reached by its thread alone; a `shared` cell by every
-agent of the CTA.
-
-Laws that S1.6 owes, with `view` and `setView` below: reading back what was
-written and writing back what was read; how `cell` relates to the memory of a
-view; that the program ids are those of the CTA; that `setView a` changes only
-cells that `a` can reach, the registers of `a` and of the agents inside `a`,
-and no synchronization object; that two agents neither of which lies within
-the other have separate registers, also two thread agents that differ in the
-group only. -/
-opaque DistState.subView : DistState → Agent → BlockState
-
-/-- Stub (S1.6), under signed statements. Part 1. Writes the upstream state `b` back as the
-state of the group or thread `a`. The inverse direction of
-`DistState.subView`. -/
-opaque DistState.setSubView : DistState → Agent → BlockState → DistState := fun σ _ _ => σ
+/-! ## Agent views -/
 
 /-- Signed. Part 1. The upstream state that agent `a` executes on. For a CTA
 it is `DistState.block`. A whole rank runs no segment. -/
@@ -289,15 +259,30 @@ theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
 
 /-! ## Programs and steps (S3.3) -/
 
-/-- UNSIGNED. Part 2. Owner: S3.3. What follows the segment of a step, for an
-agent whose program states have type `P`. `finish`: the agent has ended.
-`emit e k`: the agent performs the event `e`, which may block, and continues
-with the program state `k v`, where `v` is the value that the event read:
-the content a load or an update found, `none` for an event that reads
-nothing. -/
+/-! The 2026-11-24 choices on #47 supersede the historical N8 and singleton
+notes in the header. Every issue names its actor; the scheduling unit is one
+nonempty group. SoundLaunch restricts multi-event groups to a CAS pair.
+The revised interface awaits the second S4.1 signing round. -/
+
+/-- UNSIGNED. Part 2. The memory operand or discarded result attached to an event. -/
+inductive AccessValue where
+  | noValue
+  /-- A word-add whose old value is discarded before reaching the continuation. -/
+  | discardAddResult
+  | store (value : MemCell)
+  | update (apply : MemCell → MemCell)
+
+/-- UNSIGNED. Part 2. An issued event together with its actor and value information. -/
+structure Emission where
+  actor : Agent
+  event : Event
+  data : AccessValue := .noValue
+
+/-- UNSIGNED. Part 2. Finish, or issue a nonempty group and continue with the result of each
+member in source order. Each member carries its actor and typed payload. -/
 inductive Next (P : Type) where
   | finish
-  | emit (e : Event) (k : Option MemCell → P)
+  | emitGroup (head : Emission) (tail : List Emission) (k : List (Option MemCell) → P)
 
 /-- UNSIGNED. Part 2. Owner: S3.3. The program of one agent, cut at its
 events. `segment p` is the code from program state `p` up to the next event,
@@ -325,9 +310,30 @@ inductive AgentProgram.Steps {P : Type} (prog : AgentProgram P) :
     P → List (Segment ⊕ Event) → Prop where
   | finish {p : P} {σ : DistState} (h : prog.next p σ = .finish) :
       prog.Steps p [Sum.inl (prog.segment p)]
-  | emit {p : P} {σ : DistState} {e : Event} {k : Option MemCell → P} {v : Option MemCell}
-      {l : List (Segment ⊕ Event)} (h : prog.next p σ = .emit e k) (rest : prog.Steps (k v) l) :
-      prog.Steps p (Sum.inl (prog.segment p) :: Sum.inr e :: l)
+  | emitGroup {p : P} {σ : DistState} {e : Emission} {es : List Emission}
+      {k : List (Option MemCell) → P} {vs : List (Option MemCell)} {l : List (Segment ⊕ Event)}
+      (h : prog.next p σ = .emitGroup e es k) (arity : vs.length = es.length + 1)
+      (rest : prog.Steps (k vs) l) :
+      prog.Steps p (.inl (prog.segment p) :: ((e :: es).map (fun x => .inr x.event) ++ l))
+
+/-- UNSIGNED. Part 2. N6. The event, actor, payload and continuation are determined by the
+segment's declared reads and its local state. Required of launch programs. -/
+def AgentProgram.NextLocal {P : Type} (p : AgentProgram P) : Prop :=
+  ∀ pc σ τ, DistState.AgreesOn ((p.segment pc).reads σ) σ τ →
+    DistState.SameLocal (p.segment pc).agent σ τ → p.next pc σ = p.next pc τ
+
+/-- UNSIGNED. Part 2. N7. A cut can compute its events from the state in which the preceding
+segment starts. This includes K6's loaded lengths; ofBody retains fixed events. -/
+structure EventCut where
+  code : Segment
+  issue : DistState → Emission × List Emission
+
+/-- UNSIGNED. Part 2. Run the segments and issue their event groups in list order. -/
+def AgentProgram.ofCuts (owner : Agent) : AgentProgram (List EventCut) where
+  segment cuts := cuts.head?.map EventCut.code |>.getD (Segment.ofStmts owner [])
+  next cuts σ := match cuts with
+    | [] => .finish
+    | c :: rest => let (e, es) := c.issue σ; .emitGroup e es fun _ => rest
 
 /-- UNSIGNED. Part 2. Proved by S3.3. The segment part of a step is
 deterministic: a program state and a state fix the state reached, the event
@@ -336,16 +342,23 @@ theorem AgentProgram.Step.deterministic {P : Type} {prog : AgentProgram P} {p : 
     {σ σ₁ σ₂ : DistState} {n₁ n₂ : Next P} (h₁ : prog.Step p σ σ₁ n₁)
     (h₂ : prog.Step p σ σ₂ n₂) : σ₁ = σ₂ ∧ n₁ = n₂ := sorry
 
-/-- A loop whose body holds an event, which no flat body expresses: the agent
-runs `seg`, emits `e`, and goes round again exactly when the event read a
-value. It can take three steps or five. -/
-example (seg : Segment) (e : Event) (σ : DistState) (v : MemCell) :
+/-- A singleton event can branch on its result just like a member of a CAS group. -/
+example (seg : Segment) (e : Emission) (σ : DistState) (v : MemCell) :
     let prog : AgentProgram Bool :=
-      ⟨fun _ => seg, fun p _ => if p then .emit e fun r => r.isSome else .finish⟩
-    prog.Steps true [.inl seg, .inr e, .inl seg] ∧
-      prog.Steps true [.inl seg, .inr e, .inl seg, .inr e, .inl seg] :=
-  ⟨.emit (σ := σ) (v := none) rfl (.finish (σ := σ) rfl),
-    .emit (σ := σ) (v := some v) rfl (.emit (σ := σ) (v := none) rfl (.finish (σ := σ) rfl))⟩
+      ⟨fun _ => seg, fun p _ => if p then .emitGroup e [] (fun vs => vs.head?.join.isSome)
+                                else .finish⟩
+    prog.Steps true [.inl seg, .inr e.event, .inl seg] ∧
+      prog.Steps true [.inl seg, .inr e.event, .inl seg, .inr e.event, .inl seg] :=
+by
+  let prog : AgentProgram Bool :=
+    ⟨fun _ => seg, fun p _ => if p then .emitGroup e [] (fun vs => vs.head?.join.isSome) else .finish⟩
+  change prog.Steps true _ ∧ prog.Steps true _
+  have done_ : prog.Steps false [.inl seg] := .finish (σ := σ) rfl
+  have once : prog.Steps true [.inl seg, .inr e.event, .inl seg] :=
+    .emitGroup (p := true) (σ := σ) (e := e) (es := []) (vs := [none])
+      (k := fun vs => vs.head?.join.isSome) rfl rfl done_
+  exact ⟨once, .emitGroup (p := true) (σ := σ) (e := e) (es := []) (vs := [some v])
+    (k := fun vs => vs.head?.join.isSome) rfl rfl once⟩
 
 /-! ## The flat body as a program (S3.3) -/
 
@@ -354,25 +367,25 @@ state is what is left of a flat body: upstream statements and, at each
 synchronization or communication point, the event performed there. A step
 runs the statements before the first event, emits that event and continues
 with the body after it, whatever the event read. -/
-def AgentProgram.ofBody (a : Agent) : AgentProgram (List (Stmt ⊕ Event)) where
+def AgentProgram.ofBody (a : Agent) : AgentProgram (List (Stmt ⊕ Emission)) where
   segment body := Segment.ofStmts a ((body.takeWhile Sum.isLeft).filterMap Sum.getLeft?)
   next body _ :=
     match body.dropWhile Sum.isLeft with
-    | Sum.inr e :: rest => .emit e fun _ => rest
+    | Sum.inr e :: rest => .emitGroup e [] fun _ => rest
     | _ => .finish
 
 /-- UNSIGNED. Part 2. Proved by S3.3. A step with no event left is the
 upstream execution of the rest on the projection of the agent, written back;
 then the agent has finished. -/
 theorem AgentProgram.ofBody_step_noSync (a : Agent) (code : List Stmt) (σ σ' : DistState)
-    (n : Next (List (Stmt ⊕ Event))) :
+    (n : Next (List (Stmt ⊕ Emission))) :
     (AgentProgram.ofBody a).Step (code.map Sum.inl) σ σ' n ↔
       (stepStmts code (σ.view a)).map (σ.setView a) = some σ' ∧ n = .finish := sorry
 
 /-- UNSIGNED stub (S3.3). Part 2. Slicing of a flat body of agent `a`. The
 result lists, in program order, the segments between the events and the
 events. It is fixed before execution. -/
-opaque slice (a : Agent) (body : List (Stmt ⊕ Event)) : List (Segment ⊕ Event)
+opaque slice (a : Agent) (body : List (Stmt ⊕ Emission)) : List (Segment ⊕ Event)
 
 /-- UNSIGNED. Part 2. Proved by S3.3. A body with no event is one segment. -/
 theorem slice_noSync (a : Agent) (code : List Stmt) :
@@ -381,15 +394,15 @@ theorem slice_noSync (a : Agent) (code : List Stmt) :
 /-- UNSIGNED. Part 2. Proved by S3.3. Slicing cuts at the first event: the
 statements before it are one segment, and the rest of the body is sliced in
 the same way. -/
-theorem slice_sync (a : Agent) (code : List Stmt) (e : Event) (rest : List (Stmt ⊕ Event)) :
+theorem slice_sync (a : Agent) (code : List Stmt) (e : Emission) (rest : List (Stmt ⊕ Emission)) :
     slice a (code.map Sum.inl ++ Sum.inr e :: rest) =
-      Sum.inl (Segment.ofStmts a code) :: Sum.inr e :: slice a rest := sorry
+      Sum.inl (Segment.ofStmts a code) :: Sum.inr e.event :: slice a rest := sorry
 
 /-- UNSIGNED. Part 2. Proved by S3.3. The derived lemma: for a flat body, a
 program with no loop around an event, the steps the agent takes are exactly
 the segments and events of the flat list, whatever the states are. The proof
 needs one state to exist; `DistState` is opaque until S1.5 defines it. -/
-theorem AgentProgram.ofBody_steps (a : Agent) (body : List (Stmt ⊕ Event))
+theorem AgentProgram.ofBody_steps (a : Agent) (body : List (Stmt ⊕ Emission))
     (l : List (Segment ⊕ Event)) :
     (AgentProgram.ofBody a).Steps body l ↔ l = slice a body := sorry
 
@@ -400,11 +413,69 @@ takes one step: it runs the upstream `exec` on the block state of the CTA,
 writes the result back and finishes. `body` is the body of the instance that
 CTA `c` runs; `hbody` says that its statements are those of the upstream
 kernel `k`, and `hsync` that it holds no event. -/
-theorem exec_noSync_eq_exec (c : Cta) (k : Kernel) (body : List (Stmt ⊕ Event))
+theorem exec_noSync_eq_exec (c : Cta) (k : Kernel) (body : List (Stmt ⊕ Emission))
     (hbody : body.filterMap Sum.getLeft? = k.body) (hsync : ∀ e, Sum.inr e ∉ body)
-    (σ σ' : DistState) (n : Next (List (Stmt ⊕ Event))) :
+    (σ σ' : DistState) (n : Next (List (Stmt ⊕ Emission))) :
     (AgentProgram.ofBody (.cta c)).Step body σ σ' n ↔
       (exec k (σ.block c.rank c.pid)).map (σ.setBlock c.rank c.pid) = some σ' ∧
         n = .finish := sorry
 
 end VeriTile.Dist
+
+namespace VeriTile.Dist.DistState
+
+open VeriTile.Triton (BlockState)
+
+theorem view_eq_subView (σ : DistState) (a : Agent) : σ.view a = σ.subView a := by
+  cases a <;> rfl
+
+theorem setView_eq_setSubView (σ : DistState) (a : Agent) (b : BlockState) :
+    σ.setView a b = σ.setSubView a b := by cases a <;> rfl
+
+theorem setView_view (σ : DistState) (a : Agent) : σ.setView a (σ.view a) = σ := by
+  simpa [setView_eq_setSubView, view_eq_subView] using σ.setSubView_subView a
+
+theorem view_setView {a : Agent} {c : Cta} (ha : a.cta? = some c) (σ : DistState) (b : BlockState)
+    (hp : b.pids = DistState.programIds c.pid) (hu : b.undef = (σ.context a).undef)
+    (hg : b.numPids = (σ.context a).numPids) : (σ.setView a b).view a = b := by
+  rw [setView_eq_setSubView, view_eq_subView, DistState.subView_setSubView _ ha]
+  rw [← hp, ← hu, ← hg]
+
+/-- A write leaves another agent's local part unchanged, including child
+and enclosing agents when the caller and reader differ. -/
+theorem sameLocal_setView_ne (σ : DistState) {w r : Agent} (hne : r ≠ w) (b : BlockState) :
+    DistState.SameLocal r σ (σ.setView w b) := by
+  rw [setView_eq_setSubView]
+  unfold DistState.SameLocal
+  simp only [view_eq_subView]
+  cases r with
+  | rank => rfl
+  | _ =>
+    apply BlockState.ext
+    · intros; rfl
+    · intros; change (σ.context _).regs _ _ _ = ((σ.setSubView w b).context _).regs _ _ _
+      rw [DistState.context_setSubView_ne _ hne]
+    · intros; rfl
+    · intros; change (σ.context _).undef _ _ = ((σ.setSubView w b).context _).undef _ _
+      rw [DistState.context_setSubView_ne _ hne]
+    · intros; change (σ.context _).numPids _ = ((σ.setSubView w b).context _).numPids _
+      rw [DistState.context_setSubView_ne _ hne]
+
+theorem sameLocal_putCell (σ : DistState) (p : Addr) (v : VeriTile.Triton.MemCell) (a : Agent) :
+    SameLocal a σ (σ.putCell p v) := by cases a <;> rfl
+
+/-- A real upstream segment result automatically meets the metadata conditions of
+view readback, for a CTA, group or thread. -/
+theorem view_setView_after_stepStmts {a : Agent} {c : Cta} (ha : a.cta? = some c)
+    (σ : DistState) (code : List VeriTile.Triton.Stmt) {b : BlockState}
+    (hrun : VeriTile.Triton.stepStmts code (σ.view a) = some b) : (σ.setView a b).view a = b := by
+  have hm := stepStmts_metadata code hrun
+  rw [view_eq_subView] at hm
+  have he : metadata (σ.subView a) = (programIds c.pid,(σ.context a).undef,(σ.context a).numPids) := by
+    cases a <;> simp_all [Agent.cta?,subView,metadata]
+    all_goals exact ⟨rfl,rfl,rfl⟩
+  obtain ⟨hp,hrest⟩ := Prod.mk.inj (hm.trans he)
+  obtain ⟨hu,hg⟩ := Prod.mk.inj hrest
+  exact view_setView ha σ b hp hu hg
+
+end VeriTile.Dist.DistState

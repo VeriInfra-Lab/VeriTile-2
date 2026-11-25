@@ -1,5 +1,8 @@
+# Source: NVIDIA/cccl@5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5 docs/libcudacxx/extended_api/memory_model.rst:160-194; ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/common_ops.py:177-178
+# Licence: (Apache-2.0 WITH LLVM-exception) AND MIT
+# Changes: rewritten as a minimal example; Message passing between two ranks at system scope
 # LIT-a03. Message passing between two ranks at system scope.
-# Source: libcu++ "Memory model", "Scope Relationships" and "Example: Message
+# Context: libcu++ "Memory model", "Scope Relationships" and "Example: Message
 # Passing" (CU-MM); the store and load of the flag are those of
 # python/triton_dist/kernels/nvidia/common_ops.py:177-178.
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

@@ -25,12 +25,16 @@ done
 profile_python=python3
 python3 -c 'import tomllib' 2>/dev/null || profile_python="uv run --no-project --python 3.11 python"
 commands=("python3 scripts/check_docs.py"
-          "$profile_python -B -m unittest scripts.test_library_dependency_profile")
+          "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
+          "$profile_python -B -m unittest scripts.test_library_dependency_profile"
+          "python3 -B -m unittest scripts.test_fork_replay")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done
 if [ "$lean" = 1 ]; then
-  commands+=("bash scripts/check-core-examples.sh")
+  # Build all four main targets before the first replay snapshots the project once for all of them.
+  commands+=("bash scripts/check-core-examples.sh"
+             "lake build VeriTileDist VeriTileTileLang VeriTileInterp VeriTileEquiv")
   for target in VeriTileDist VeriTileTileLang VeriTileInterp VeriTileEquiv; do
     commands+=("python3 scripts/check_fork_target.py $target --replay")
   done
@@ -38,10 +42,13 @@ if [ "$lean" = 1 ]; then
              "python3 scripts/check_frozen_statements.py"
              "python3 scripts/test_fork_targets.py"
              # Fork-owned regression modules that no target gate builds.
+             "bash tests/interp/run_regression.sh"
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpReflectBench"
              "lake build tests.lean.InterpEvalSmoke"
+             "lake build tests.lean.InterpAdequacyNeg"
              "lake build tests.lean.InterpFloatCarrier"
+             "lake build tests.lean.InterpFloatCensus"
              "lake build tests.lean.InterpSymbolic"
              "lake env lean tests/lean/InterpSymbolic.lean"
              "lake build tests.lean.InterpArraySmoke"
@@ -49,17 +56,30 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TensorDescriptorSource"
              "lake build tests.lean.dist.SourceHelperSyntax"
              "lake build tests.lean.InterpBridgeInvariant"
+             "lake env lean tests/lean/InterpBridgeCensus.lean"
              "lake build tests.lean.InterpFPValue"
+             "python3 -B -m unittest scripts.test_fp_value_carrier"
              "lake build tests.lean.dist.SwizzleSource"
+             "lake build tests.lean.dist.JudgmentVariants"
              "lake build tests.lean.dist.TritonExtConstexpr"
-             "lake build tests.lean.dist.TritonExtProfiler")
+             "lake build tests.lean.dist.TritonExtProfiler"
+             "lake build tests.lean.dist.TritonDistSyntax"
+             "lake build tests.lean.dist.StateViews")
 fi
 
 log=$(mktemp -d)
+# One comparator snapshot (a copy of the project with .lake) shared by the four --replay commands.
+replay=$(mktemp -d)
+trap 'rm -rf "$replay"' EXIT
+trap 'exit 130' INT TERM
 failed=0
 for index in "${!commands[@]}"; do
   # Unquoted on purpose: each entry is a plain command line without shell syntax.
-  ${commands[$index]} >"$log/$index.log" 2>&1
+  if [[ ${commands[$index]} == *--replay ]]; then
+    VERITILE_REPLAY_WORKSPACE=$replay ${commands[$index]} >"$log/$index.log" 2>&1
+  else
+    ${commands[$index]} >"$log/$index.log" 2>&1
+  fi
   code=$?
   echo "exit $code  ${commands[$index]}"
   if [ "$code" != 0 ]; then

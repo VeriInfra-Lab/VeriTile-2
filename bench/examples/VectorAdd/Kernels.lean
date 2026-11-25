@@ -1,8 +1,8 @@
+-- Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/tutorials/01-vector-add.py:29-53
+-- Licence: MIT
+-- Changes: transcribed to Lean; quote the full-tile Python example and its commuted variant with explicit FP32 bindings
 import VeriTile.Triton.DSL.CallSignature
 
-/-! The registered Python companion supplies the complete function bodies.
-The original add_kernel body is unchanged. The comparison commutes only its
-addition. Invocation bindings and FP32 storage types are outside the bodies. -/
 namespace VeriTile.Bench.Examples.VectorAdd.Kernels
 open VeriTile Triton
 

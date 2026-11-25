@@ -40,6 +40,8 @@ python3 scripts/check_frozen_statements.py                   # signed statements
 python3 scripts/test_fork_targets.py                         # the gates reject deliberate violations
 ```
 
+`--replay` builds all wrapper modules in one Lake run and then runs the comparators in parallel: 8 at a time by default, set `VERITILE_REPLAY_JOBS` to change it. It reports every failing file. `scripts/local_gate.sh` takes one judge snapshot per gate and shares it across the four `--replay` commands through `VERITILE_REPLAY_WORKSPACE`. The snapshot is a copy of the project including `.lake` (about 18 GB) in the temporary directory, so point `TMPDIR` at a disk with room.
+
 ## Signing a statement
 
 Add a row `statement<TAB>module<TAB>-<TAB>date, ticket and who signed` to
