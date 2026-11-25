@@ -196,11 +196,16 @@ class FrozenTablesAgainstBase(unittest.TestCase):
         self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
         self.assertIn(f'Definitions.tsv: P.Def: recorded {"d" * 64}, now {"e" * 64}', rejected.stderr)
 
-    def test_changed_module_fails(self):
+    def test_module_moves_only_with_the_same_fingerprint(self):
+        # The move to a main target that the contributor guide prescribes.
         self.tsv.write_text(self.STATEMENTS.replace('M.kept', 'M.moved'))
+        accepted = self.check()
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertIn('[moved] P.kept: M.kept → M.moved', accepted.stdout)
+        self.tsv.write_text(self.STATEMENTS.replace(f'M.kept\t{"a" * 64}', f'M.moved\t{"c" * 64}'))
         rejected = self.check()
         self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-        self.assertIn(f'P.kept: recorded M.kept {"a" * 64}, now M.moved {"a" * 64}', rejected.stderr)
+        self.assertIn(f'P.kept: recorded M.kept {"a" * 64}, now M.moved {"c" * 64}', rejected.stderr)
 
     def test_added_unfilled_row_passes(self):
         self.tsv.write_text(self.STATEMENTS + 'P.new\tM.new\t-\tnew\n')

@@ -5,9 +5,12 @@ check_frozen_statements.py compares the two tables only with the build of the
 same branch, so a branch that edits a table, or runs --fill or
 --accept-definitions, still passes it. This check reads both tables at
 `git merge-base HEAD <main>` and in the working tree. It fails when a row
-recorded at the merge base was deleted, or its fingerprint or (for a
-statement) its module changed. New rows pass here; check_frozen_statements.py
-accepts them only with `-` or with the computed fingerprint.
+recorded at the merge base was deleted or its fingerprint changed. A statement
+whose fingerprint is unchanged may change only its module: the move to a main
+target that documents/ContributorGuide.md prescribes. It is printed as
+`[moved]`; check_frozen_statements.py checks that the new module declares it.
+New rows pass here; check_frozen_statements.py accepts them only with `-` or
+with the computed fingerprint.
 
 <main> is --main, else the first of fork/main, origin/main and main that exists.
 
@@ -55,7 +58,7 @@ def main():
         raise ValueError(f'no merge base of HEAD and {ref}')
     base = merged.stdout.strip()
     allowed = {name.strip() for name in os.environ.get(OVERRIDE, '').split(',') if name.strip()}
-    changed, errors, overridden, counts = set(), [], [], []
+    changed, errors, overridden, moved, counts = set(), [], [], [], []
     for path, header, key in ((args.tsv, STATEMENT_HEADER, slice(1, 3)), (args.definitions, DEFINITION_HEADER, slice(1, 2))):
         relative = path.resolve().relative_to(repo).as_posix()
         # A table absent at the merge base has no recorded rows.
@@ -69,12 +72,17 @@ def main():
         for name, row in old.items():
             if name in new and new[name][key] == row[key]:
                 continue
+            if name in new and key.stop == 3 and new[name][2] == row[2]:
+                moved.append(f'{name}: {row[1]} → {new[name][1]}')
+                continue
             now = ' '.join(new[name][key]) if name in new else 'deleted'
             line = f'{path.name}: {name}: recorded {" ".join(row[key])}, now {now}'
             changed.add(name)
             (overridden if name in allowed else errors).append(line)
     for name in sorted(allowed - changed):
         errors.append(f'{OVERRIDE} names {name}, which did not change')
+    for line in moved:
+        print(f'[moved] {line}')
     for line in overridden:
         print(f'[override] {line}')
     if errors:

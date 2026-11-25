@@ -81,9 +81,11 @@ on, so `check_frozen_statements.py` alone cannot tell a reviewed sign-off from
 an author accepting their own change. `scripts/check_frozen_base.py` reads
 both tables at `git merge-base HEAD <main>` (`--main`, default `fork/main`,
 then `origin/main`, then `main`) and fails when a row recorded there was
-deleted or its fingerprint or module changed. New rows pass it; the
-fingerprint check above accepts them only with `-` or with the computed
-fingerprint.
+deleted or its fingerprint changed. A statement whose fingerprint is
+unchanged may change only its module, as when a proved statement moves to its
+main target; the check prints it as `[moved]`, and the fingerprint check above
+verifies that the new module declares it. New rows pass it; the fingerprint
+check above accepts them only with `-` or with the computed fingerprint.
 
 The coordinator's sign-off and re-sign batches name the rows they change,
 and only those, in an environment variable for that one run:
@@ -94,6 +96,6 @@ VERITILE_FROZEN_OVERRIDE=VeriTile.Dist.foo,VeriTile.Dist.Bar bash scripts/local_
 
 Names are first-column entries of either table; every named row must actually
 differ, and the check prints each overridden row. `scripts/local_gate.sh`
-never sets the variable, so an author's branch that deletes or changes a
-recorded row, including moving a statement to another module, fails the
-standard gate until the coordinator signs it.
+never sets the variable, so an author's branch that deletes a recorded row
+or changes a recorded fingerprint fails the standard gate until the
+coordinator signs it.
