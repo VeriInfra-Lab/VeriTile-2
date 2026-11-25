@@ -503,6 +503,7 @@ globs = [
   "tests.lean.InterpFloatCensus",
   "tests.lean.dist.TritonDistSyntax",
   "tests.lean.dist.StateViews",
+  "tests.lean.dist.PointerCasts",
   "tests.lean.dist.UnguardedShared",
 ]
 
