@@ -21,9 +21,15 @@ The Lean interpreter returned binary64 words. The Python exporter in [#278](http
 
 At N=1024, C2 hit the IR interpreter’s deep-recursion guard (`deep recursion was detected at 'interpreter'`) with both the default stack and `--tstack=131072`. The size cutoffs and this stack limit are specific to the measured configuration. A compiled array runner could change both. That run produced no Lean output, so it has no paired timing or agreement result. A separate measurement at 128 supplied the fourth successful size. The other five families completed at 1024.
 
+## Main-branch reproduction
+
+At the [exporter merge](https://github.com/VeriInfra-Lab/VeriTile-2/commit/89d5996c1aec4dffaac9506fbe9f2c315ad6ea59), the recipe below reproduced all 24 pairs and 3,196 outputs at the original tolerance. A1, A2, B1 and B2 matched exactly. The maximum absolute errors were 5.274e-9 for C1 and 5.961e-8 for C2 (rounded up). B1 at N=256 measured 50.138 ms, just over the 50 ms budget, compared with 48.216 ms in the table and 49.6 ms in the [independent review](https://github.com/VeriInfra-Lab/VeriTile-2/pull/573#issuecomment-7148137644). The N=256 batch cutoff remains in force. Its margin at this size varies between runs on the shared CPU.
+
+To locate the growth, a separate run used the same B1 and C1 kernels and inputs, one warm-up and five repetitions. It timed `Array.interp` and the subsequent scalar readback and validation separately. At N=64 and 256, B1 execution medians were 3.60 and 48.23 ms and C1 execution medians were 41.84 and 663.03 ms. All four scalar readback medians were below 0.031 ms. The growth occurs during interpreter execution. In B1 the dot visits each inner index and both reshaped inputs select that index from a row-major list. For C1 the split measures the register assignment and both reductions together. [Binary64 dot and reductions](../VeriTile/Interp/Carrier/Float.lean) · [Reshape index lookup](../VeriTile/Triton/Core/Reshape.lean)
+
 ## Reproduce the comparison
 
-Use Lean from this repository's toolchain and the Python carrier from #278. The exporter can be used in its own checkout at [82a46d6](https://github.com/VeriInfra-Lab/VeriTile-2/commit/82a46d6ceb14c7abcfaee3251b1296bdd5a6a847). In that checkout put the first block in `Bench118.lean` and the second in `compare118.py`, install the two Python packages listed above in a virtual environment, then run:
+Check out [89d5996c1](https://github.com/VeriInfra-Lab/VeriTile-2/commit/89d5996c1aec4dffaac9506fbe9f2c315ad6ea59), the merge of the NumPy exporter into `main`. This revision contains both interpreters and the two drivers printed below. Use its Lean toolchain. In the checkout root put the first block in `Bench118.lean` and the second in `compare118.py`, install NumPy 2.4.6 and ml_dtypes 0.7.0 in a Python 3.11 virtual environment, then run:
 
 ```sh
 lake build VeriTile.Interp.Array.Exec VeriTile.Interp.Carrier.Float VeriTile.Interp.Carrier.PyExport
