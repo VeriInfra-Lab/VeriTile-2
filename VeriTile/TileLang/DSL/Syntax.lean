@@ -66,72 +66,72 @@ def tlOutputs : Parser := nonReservedSymbol "out_idx" true
 def tlConfig : Parser := nonReservedSymbol "pass_configs" true
 def tlAssert : Parser := nonReservedSymbol "assert" true
 
-syntax tlValueName : tlExpr
-syntax num : tlExpr
-syntax scientific : tlExpr
-syntax str : tlExpr
-syntax tlBool : tlExpr
-syntax "(" tlExpr ")" : tlExpr
-syntax "(" tlExpr "," tlExpr,*,? ")" : tlExpr
-syntax "[" tlExpr,*,? "]" : tlExpr
-syntax:max tlName noWs "[" tlIndex,+,? "]" : tlExpr
-syntax tlExpr : tlIndex
-syntax (tlExpr)? ":" (tlExpr)? : tlIndex
-syntax:75 "-" tlExpr:75 : tlExpr
-syntax:80 tlExpr:81 " ** " tlExpr:75 : tlExpr
-syntax:70 tlExpr:70 " * " tlExpr:71 : tlExpr
-syntax:70 tlExpr:70 " / " tlExpr:71 : tlExpr
-syntax:70 tlExpr:70 " // " tlExpr:71 : tlExpr
-syntax:70 tlExpr:70 " % " tlExpr:71 : tlExpr
-syntax:65 tlExpr:65 " + " tlExpr:66 : tlExpr
-syntax:65 tlExpr:65 " - " tlExpr:66 : tlExpr
-syntax:56 tlExpr:56 " ^ " tlExpr:57 : tlExpr
-syntax:50 tlExpr:51 " < " tlExpr:51 : tlExpr
-syntax:50 tlExpr:51 " > " tlExpr:51 : tlExpr
-syntax:50 tlExpr:51 " <= " tlExpr:51 : tlExpr
-syntax:50 tlExpr:51 " >= " tlExpr:51 : tlExpr
-syntax:50 tlExpr:51 " == " tlExpr:51 : tlExpr
-syntax:50 tlExpr:51 " != " tlExpr:51 : tlExpr
-syntax:40 tlExpr:41 " if " tlExpr:41 " else " tlExpr:40 : tlExpr
+syntax (name := valueExpr) tlValueName : tlExpr
+syntax (name := integerLiteral) num : tlExpr
+syntax (name := scientificLiteral) scientific : tlExpr
+syntax (name := stringLiteral) str : tlExpr
+syntax (name := booleanLiteral) tlBool : tlExpr
+syntax (name := groupedExpr) "(" tlExpr ")" : tlExpr
+syntax (name := tupleExpr) "(" tlExpr "," tlExpr,*,? ")" : tlExpr
+syntax (name := listExpr) "[" tlExpr,*,? "]" : tlExpr
+syntax:max (name := indexedExpr) tlName noWs "[" tlIndex,+,? "]" : tlExpr
+syntax (name := indexExpr) tlExpr : tlIndex
+syntax (name := sliceIndex) (tlExpr)? ":" (tlExpr)? : tlIndex
+syntax:75 (name := negExpr) "-" tlExpr:75 : tlExpr
+syntax:80 (name := powExpr) tlExpr:81 " ** " tlExpr:75 : tlExpr
+syntax:70 (name := mulExpr) tlExpr:70 " * " tlExpr:71 : tlExpr
+syntax:70 (name := divExpr) tlExpr:70 " / " tlExpr:71 : tlExpr
+syntax:70 (name := floorDivExpr) tlExpr:70 " // " tlExpr:71 : tlExpr
+syntax:70 (name := modExpr) tlExpr:70 " % " tlExpr:71 : tlExpr
+syntax:65 (name := addExpr) tlExpr:65 " + " tlExpr:66 : tlExpr
+syntax:65 (name := subExpr) tlExpr:65 " - " tlExpr:66 : tlExpr
+syntax:56 (name := xorExpr) tlExpr:56 " ^ " tlExpr:57 : tlExpr
+syntax:50 (name := ltExpr) tlExpr:51 " < " tlExpr:51 : tlExpr
+syntax:50 (name := gtExpr) tlExpr:51 " > " tlExpr:51 : tlExpr
+syntax:50 (name := leExpr) tlExpr:51 " <= " tlExpr:51 : tlExpr
+syntax:50 (name := geExpr) tlExpr:51 " >= " tlExpr:51 : tlExpr
+syntax:50 (name := eqExpr) tlExpr:51 " == " tlExpr:51 : tlExpr
+syntax:50 (name := neExpr) tlExpr:51 " != " tlExpr:51 : tlExpr
+syntax:40 (name := conditionalExpr) tlExpr:41 " if " tlExpr:41 " else " tlExpr:40 : tlExpr
 
-syntax tlExpr : tlArg
+syntax (name := positionalArg) tlExpr : tlArg
 syntax (name := kw) tlName "=" tlExpr : tlArg
 syntax (name := primitive) rawIdentNoAntiquot "(" tlArg,*,? ")" : tlExpr
 syntax (name := layout) rawIdentNoAntiquot "(" tlExpr "," &"lambda" tlName,+ ":" tlExpr ")" : tlExpr
-syntax "{" tlName ":" tlExpr (",")? "}" : tlExpr
+syntax (name := layoutMap) "{" tlName ":" tlExpr (",")? "}" : tlExpr
 
-syntax tlName : tlPlace
+syntax (name := namePlace) tlName : tlPlace
 syntax (name := indexedTarget) tlName noWs "[" tlIndex,+,? "]" : tlPlace
-syntax tlPlace : tlTarget
-syntax tlName "," tlName,+ : tlTarget
-syntax tlName : tlParam
+syntax (name := placeTarget) tlPlace : tlTarget
+syntax (name := tupleTarget) tlName "," tlName,+ : tlTarget
+syntax (name := requiredParam) tlName : tlParam
 syntax (name := defaultParam) tlName "=" tlExpr : tlParam
-syntax tlName ":" &"T.Tensor" "(" tlExpr "," tlExpr ")" : tlTensor
-syntax tlTensor : tlParam
+syntax (name := tensorAnnotation) tlName ":" &"T.Tensor" "(" tlExpr "," tlExpr ")" : tlTensor
+syntax (name := tensorParam) tlTensor : tlParam
 
 syntax (name := binding) tlTarget "=" tlExpr : tlBinding
-syntax tlBinding : tlStmt
-syntax tlTensor : tlStmt
-syntax tlPlace "+=" tlExpr : tlStmt
-syntax tlPlace "*=" tlExpr : tlStmt
-syntax tlPlace "-=" tlExpr : tlStmt
-syntax tlPlace "/=" tlExpr : tlStmt
+syntax (name := assignStmt) tlBinding : tlStmt
+syntax (name := tensorStmt) tlTensor : tlStmt
+syntax (name := addAssignStmt) tlPlace "+=" tlExpr : tlStmt
+syntax (name := mulAssignStmt) tlPlace "*=" tlExpr : tlStmt
+syntax (name := subAssignStmt) tlPlace "-=" tlExpr : tlStmt
+syntax (name := divAssignStmt) tlPlace "/=" tlExpr : tlStmt
 syntax (name := operation) rawIdentNoAntiquot "(" tlArg,*,? ")" : tlStmt
-syntax "return" tlExpr : tlStmt
+syntax (name := returnStmt) "return" tlExpr : tlStmt
 syntax (name := branch) "if" tlExpr ":" tlSuite ("else" ":" tlSuite)? : tlStmt
 syntax (name := loop) "for" tlName,+ "in" tlIter ":" tlSuite : tlStmt
 syntax (name := loopCall) rawIdentNoAntiquot "(" tlArg,*,? ")" : tlIter
-syntax (name := kernel) "with" &"T.Kernel" "(" tlArg,+,? ")" "as" tlName ":" tlSuite : tlStmt
-syntax (name := grid) "with" &"T.Kernel" "(" tlArg,+,? ")" "as" "(" tlName,+,? ")" ":" tlSuite : tlStmt
+syntax (name := kernel) "with" &"T.Kernel" "(" tlArg,+,? ")" &"as" tlName ":" tlSuite : tlStmt
+syntax (name := grid) "with" &"T.Kernel" "(" tlArg,+,? ")" &"as" "(" tlName,+,? ")" ":" tlSuite : tlStmt
 syntax (name := role) "with" &"T.ws" "(" tlExpr ")" ":" tlSuite : tlStmt
-syntax "{" sepBy1(tlStmt, ";") (";")? "}" : tlSuite
+syntax (name := suite) "{" sepBy1(tlStmt, ";") (";")? "}" : tlSuite
 syntax (name := helper) "@T.macro" "def" tlName "(" tlName,*,? ")" ":" tlSuite : tlMacro
 
 -- The outer configuration admits literals and source names in defaults and
 -- expressions; only these binding/assert/constexpr-branch statements can run there.
-syntax tlBinding : tlStatic
+syntax (name := staticAssign) tlBinding : tlStatic
 syntax (name := staticBranch) "if" tlExpr ":" "{" sepBy1(tlStatic, ";") (";")? "}" ("else" ":" "{" sepBy1(tlStatic, ";") (";")? "}")? : tlStatic
-syntax tlAssert tlExpr ("," str)? : tlStatic
+syntax (name := staticAssert) tlAssert tlExpr ("," str)? : tlStatic
 syntax (name := outputs) tlOutputs "=" "[" num,+,? "]" : tlCfg
 syntax (name := config) tlConfig "=" "{" (str <|> rawIdentNoAntiquot) ":" tlBool "}" : tlCfg
 syntax (name := factory) ("@tilelang.jit" ("(" tlCfg,+,? ")")?)?
@@ -236,10 +236,28 @@ private def validOuter (s : Syntax) : Bool := Id.run do
 
 /-- The whitelist and local macro binding check run inside the parser, before
 a quoted term can be elaborated. -/
-def checkedOuter : Parser := categoryParser `tlOuter 0 >>
-  checkStackTop validOuter "unsupported TileLang call, arguments, kernel binding or macro"
+private def validateOuter : Parser := {
+  info := epsilonInfo
+  fn := fun _ state => Id.run do
+    let s := state.stxStack.back
+    if validOuter s then return state
+    if s.isOfKind ``factory then
+      let macros := s[9].getArgs.map (fun g => g[0][2].getId)
+      let unbound := s[17].find? fun call =>
+        (call.isOfKind ``primitive || call.isOfKind ``operation) &&
+        pyName call[0].getId && !macros.contains call[0].getId
+      if let some call := unbound then
+        return state.mkUnexpectedError s!"unbound TileLang local macro: {call[0].getId}"
+    return state.mkUnexpectedError "unsupported TileLang call, arguments, kernel binding or macro"
+}
 
-syntax (name := quotation) "tilelang" "{" checkedOuter "}" : term
+@[combinator_formatter validateOuter] private def validateOuterFmt : PrettyPrinter.Formatter := pure ()
+@[combinator_parenthesizer validateOuter] private def validateOuterParen : PrettyPrinter.Parenthesizer := pure ()
+
+def checkedOuter : Parser := categoryParser `tlOuter 0 >> validateOuter
+def quotationKeyword : Parser := nonReservedSymbol "tilelang" true
+
+syntax (name := quotation) quotationKeyword "{" checkedOuter "}" : term
 
 private partial def quoteSource (s : Syntax) : MetaM Expr := do
   match s with
@@ -251,50 +269,5 @@ private partial def quoteSource (s : Syntax) : MetaM Expr := do
   | .missing => throwError "missing TileLang syntax"
 
 @[term_elab quotation] def elabTileLang : Elab.Term.TermElab := fun stx _ => quoteSource stx[2]
-
--- Source-only identifiers must stay usable as ordinary Lean after import.
-example : True := trivial
-example : ¬ False := id
-example (pass_configs out_idx : Option Nat) : Option Nat := pass_configs <|> out_idx <|> none
-
--- These cases exercise the public term parser. An elaborator error would
--- accept the parse and fail these regressions.
-private def sample (body : String) : String :=
-  "tilelang { @tilelang.jit def demo(X, Y): {with T.Kernel(1, threads=32) as b: {" ++ body ++ "}}}"
-
-run_cmd
-  let env ← getEnv
-  for body in ["T.copy(X, Y)", "for i in T.Pipelined(2, num_stages=k): {Y[i] = X[i] + 1}",
-    "T.mbarrier_wait_parity(parity=(k // n) % n, mbarrier=X[b])",
-    "with T.ws(1): {T.tma_copy(X[:, :], Y[:, :], barrier=X[b])}",
-    "L = T.Layout(X.shape, lambda i, j: [j, i]); T.annotate_layout({X: L})"] do
-    if let .error e := Parser.runParserCategory env `term (sample body) then
-      throwError "expected TileLang syntax to parse: {body}: {e}"
-  for body in ["T.wgmma(X, Y)", "T.tcgen05(X)", "T.fence_proxy_async()",
-    "T.gemm(X, Y, X, future_kw=True)", "T.gemm(X, Y, X, policy=a, policy=b)",
-    "T.copy(X, Y, 1)", "T.copy(X, unknown(Y))", "unknown.T.copy(X, Y)",
-    "T.mbarrier_arrive(mbarrier=X, X)", "while k: {T.clear(X)}",
-    "for i in arbitrary(k): {T.clear(X)}", "T.copy(X, T.tcgen05(Y))",
-    "for i, j in range(n): {T.clear(X)}", "X, Y += 1"] do
-    if (Parser.runParserCategory env `term (sample body)).isOk then
-      throwError "accepted outside TileLang syntax: {body}"
-
-  for params in ["X, X", "n=1, X", "X=T.alloc_shared([1], T.float16)"] do
-    let source := "tilelang { @tilelang.jit def demo(" ++ params ++
-      "): {with T.Kernel(1) as b: {T.clear(X)}} }"
-    if (Parser.runParserCategory env `term source).isOk then
-      throwError "accepted invalid eager parameters: {params}"
-
-/-- A declaration and use retain the formal arguments and both constexpr arms. -/
-private def factoryExample : Source := tilelang {
-  def demo(n, enabled): {
-    if enabled: {k = n} else: {k = 1};
-    @T.macro def stage(X, Y): {T.copy(X, Y)};
-    @T.prim_func def run(X: T.Tensor([k], T.float32), Y: T.Tensor([k], T.float32)): {
-      with T.Kernel(k) as b: {stage(X, Y)}
-    };
-    return run
-  }
-}
 
 end VeriTile.TileLang

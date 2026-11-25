@@ -25,6 +25,7 @@ done
 profile_python=python3
 python3 -c 'import tomllib' 2>/dev/null || profile_python="uv run --no-project --python 3.11 python"
 commands=("python3 scripts/check_docs.py"
+          "python3 scripts/transcribe_tilelang_roots.py --check"
           "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
           "python3 -B -m unittest scripts.test_fork_replay")
@@ -71,7 +72,9 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.ElementHelper"
              "lake build tests.lean.dist.PointerCasts"
              "lake build tests.lean.dist.UnguardedShared"
-             "lake build tests.lean.dist.SegmentFootprint")
+             "lake build tests.lean.dist.SegmentFootprint"
+             "lake env lean tests/lean/TileLangSyntax.lean"
+             "lake env lean tests/lean/TileLangPinnedRoots.lean")
 fi
 
 log=$(mktemp -d)

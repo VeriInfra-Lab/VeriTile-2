@@ -28,55 +28,55 @@ The directly represented JIT options are `out_idx=[…]` and one boolean `pass_c
 
 ## Name × arguments × status
 
-The [A0.2 TileLang census](census/MinimalSyntax.md#tilelang) assigns nine kernel IDs, counts one use per root (including same-file helpers), and records the union of observed keyword names. In the table a number is the exact count of positional operands. A keyword following a plus is required in that alternative. Keywords in a group can change order, but must be unique and follow all positionals. The table distinguishes separate observed combinations of keywords. An unlisted spelling or argument combination is a parse failure for this draft.
+The [A0.2 TileLang census](census/MinimalSyntax.md#tilelang) assigns nine kernel IDs, counts one use per root (including same-file helpers), and records the union of observed keyword names. In the table a number is the exact count of positional operands. A keyword following a plus is required in that alternative. Keywords in a group can change order, but must be unique and follow all positionals. The table distinguishes separate observed combinations of keywords. An unlisted spelling or argument combination is a parse failure for this draft. The last column cites a complete gated client in [the generated roots](../tests/lean/TileLangPinnedRoots.lean). “Adapted” denotes the copy with an explicit local layout macro. The [public syntax tests](../tests/lean/TileLangSyntax.lean) also exercise the rank-one grid and the declared-macro rule, which do not occur at the pin.
 
-| Call | Positional operands and keywords | Roots | Public parse result |
+| Call | Positional operands and keywords | Roots | Public parse result | Test root |
+| --- | --- | ---: | --- | --- |
+| `T.Kernel` | 1–3 grid coordinates, optionally + `threads`; the binder count equals grid rank | 9 | accepted | 1 |
+| `T.Tensor` | 2, in tensor annotations | 9 | accepted | 1 |
+| `T.ceildiv` | 2 | 9 | accepted | 1 |
+| `T.copy` | 2 | 9 | accepted | 1 |
+| `T.alloc_fragment` | 2 or 1 + `dtype` | 8 | accepted | 1 |
+| `T.alloc_shared` | 2 or 1 + `dtype` | 7 | accepted | 1 |
+| `T.gemm` | 3, optionally + `transpose_A`, `transpose_B`, `policy`, or both `transpose_B, policy` | 7 | accepted | 1 |
+| `T.Parallel` | 1 or 2 | 6 | accepted | 1 |
+| `T.Pipelined` | 1 or 2 + `num_stages` in either case | 6 | accepted | 1 |
+| `T.clear` | 1 | 6 | accepted | 2 |
+| `T.exp2` | 1 | 5 | accepted | 1 |
+| `T.const` | 1 | 4 | accepted | 6 |
+| `T.if_then_else` | 3 | 3 | accepted | 1 |
+| `T.max` | 2 | 3 | accepted | 1 |
+| `T.reduce_sum` | 3 or 2 + `dim` | 3 | accepted | 1 |
+| `(local function: undecorated)` | 1; `make_dq_layout(dQ)` | 2 | parse failure | 3–4, original |
+| `range` | 1 | 2 | accepted | 2 |
+| `T.Layout` | 2; the second operand is a coordinate lambda | 2 | accepted | 3 adapted |
+| `T.annotate_layout` | 1 | 2 | accepted | 3 adapted |
+| `T.empty` | 2 | 2 | accepted | 8 |
+| `T.fill` | 2 | 2 | accepted | 1 |
+| `T.infinity` | 1 | 2 | accepted | 1 |
+| `T.min` | 2 | 2 | accepted | 5 |
+| `T.reduce_max` | 2 + `dim, clear` | 2 | accepted | 1 |
+| `T.use_swizzle` | 1 | 2 | accepted | 6 |
+| `math.ceil` | 1 | 1 | accepted | 7 |
+| `T.alloc_barrier` | 1 | 1 | accepted | 9 |
+| `T.atomic_add` | 2 | 1 | accepted | 4 adapted |
+| `T.floordiv` | 2 | 1 | accepted | 4 adapted |
+| `T.log2` | 1 | 1 | accepted | 1 |
+| `T.mbarrier_arrive` | 0 + `mbarrier` | 1 | accepted | 9 |
+| `T.mbarrier_wait_parity` | 0 + `mbarrier, parity` | 1 | accepted | 9 |
+| `T.tma_copy` | 2 + `barrier` | 1 | accepted | 9 |
+| `T.ws` | 1 | 1 | accepted | 9 |
+
+| Statement | Accepted target forms | Roots | Syntax rule |
 | --- | --- | ---: | --- |
-| `T.Kernel` | 1–3 grid coordinates, optionally + `threads`; the binder count equals grid rank | 9 | accepted |
-| `T.Tensor` | 2, in tensor annotations | 9 | accepted |
-| `T.ceildiv` | 2 | 9 | accepted |
-| `T.copy` | 2 | 9 | accepted |
-| `T.alloc_fragment` | 2 or 1 + `dtype` | 8 | accepted |
-| `T.alloc_shared` | 2 or 1 + `dtype` | 7 | accepted |
-| `T.gemm` | 3, optionally + `transpose_A`, `transpose_B`, `policy`, or both `transpose_B, policy` | 7 | accepted |
-| `T.Parallel` | 1 or 2 | 6 | accepted |
-| `T.Pipelined` | 1 or 2 + `num_stages` in either case | 6 | accepted |
-| `T.clear` | 1 | 6 | accepted |
-| `T.exp2` | 1 | 5 | accepted |
-| `T.const` | 1 | 4 | accepted |
-| `T.if_then_else` | 3 | 3 | accepted |
-| `T.max` | 2 | 3 | accepted |
-| `T.reduce_sum` | 3 or 2 + `dim` | 3 | accepted |
-| `(local function: undecorated)` | 1; `make_dq_layout(dQ)` | 2 | parse failure |
-| `range` | 1 | 2 | accepted |
-| `T.Layout` | 2; the second operand is a coordinate lambda | 2 | accepted |
-| `T.annotate_layout` | 1 | 2 | accepted |
-| `T.empty` | 2 | 2 | accepted |
-| `T.fill` | 2 | 2 | accepted |
-| `T.infinity` | 1 | 2 | accepted |
-| `T.min` | 2 | 2 | accepted |
-| `T.reduce_max` | 2 + `dim, clear` | 2 | accepted |
-| `T.use_swizzle` | 1 | 2 | accepted |
-| `math.ceil` | 1 | 1 | accepted |
-| `T.alloc_barrier` | 1 | 1 | accepted |
-| `T.atomic_add` | 2 | 1 | accepted |
-| `T.floordiv` | 2 | 1 | accepted |
-| `T.log2` | 1 | 1 | accepted |
-| `T.mbarrier_arrive` | 0 + `mbarrier` | 1 | accepted |
-| `T.mbarrier_wait_parity` | 0 + `mbarrier, parity` | 1 | accepted |
-| `T.tma_copy` | 2 + `barrier` | 1 | accepted |
-| `T.ws` | 1 | 1 | accepted |
-
-| Statement | Accepted target forms | Roots |
-| --- | --- | ---: |
-| `Expr` | A listed effectful call or a declared local macro as a statement | 9 |
-| `With` | `T.Kernel` with one name or a coordinate tuple; `T.ws(role)` | 9 |
-| `Assign` | Name, name tuple, or subscript followed by `=` and an expression | 8 |
-| `For` | One binder per `T.Parallel` dimension, one binder for `T.Pipelined` or `range` | 8 |
-| `AnnAssign` | Named `T.Tensor` annotation | 4 |
-| `If` | Runtime or captured condition in the kernel, static branch in the factory, optional else suite | 4 |
-| `Return` | Expression in a kernel or helper; the declared prim_func in a factory | 4 |
-| `AugAssign` | Name or subscript with `+=`, `-=`, `*=` or `/=` | 3 |
+| `Expr` | A listed effectful call or a declared local macro as a statement | 9 | `operation` |
+| `With` | `T.Kernel` with one name or a coordinate tuple; `T.ws(role)` | 9 | `kernel`, `grid`, `role` |
+| `Assign` | Name, name tuple, or subscript followed by `=` and an expression | 8 | `binding` |
+| `For` | One binder per `T.Parallel` dimension, one binder for `T.Pipelined` or `range` | 8 | `loop` |
+| `AnnAssign` | Named `T.Tensor` annotation | 4 | `tensorStmt` |
+| `If` | Runtime or captured condition in the kernel, static branch in the factory, optional else suite | 4 | `branch`, `staticBranch` |
+| `Return` | Expression in a kernel or helper; the declared prim_func in a factory | 4 | `returnStmt`, `factory` |
+| `AugAssign` | Name or subscript with `+=`, `-=`, `*=` or `/=` | 3 | `addAssignStmt`, `subAssignStmt`, `mulAssignStmt`, `divAssignStmt` |
 
 | Explicit exclusions | Public parse result |
 | --- | --- |
@@ -88,7 +88,9 @@ TileScale has a [separate A4 census](census/MinimalSyntax.md#tilescale). Shared 
 
 ## Pinned root audit
 
-All five distinct files were fetched at TileLang `35850c06875bcc84751417982bf7b4d662bafdbc` and their contents checked against Git blob IDs on 2026-11-25. Each of the nine roots below was tested through the public quotation with its full parameter list and complete body. The test transcribed the Python AST to braces and semicolons, normalized string quotes and tuples of binders, and retained every kernel call, slice, branch and JIT option. Host code and the outer host autotuner were excluded. Seven roots produced syntax trees. The two refusals call the same undecorated Python helper, declared at line 121 and used at lines 144 and 201. In a second pair of complete clients, declaring the same helper body as a local `@T.macro` (including its six-coordinate index lambda) made both kernels parse and elaborate. Their unchanged source calls then bind to a known name and arity. This is an explicit transcription choice; the original top-level undecorated helper still fails. [Helper and both call sites](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py#L121-L202)
+All five distinct files were fetched at TileLang `35850c06875bcc84751417982bf7b4d662bafdbc` and their contents checked against Git blob IDs on 2026-11-25. Run `python3 scripts/transcribe_tilelang_roots.py --check` to recompute all eleven complete clients byte for byte from the five vendored Git blobs, with no network or GPU dependencies. Run `lake env lean tests/lean/TileLangPinnedRoots.lean` to elaborate the nine positive clients and check the two original negative diagnostics through the public term parser. Both steps and the public restriction tests run in the author gate. [AST transcriber](../scripts/transcribe_tilelang_roots.py) · [Pinned inputs and attribution](../THIRD_PARTY_NOTICES.md#tilelang)
+
+Each of the nine roots below was tested through the public quotation with its full parameter list and complete body. The test transcribed the Python AST to braces and semicolons, normalized string quotes and tuples of binders, and retained every kernel call, slice, branch and JIT option. Host code and the outer host autotuner were excluded. Seven roots produced syntax trees. The two refusals call the same undecorated Python helper, declared at line 121 and used at lines 144 and 201. In a second pair of complete clients, declaring the same helper body as a local `@T.macro` (including its six-coordinate index lambda) made both kernels parse and elaborate. Their unchanged source calls then bind to a known name and arity. This is an explicit transcription choice; the original top-level undecorated helper still fails. [Helper and both call sites](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py#L121-L202)
 
 | Census IDs | File and outer/body lines at pin | Factory shape and result | Git blob |
 | --- | --- | --- | --- |

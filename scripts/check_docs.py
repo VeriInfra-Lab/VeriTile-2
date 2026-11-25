@@ -64,7 +64,8 @@ DERIVED_SOURCES = {
     'VeriTile/Examples': ('AttentionForwardClosedForm.lean',),
     'VeriTile/Triton/DSL': ('UniformJitFunctions.lean',),
     'VeriTile/Triton/Random': ('Philox.lean',),
-    'tests/lean': ('PhiloxRandom.lean',),
+    'scripts/fixtures/tilelang_roots': ('*.py.txt',),
+    'tests/lean': ('PhiloxRandom.lean', 'TileLangPinnedRoots.lean'),
     'site/src/lib': ('vector-add-record.json',),
     '.': ('README.md',),
 }
