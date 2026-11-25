@@ -38,7 +38,7 @@ reflect_kernel FloatDTypeAdd.Kernels.optimizedKernel
 reflect_kernel FloatDTypeSoftmax.Kernels.floatStableSoftmaxKernel
 reflect_kernel FloatDTypeSoftmax.Kernels.floatSoftmaxRecipKernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel FloatDTypeSoftmax.Kernels.commonPrefix
 reflect_kernel FloatDTypeSoftmax.Kernels.originalKernel
 reflect_kernel FloatDTypeSoftmax.Kernels.reciprocalKernel
@@ -49,13 +49,13 @@ reflect_kernel FusedSiLU.Kernels.siluStepGateKernel
 reflect_kernel FusedSiLU.Kernels.siluStepSiluKernel
 reflect_kernel FusedSiLU.Kernels.siluStepResidualKernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel FusedSiLU.Kernels.unfusedSiLUKernel
 reflect_kernel FusedSwiglu.Kernels.swiglu_fused_kernel
 reflect_kernel FusedSwiglu.Kernels.silu_step_kernel
 reflect_kernel FusedSwiglu.Kernels.mul_step_kernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel FusedSwiglu.Kernels.swiglu_unfused
 reflect_kernel HyperConnectionsDepth.Kernels.matrixKernel
 reflect_kernel HyperConnectionsDepth.Kernels.scalarKernel
@@ -88,7 +88,7 @@ reflect_kernel RowWiseSum.Kernels.reversedKernel
 reflect_kernel SoftmaxReciprocal.Kernels.stableSoftmaxKernel
 reflect_kernel SoftmaxReciprocal.Kernels.softmaxRecipKernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel SoftmaxReciprocal.Kernels.commonPrefix
 reflect_kernel SoftmaxReciprocal.Kernels.originalKernel
 reflect_kernel SoftmaxReciprocal.Kernels.reciprocalKernel

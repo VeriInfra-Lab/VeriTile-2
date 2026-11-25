@@ -208,42 +208,42 @@ example (a b c hidden : RegionName) (n ranks block : Nat) :
     hiddenCollision a b c hidden n ranks block = hiddenInlined a b c hidden n ranks block := rfl
 
 /-- error: unknown sequential source procedure -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 private def unknown (input_ptr peer_ptr output_ptr : RegionName) (elems_per_rank num_ranks BLOCK_SIZE : Nat) : ComputeKernel :=
   with_triton_call ringSignature call_args [elems_per_rank := elems_per_rank, num_ranks := num_ranks] dist_procedures in triton {
     invalid_helper(input_ptr, peer_ptr)
   }
 
 /-- error: src_ptr requires a pointer name -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 private def nonPointer (input_ptr peer_ptr output_ptr : RegionName) (elems_per_rank num_ranks BLOCK_SIZE : Nat) : ComputeKernel :=
   with_triton_call ringSignature call_args [elems_per_rank := elems_per_rank, num_ranks := num_ranks] dist_procedures in triton {
     copy_continuous_kernel(1, peer_ptr, elems_per_rank, BLOCK_SIZE)
   }
 
 /-- error: missing required procedure argument -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 private def missing (input_ptr peer_ptr output_ptr : RegionName) (elems_per_rank num_ranks BLOCK_SIZE : Nat) : ComputeKernel :=
   with_triton_call ringSignature call_args [elems_per_rank := elems_per_rank, num_ranks := num_ranks] dist_procedures in triton {
     copy_continuous_kernel(input_ptr, peer_ptr, elems_per_rank)
   }
 
 /-- error: unknown or repeated procedure argument -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 private def repeatedArgument (input_ptr peer_ptr output_ptr : RegionName) (elems_per_rank num_ranks BLOCK_SIZE : Nat) : ComputeKernel :=
   with_triton_call ringSignature call_args [elems_per_rank := elems_per_rank, num_ranks := num_ranks] dist_procedures in triton {
     copy_continuous_kernel(input_ptr, peer_ptr, elems_per_rank, N=elems_per_rank)
   }
 
 /-- error: positional procedure argument follows a keyword -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 private def latePositional (input_ptr peer_ptr output_ptr : RegionName) (elems_per_rank num_ranks BLOCK_SIZE : Nat) : ComputeKernel :=
   with_triton_call ringSignature call_args [elems_per_rank := elems_per_rank, num_ranks := num_ranks] dist_procedures in triton {
     copy_continuous_kernel(input_ptr, dst_ptr=peer_ptr, elems_per_rank, BLOCK_SIZE)
   }
 
 /-- error: BLOCK_SIZE requires a literal or caller constexpr -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 private def dynamicBlock (input_ptr peer_ptr output_ptr : RegionName) (elems_per_rank num_ranks BLOCK_SIZE : Nat) : ComputeKernel :=
   with_triton_call ringSignature call_args [elems_per_rank := elems_per_rank, num_ranks := num_ranks] dist_procedures in triton {
     copy_continuous_kernel(input_ptr, peer_ptr, elems_per_rank, num_ranks)
