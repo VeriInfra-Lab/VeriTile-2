@@ -127,6 +127,18 @@ class ForkTargetGates(unittest.TestCase):
             'tests/lean/LineBefore.lean': '#guard_msgs -- x\n  (substring := true) in\n' + quiet,
             'tests/lean/BlockInside.lean': '#guard_msgs (/- ) -/ substring := true) in\n' + quiet,
             'tests/lean/LineInside.lean': '#guard_msgs (substring := true -- x\n  ) in\n' + quiet,
+            # Round 7: a guard that does not start its line, and command-level metaprogramming.
+            'tests/lean/OpenIn.lean': 'open Nat in #guard_msgs (substring := true) in\n' + quiet,
+            'tests/lean/GuardMacro.lean': ('macro "q " c:command : command => `(#guard_msgs (substring := true) in $c)\n'
+                                           'q ' + quiet),
+            'tests/lean/StringDashes.lean': '#eval "--" #guard_msgs (substring := true) in\n' + quiet,
+            'tests/lean/NestedComment.lean': '/- a /- b -/ c -/ #guard_msgs (substring := true) in\n' + quiet,
+            'tests/lean/PlainMacro.lean': 'macro "triv" : tactic => `(tactic| trivial)\n',
+            'tests/lean/Elab.lean': 'open Lean Elab Command in\nelab "go" : command => pure ()\n',
+            'tests/lean/Notation.lean': 'local notation "zero" => (0 : Nat)\n',
+            'tests/lean/Infix.lean': 'infixl:65 " +++ " => Nat.add\n',
+            # A '"' character literal does not open a string that would hide the guard after it.
+            'tests/lean/CharQuote.lean': 'def c := \'"\'\n#guard_msgs (substring := true) in\n' + quiet,
         }
         for case, text in hiding.items():
             relative = 'lakefile.toml' if case == 'nested lakefile' else case
@@ -144,12 +156,24 @@ class ForkTargetGates(unittest.TestCase):
                     '/-- info: 1 -/\n#guard_msgs (info, substring := true) in\n#eval 1\n'
                     '/-- error: no -/\n#guard_msgs (error, drop info, substring := true) in\n#eval f\n'
                     # Checked with lake env lean: a `drop info` substring guard lets the warning through.
-                    '#guard_msgs (drop info, substring := true) in\n#eval 1\n')
+                    '#guard_msgs (drop info, substring := true) in\n#eval 1\n'
+                    # Prose and strings that mention guards or metaprogramming (the first three are on main).
+                    '-- Capture parser errors inside elaboration so #guard_msgs can check them;\n'
+                    '-- putting unparseable syntax directly after #guard_msgs aborts command parsing.\n'
+                    '-- elaboration-level #guard_msgs can intercept the diagnostic.\n'
+                    '/-- The prefix loads both operands; a macro or syntax here is prose. -/\n'
+                    'def s := "#guard_msgs (substring := true) in macro"\n'
+                    'def c := \'"\'\n'
+                    'theorem u (h : «syntax» = 1) : True := trivial\n'
+                    'def q (l : List Nat) := l.prefix\n'
+                    # Lean block comments nest, so this guard is still inside a comment.
+                    '/- outer /- inner -/ #guard_msgs (substring := true) in still a comment -/\n')
                 # The word in a comment line of a lakefile is fine.
                 (root / 'lakefile.toml').write_text('name = "veritile"\n# no sorry here\n')
                 allowlist = root / 'allowlist.txt'
                 allowlist.write_text('')
-                check = ['check_test_sorry.py', '--sources', '--root', str(root), '--allowlist', str(allowlist)]
+                check = ['check_test_sorry.py', '--sources', '--root', str(root), '--allowlist', str(allowlist),
+                         '--meta-allowlist', str(allowlist)]
                 clean = run(*check)
                 self.assertEqual(clean.returncode, 0, clean.stderr)
                 (root / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -164,7 +188,25 @@ class ForkTargetGates(unittest.TestCase):
             (root / 'tests/lean/Owed.lean').write_text('theorem owed : 1 = 2 := sorry\n')
             allowlist = root / 'allowlist.txt'
             allowlist.write_text('tests/lean/Owed.lean\towed\tproof owed by a ticket\n')
-            check = ['check_test_sorry.py', '--sources', '--root', str(root), '--allowlist', str(allowlist)]
+            metaprograms = root / 'metaprograms.txt'
+            metaprograms.write_text('tests/lean/Owed.lean\ttriv\ta reviewed tactic macro\n')
+            check = ['check_test_sorry.py', '--sources', '--root', str(root), '--allowlist', str(allowlist),
+                     '--meta-allowlist', str(metaprograms)]
+            # An allowlisted macro passes; another one in the same file does not.
+            (root / 'tests/lean/Owed.lean').write_text('macro "triv" : tactic => `(tactic| trivial)\n')
+            self.assertEqual(run(*check).returncode, 0)
+            (root / 'tests/lean/Owed.lean').write_text('macro "triv" : tactic => `(tactic| trivial)\n'
+                                                      'macro "triv2" : tactic => `(tactic| trivial)\n')
+            rejected = run(*check)
+            self.assertIn('tests/lean/Owed.lean:2: macro triv2', rejected.stderr)
+            self.assertNotIn('Owed.lean:1:', rejected.stderr)
+            # The two lists do not stand in for each other.
+            allowlist.write_text('tests/lean/Owed.lean\ttriv2\twrong list\n')
+            self.assertIn('macro triv2', run(*check).stderr)
+            (root / 'tests/lean/Owed.lean').write_text('theorem triv : 1 = 2 := sorry\n')
+            self.assertIn('tests/lean/Owed.lean:1: sorry', run(*check).stderr)
+            allowlist.write_text('tests/lean/Owed.lean\towed\tproof owed by a ticket\n')
+            (root / 'tests/lean/Owed.lean').write_text('theorem owed : 1 = 2 := sorry\n')
             accepted = run(*check)
             self.assertEqual(accepted.returncode, 0, accepted.stderr)
             (root / 'tests/lean/Owed.lean').write_text('theorem owed : 1 = 2 := sorry\ntheorem owed2 : 1 = 2 := sorry\n')

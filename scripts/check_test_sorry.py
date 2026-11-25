@@ -24,13 +24,24 @@ hidden, not the ways of hiding it. It fails on
   `substring := true` guard whose filter does not name its severities, or
   names `warning` or `all`. A substring guard captures every message of its
   command, the `sorry` warning included, as soon as its docstring is a
-  substring of the output, so `(error, substring := true)` is the only safe
-  form: the warning then passes through to the log scan. The guard header
+  substring of the output; with the severities named, as in
+  `(error, substring := true)`, the warning passes through to the log scan
+  instead. The guard header
   (from the keyword to its `in`, across lines) may not contain a comment,
   since Lean reads a comment as whitespace and it would hide the filter from
   this check. Such a line passes
   only if its file is allowlisted and the line, or for a guard the next line,
   names the allowlisted declaration.
+- in a tests/lean source: command-level metaprogramming (`macro`,
+  `macro_rules`, `syntax`, `elab`, `elab_rules`, `notation`, `infix`,
+  `infixl`, `infixr`, `prefix`, `postfix`) unless the file and the declared
+  name are in scripts/test-metaprogram-allowlist.txt, since a metaprogram can
+  assemble a hiding guard or a `sorry` out of pieces no rule here sees.
+Guards and metaprograms are found anywhere in code, not only at a line start;
+`--` and `/- -/` comments (which nest) and string contents are skipped, and
+docstrings are kept for the guard rules. What remains needs metaprogramming
+defined outside tests/lean, which coordinator review of gate-file and
+allowlist diffs covers.
 """
 import argparse
 from pathlib import Path
@@ -39,6 +50,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / 'scripts/test-sorry-allowlist.txt'
+# Kept apart from ALLOWLIST: an accepted macro name must not exempt the lines that use it from the sorry rules.
+META_ALLOWLIST = ROOT / 'scripts/test-metaprogram-allowlist.txt'
 # Lake prints `warning: FILE:L:C: MSG`, Lean prints `FILE:L:C: warning: MSG`; this toolchain quotes with backticks.
 # FILE is anchored to this repository's tests/lean, not a dependency's under .lake/packages.
 WARNING = re.compile(r'^(?:warning: )?(?:\./|' + re.escape(str(ROOT)) + r'/)?(tests/lean/[^\s:]+\.lean):(\d+):(\d+): '
@@ -67,11 +80,63 @@ def declaration(file, line, column):
 
 LAKEFILE_WORDS = re.compile(r'\bsorry\b')
 TEST_WORDS = re.compile(r'\bsorry(?:Ax)?\b|\bdrop\s+(?:warning|all)\b')
-# Tactic position only, outside `--` comments: `admit` and `stop` are also English words and names.
+# Tactic position only, in code: `admit` and `stop` are also English words and names.
 TACTICS = re.compile(r'(?:^|\bby\b|<;>|;|\(|·)\s*admit\b|(?:\bby\b|<;>|;|·)\s*stop\b|^\s*stop\s*$')
-# A guard command starts a line or follows its docstring, which holds the messages it expects.
-GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*|^[ \t]*)#guard_msgs\b', re.DOTALL | re.MULTILINE)
+# A guard anywhere in code (`open Nat in #guard_msgs ...`), with the docstring before it that holds the
+# messages it expects.
+GUARD = re.compile(r'(?:/--((?:(?!-/).)*?)-/\s*)?#guard_msgs\b', re.DOTALL)
 GUARD_END = re.compile(r'\bin\b')
+# Command-level metaprogramming can build a hiding guard or a sorry out of pieces no rule here sees.
+META = re.compile(r'(?<![\w.])(macro_rules|macro|syntax|elab_rules|elab|notation|infixl|infixr|infix|prefix|postfix)'
+                  r'(?![\w\'!?»])')
+META_NAME = re.compile(r'\s*(?:\(\s*name\s*:=\s*([^\s)]+)\s*\)\s*)?(?:\(\s*priority\s*:=[^)]*\)\s*)?'
+                       r'(?:"([^"]*)"|([^\s(:"]+))?')
+
+
+def views(text):
+    """The text with comments and string contents blanked (code), and the same keeping docstrings (guards).
+
+    Both keep every offset and newline. Lean block comments nest.
+    """
+    code, guard = list(text), list(text)
+
+    def blank(buffer, start, end):
+        for k in range(start, end):
+            if buffer[k] != '\n':
+                buffer[k] = ' '
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith('--', i):
+            end = text.find('\n', i)
+            end = n if end < 0 else end
+            blank(code, i, end)
+            blank(guard, i, end)
+            i = end
+        elif text.startswith('/-', i):
+            depth, end = 1, i + 2
+            while end < n and depth:
+                if text.startswith('/-', end):
+                    depth, end = depth + 1, end + 2
+                elif text.startswith('-/', end):
+                    depth, end = depth - 1, end + 2
+                else:
+                    end += 1
+            blank(code, i, end)
+            if not text.startswith('/--', i):
+                blank(guard, i, end)
+            i = end
+        elif text[i] == '"':
+            end = i + 1
+            while end < n and text[end] != '"':
+                end += 2 if text[end] == '\\' else 1
+            blank(code, i + 1, end)
+            blank(guard, i + 1, end)
+            i = end + 1
+        elif text.startswith(("'\"'", "'\\\"'"), i):  # the character literals '"' and '\"'
+            i += 3 if text.startswith("'\"'", i) else 4
+        else:
+            i += 1
+    return ''.join(code), ''.join(guard)
 
 
 def guard_header(text, start):
@@ -95,8 +160,8 @@ def captures_warnings(options):
     return not severities or any(re.search(r'\b(?:warning|all)\b', item) for item in severities)
 
 
-def tripwires(root, accepted):
-    """Source lines that use or could hide a `sorry` outside the allowlist."""
+def tripwires(root, accepted, metaprograms=frozenset()):
+    """Source lines that use or could hide a `sorry` outside the allowlists."""
     hits = []
     for name in ('lakefile.toml', 'library/lakefile.toml'):
         path = root / name
@@ -108,20 +173,29 @@ def tripwires(root, accepted):
         names = {name for f, name in accepted if f == file}
         text = path.read_text(errors='replace')
         lines = text.splitlines()
+        code, guards = views(text)
+        code_lines = code.splitlines()
 
         def named(*texts):
             return any(re.search(r'(?<![\w.])' + re.escape(name) + r'(?![\w.])', t) for name in names for t in texts)
         for number, line in enumerate(lines, 1):
             if not named(line):
                 hits += [f'{file}:{number}: {match.group(0).strip()}' for match in
-                         [*TEST_WORDS.finditer(line), *TACTICS.finditer(line.split('--')[0])]]
-        for match in GUARD.finditer(text):
+                         [*TEST_WORDS.finditer(line), *TACTICS.finditer(code_lines[number - 1])]]
+        for match in META.finditer(code):
+            found = META_NAME.match(text, match.end())
+            name = match.group(1) if match.group(1) == 'macro_rules' else \
+                (found.group(1) or found.group(2) or found.group(3) or '?')
+            if (file, name) not in metaprograms:
+                hits.append(f'{file}:{text.count(chr(10), 0, match.start()) + 1}: {match.group(1)} {name} '
+                            f'(metaprogramming outside {META_ALLOWLIST.name})')
+        for match in GUARD.finditer(guards):
             number = text.count('\n', 0, match.end()) + 1
             if named(*lines[number - 1:number + 1]):
                 continue
             if match.group(1) and re.search(r'\bwarning\b', match.group(1), re.IGNORECASE):
                 hits.append(f'{file}:{number}: #guard_msgs expecting a warning')
-            header = guard_header(text, match.end())
+            header = text[match.end():match.end() + len(guard_header(guards, match.end()))]
             if '/-' in header or '--' in header:
                 hits.append(f'{file}:{number}: comment in a #guard_msgs header')
             elif captures_warnings(guard_options(header)):
@@ -134,11 +208,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('logs', nargs='*', type=Path, help='output of gate commands')
     parser.add_argument('--allowlist', type=Path, default=ALLOWLIST)
+    parser.add_argument('--meta-allowlist', type=Path, default=META_ALLOWLIST)
     parser.add_argument('--sources', action='store_true', help='check the sources for ways to hide the warning')
     parser.add_argument('--root', type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sources:
-        hits = tripwires(args.root, allowed(args.allowlist))
+        hits = tripwires(args.root, allowed(args.allowlist), allowed(args.meta_allowlist))
         if hits:
             raise ValueError('a source uses or can hide sorry outside the allowlist:\n' + '\n'.join(hits))
         print('[ok] no lakefile or tests/lean source uses or hides sorry outside the allowlist')
