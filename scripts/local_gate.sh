@@ -89,6 +89,8 @@ for index in "${!commands[@]}"; do
     ${commands[$index]} >"$log/$index.log" 2>&1
   fi
   code=$?
+  # A `sorry` in a tests/lean file fails the command that built or ran it.
+  python3 scripts/check_test_sorry.py "$log/$index.log" >>"$log/$index.log" 2>&1 || [ "$code" != 0 ] || code=1
   echo "exit $code  ${commands[$index]}"
   if [ "$code" != 0 ]; then
     failed=$((failed + 1))

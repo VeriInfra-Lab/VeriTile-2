@@ -1,0 +1,9 @@
+# Accepted `sorry` warnings in tests/lean files that scripts/local_gate.sh builds or runs.
+# Checked by scripts/check_test_sorry.py on the output of every gate command.
+#
+# Format (tab-separated):
+#   tests/lean/File.lean	declaration	one-line reason
+#
+# The declaration is the word at the reported position: a theorem or
+# definition name, or `example`. Keep this list short; a certificate that
+# uses `sorry` certifies nothing.

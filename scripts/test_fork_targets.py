@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Negative examples for the fork target gates.
 
-Writes throwaway probe modules into VeriTile/Dist and VeriTile/Staging and
+Writes throwaway probe modules into VeriTile/Dist, VeriTile/Staging and tests/lean, and
 removes them again; do not run it while another build uses this checkout.
 """
 import hashlib
@@ -51,6 +51,30 @@ class ForkTargetGates(unittest.TestCase):
         rejected = run('check_fork_target.py', 'VeriTileDist')
         self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
         self.assertIn('AXIOM\tVeriTile/Dist/GateProbe.lean:veritileGateProbe', rejected.stderr)
+
+    def test_sorry_in_a_test_file_fails(self):
+        relative = 'tests/lean/GateSorryProbe.lean'
+        self.probe(relative, 'theorem veritileTestSorryProbe : True := sorry\nexample : True := sorry\n')
+        # The gate runs `lake env lean tests/lean/...` and scans its output; Lake's replayed form must match too.
+        ran = subprocess.run(['lake', 'env', 'lean', relative], cwd=ROOT, text=True, capture_output=True)
+        self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+        with tempfile.TemporaryDirectory() as temp:
+            log, allowlist = Path(temp) / 'command.log', Path(temp) / 'allowlist.txt'
+            log.write_text(ran.stdout + ran.stderr +
+                           f'warning: {relative}:1:8: declaration uses `sorry`\n'
+                           'warning: VeriTile/Staging/Probe.lean:1:8: declaration uses `sorry`\n')
+            allowlist.write_text(f'{relative}\texample\tprobe\n')
+            rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
+            self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+            self.assertIn(f'SORRY\t{relative}\tveritileTestSorryProbe\t({relative}:1:8)', rejected.stderr)
+            self.assertNotIn('\texample\t', rejected.stderr)
+            self.assertNotIn('Staging', rejected.stderr)
+            allowlist.write_text(f'{relative}\texample\tprobe\n{relative}\tveritileTestSorryProbe\tprobe\n')
+            accepted = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            allowlist.write_text(f'{relative}\tveritileTestSorryProbe\tprobe\n')
+            rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
+            self.assertIn(f'SORRY\t{relative}\texample\t({relative}:2:0)', rejected.stderr)
 
     def test_frozen_statement_rejects_an_importing_module(self):
         owner = 'VeriTile.Staging.FrozenOwnerProbe'
