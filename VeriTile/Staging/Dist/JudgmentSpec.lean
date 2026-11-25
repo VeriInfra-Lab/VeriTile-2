@@ -1,6 +1,15 @@
-/- Unsigned S4.1 design draft (#47). The event vocabulary and the first part
-of SegmentSpec are signed. This file contains candidate statements to review,
-not certificates. The five source/control comparisons are in
+/- S4.1 design draft (#47). The event vocabulary and the first part
+of SegmentSpec are signed.
+
+Signed on 2026-11-25 (user decisions of 2026-11-24 and 2026-11-25, recorded on
+#47; the agent recorded the signature on the user's delegation): C1
+`step_comm` (the statement only; its proof is owed by #51), C2
+`wait_enabled_mono` and `threshold_stays_enabled`, the bridge
+`SyncEdge.hb_of_readsFrom` and the add-only counting edge `CountingEdge.hb`,
+with the definitions under them. C3, `implementsAll_of_canonical`,
+`DetRaceFree`, `UnorderedAtomicRace` and `Occurrence.discardedAddAt` stay
+unsigned and are signed with #54. Everything else in this file is a candidate
+statement to review, not a certificate. The five source/control comparisons are in
 tests/lean/dist/JudgmentVariants.lean. -/
 import VeriTile.Staging.Dist.SegmentSpec
 import VeriTile.Triton.Concurrent.EventProgramIO
@@ -284,7 +293,7 @@ def DirectHB (l : Launch P) (h : History) (p : Addr) (i j : Nat) : Prop :=
 /-- S4.3/#49. Scope visibility is indexed by the cell throughout the chain. -/
 def HB (l : Launch P) (h : History) (p : Addr) := Relation.TransGen (DirectHB l h p)
 
-/-- UNSIGNED. S5.1/S1: the scope checker supplies a synchronization pair for the
+/-- Signed (#47). S5.1/S1: the scope checker supplies a synchronization pair for the
 observed cell `p`. At its two history positions, the acquire must read from
 this release on the same synchronization counter. -/
 theorem SyncEdge.hb_of_readsFrom {l : Launch P} {h : History} {p : Addr} {i j : Nat}
@@ -299,7 +308,8 @@ theorem SyncEdge.hb_of_readsFrom {l : Launch P} {h : History} {p : Addr} {i j : 
   exact .single ⟨x, y, hx, hy, source.1,
     Or.inr (Or.inr (Or.inr (Or.inl ⟨rel, acq, c, m, ex, ey, released, source, edge⟩)))⟩
 
-/-- UNSIGNED. S4.1. The add-only counting edge is a direct HB edge. -/
+/-- Signed (#47). S4.1. The add-only counting edge is a direct HB edge. Its scope
+(a satisfied `ge` wait on an add-only counter) is widened only by #55. -/
 theorem CountingEdge.hb {l : Launch P} {h : History} {p : Addr} {i j : Nat}
     (edge : CountingEdge l h p i j) : HB l h p i j := by
   obtain ⟨_, _, _, _, _, _, _, _, lt, src, _, dst, _⟩ := id edge
@@ -421,14 +431,14 @@ structure SoundLaunch (l : Launch P) : Prop where
     ∀ x ∈ f.history, ∀ y ∈ f.history, ∀ c g t, x.owner = .thread c g t →
       y.owner = .thread c g t → ∀ a b, x.program? = some a → y.program? = some b → a = b
 
-/-- C1 candidate, S4.5/#51. Histories record the swapped order, so the
+/-- Signed (#47), statement only; the proof is owed by #51. C1, S4.5/#51. Histories record the swapped order, so the
 equality asserted is on memory and continuations. -/
 theorem step_comm {l : Launch P} (sound : SoundLaunch l) {s final : Config P} {a b : Choice}
     (first : Run l s [a,b] final) (ra rb : Resources) (ha : Reserves l s a ra)
     (hb : Reserves l s b rb) (apart : Independent ra rb) :
     ∃ swapped, Run l s [b,a] swapped ∧ swapped.mem = final.mem ∧ swapped.pc = final.pc := sorry
 
-/-- C2, S4.6/#52. Only monotone threshold comparisons have this property;
+/-- Signed (#47). C2, S4.6/#52. Only monotone threshold comparisons have this property;
 a set that decreases the counter or equality with a threshold can disable a wait. -/
 theorem wait_enabled_mono {init : Counter → Nat} {c : Counter} {n : Nat} {pre post : Trace}
     (prefixOf : pre <+: post) (monotone : c.SetsMonotone init post)
@@ -442,6 +452,8 @@ def CountMonotone (l : Launch P) (c : Counter) : Prop :=
   ∀ {s t action n}, step l s action t → s.count? l.initialCount c = some n →
     ∃ m ≥ n, t.count? l.initialCount c = some m
 
+/-- Signed (#47). C2 at state level, S4.6/#52: a threshold that holds stays
+enabled along any run whose steps never decrease the counter. -/
 theorem threshold_stays_enabled {l : Launch P} {c : Counter} {s t : Config P}
     {sched n old} (mono : CountMonotone l c) (run : Run l s sched t)
     (seen : s.count? l.initialCount c = some old) (enabled : n ≤ old) :
