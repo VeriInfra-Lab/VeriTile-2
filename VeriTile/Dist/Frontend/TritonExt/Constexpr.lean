@@ -47,8 +47,13 @@ names, source constants and fixed pointer types. Runtime arguments are never
 compile-time bindings. The adapter evaluates only Lean data and leaves
 unrelated expressions and source instructions to the existing frontend.
 An integer folded into a register assignment is materialized with its
-Triton integer dtype. Static dimensions and inline operands retain literal
-syntax so the consuming constructor can select the type.
+Triton integer dtype. In Triton v3.5.1, `visit_Assign` unwraps the constexpr
+and calls `to_tensor`, which selects the dtype by the integer's range
+(accessed 2026-11-25).
+https://github.com/triton-lang/triton/blob/v3.5.1/python/triton/compiler/code_generator.py#L678-L699
+https://github.com/triton-lang/triton/blob/v3.5.1/python/triton/language/semantic.py#L117-L132
+Static dimensions and inline operands retain literal syntax so the consuming
+constructor can select the type.
 Integer aliases from these calls have block scope, including inside a runtime
 `if`. The condition and runtime statements remain in the kernel.
 Stored source procedures use their own entry point.
