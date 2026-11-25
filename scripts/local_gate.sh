@@ -68,7 +68,8 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.SourceHelpers"
              "lake build tests.lean.dist.ProcedureHelpers"
              "lake build tests.lean.dist.ElementHelper"
-             "lake build tests.lean.dist.PointerCasts")
+             "lake build tests.lean.dist.PointerCasts"
+             "lake build tests.lean.dist.UnguardedShared")
 fi
 
 log=$(mktemp -d)
