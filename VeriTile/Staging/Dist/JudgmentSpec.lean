@@ -446,23 +446,32 @@ theorem wait_enabled_mono {init : Counter → Nat} {c : Counter} {n : Nat} {pre 
   Counter.ge_stable monotone prefixOf enabled
 
 /-- S4.6/#52. State-level C2 covers physical words as well as abstract
-counters. Every step that can modify the counter must preserve its type and
-not decrease it. Equality waits do not satisfy threshold stability. -/
-def CountMonotone (l : Launch P) (c : Counter) : Prop :=
-  ∀ {s t action n}, step l s action t → s.count? l.initialCount c = some n →
-    ∃ m ≥ n, t.count? l.initialCount c = some m
+counters. Every step from a configuration reachable from `l.initial σ₀` that
+can modify the counter must preserve its type and not decrease it. Equality
+waits do not satisfy threshold stability. Unreachable configurations are
+excluded: over all configurations no launch satisfies this (#47, 2026-11-25). -/
+def CountMonotone (l : Launch P) (σ₀ : DistState) (c : Counter) : Prop :=
+  ∀ {pre s t action n}, Run l (l.initial σ₀) pre s → step l s action t →
+    s.count? l.initialCount c = some n → ∃ m ≥ n, t.count? l.initialCount c = some m
 
-/-- Signed (#47). C2 at state level, S4.6/#52: a threshold that holds stays
-enabled along any run whose steps never decrease the counter. -/
-theorem threshold_stays_enabled {l : Launch P} {c : Counter} {s t : Config P}
-    {sched n old} (mono : CountMonotone l c) (run : Run l s sched t)
-    (seen : s.count? l.initialCount c = some old) (enabled : n ≤ old) :
+private theorem Run.snoc {l : Launch P} {s t u : Config P} {xs : Schedule} {c : Choice}
+    (run : Run l s xs t) (last : step l t c u) : Run l s (xs ++ [c]) u := by
+  induction run with
+  | nil => exact .cons last (.nil _)
+  | cons first _ ih => exact .cons first (ih last)
+
+/-- C2 at state level, S4.6/#52: a threshold that holds at a reachable
+configuration stays enabled along any run whose steps never decrease the
+counter. Re-signing with the reachable `CountMonotone` is pending (#47). -/
+theorem threshold_stays_enabled {l : Launch P} {σ₀ : DistState} {c : Counter} {s t : Config P}
+    {pre sched n old} (mono : CountMonotone l σ₀ c) (reach : Run l (l.initial σ₀) pre s)
+    (run : Run l s sched t) (seen : s.count? l.initialCount c = some old) (enabled : n ≤ old) :
     ∃ v ≥ n, t.count? l.initialCount c = some v := by
-  induction run generalizing old with
+  induction run generalizing pre old with
   | nil => exact ⟨old,enabled,seen⟩
   | cons first _ ih =>
-    obtain ⟨m, ge, found⟩ := mono first seen
-    exact ih found (enabled.trans ge)
+    obtain ⟨m, ge, found⟩ := mono reach first seen
+    exact ih (reach.snoc first) found (enabled.trans ge)
 
 /-- C3 obstruction. Both scoped atomic sets are race-free with respect to
 each other, but swapping them changes the final counter. -/
