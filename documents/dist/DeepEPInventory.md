@@ -792,11 +792,11 @@ rows), the FP8 payload and a comparison with `deep_ep`.
 
 ## 8. The frozen MoE specification against version 1 normal mode
 
-The declarations are in `VeriTile/Staging/Dist/SpecLibSpec.lean` (lines
-217-290): `MoERouting`, `MoERows`, `MoERouting.Assigns`, `MoEDispatch`,
-`MoEStoreBack`, `moeCombine`, `moeCombine_of_moeDispatch`. The file header
-(lines 27-30) names the EPv2 port as their source. This ticket does not edit
-the file.
+The `VeriTile.Dist` declarations `MoERouting`, `MoERows`, `MoERouting.Assigns`,
+`MoEDispatch`, `MoEStoreBack`, `moeCombine` and `moeCombine_of_moeDispatch`
+are in [SpecLibSpec.lean](../../VeriTile/Staging/Dist/SpecLibSpec.lean).
+The “MoE source” paragraph in that module names the EPv2 port as their source.
+This ticket does not edit the file.
 
 **What agrees (I, from section 3.2).**
 
