@@ -537,6 +537,12 @@ globs = [
   "tests.lean.dist.PointerCasts",
   "tests.lean.dist.UnguardedShared",
   "tests.lean.dist.SegmentFootprint",
+  "tests.lean.dist.CountMonotoneVacuous",
+  "tests.lean.dist.NonWordObservation",
+  "tests.lean.dist.FetchAddObservation",
+  "tests.lean.dist.WordCounterCheck",
+  "tests.lean.dist.DeepEPChannel",
+  "tests.lean.dist.Tutorial01",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own

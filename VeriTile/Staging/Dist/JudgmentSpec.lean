@@ -549,7 +549,9 @@ premise (#47, 2026-11-25): DetRaceFree uses HB, whose synchronization edges
 already check scope through Mode.Pairs, and `Fire` returns no count of a
 non-word counter, so an unrecorded observation cannot reach memory.
 S5.2/#57 owns the source-level synchronization obligations, outside this
-theorem. S4.7 owes normalization.
+theorem. S4.7 owes normalization. Still false as stated after the 2026-11-25
+fix: two `acqRel` fetch-adds on one word whose results are stored are
+`DetRaceFree` in either order (tests/lean/dist/FetchAddObservation.lean).
 C1 will also need a simulation for suffixes, including reads-from and delivery
 ticket renaming; equality of the raw event histories would be false. -/
 theorem detRaceFree_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
