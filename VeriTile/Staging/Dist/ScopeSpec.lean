@@ -1,5 +1,10 @@
 /-
-S5.1 (#56) draft for sign-off. The checker uses the signed event interface in
+S5.1 (#56). Signed on 2026-11-25 (user decision S1–S7 of 2026-11-24, recorded
+on #56; the agent recorded the signature on the user's delegation): the scope
+checker `scopeConsistent` with `ScopeReliance`, through its soundness statement
+`scopeConsistent_sound` and the two examples `scopeConsistent_crossRankGpu` and
+`scopeConsistent_crossRankSys`. The trust-assumption interface below is not
+frozen yet: no signed statement mentions it (see #56). The checker uses the signed event interface in
 EventSpec. A reliance names the release and acquire that a proof needs and
 the cell whose visibility it needs. S4.1 supplies the trace conditions,
 including the read-from condition that connects such a pair to happens-before.
@@ -8,14 +13,14 @@ import VeriTile.Staging.Dist.EventSpec
 
 namespace VeriTile.Dist
 
-/-- UNSIGNED. Owner: S5.2. A release/acquire pair required for the visibility
+/-- Signed (#56). Owner: S5.2. A release/acquire pair required for the visibility
 of a cell. The cell can differ from the synchronization word. -/
 structure ScopeReliance where
   cell : Addr
   writer : Agent × Event
   reader : Agent × Event
 
-/-- UNSIGNED. Owner: S5.2. Every required pair must write and read the same
+/-- Signed (#56). Owner: S5.2. Every required pair must write and read the same
 counter and satisfy the signed mode-pairing conditions for the stated reach. -/
 def scopeConsistent (reach : ShmemReach) (reliances : List ScopeReliance) : Bool :=
   reliances.all fun r =>
@@ -26,14 +31,14 @@ def scopeConsistent (reach : ShmemReach) (reliances : List ScopeReliance) : Bool
       decide (c = c' ∧ Mode.Pairs reach r.cell r.writer.1 r.reader.1 m m')
     | _, _ => false
 
-/-- UNSIGNED. Owner: S5.2. Every requested pair admitted by the checker
+/-- Signed (#56). Owner: S5.2. Every requested pair admitted by the checker
 satisfies `SyncEdge` for the requested cell. -/
 theorem scopeConsistent_sound (reach : ShmemReach) (reliances : List ScopeReliance)
     (h : scopeConsistent reach reliances = true) :
     ∀ r ∈ reliances, SyncEdge reach r.cell r.writer r.reader := by
   sorry
 
-/-- UNSIGNED. Owner: S5.2. A GPU-scope acquire cannot pair with a release
+/-- Signed (#56). Owner: S5.2. A GPU-scope acquire cannot pair with a release
 issued from another rank. -/
 theorem scopeConsistent_crossRankGpu :
     let flag : Addr := ⟨.global 0, ⟨"flag"⟩, 0⟩
@@ -42,7 +47,7 @@ theorem scopeConsistent_crossRankGpu :
         (.rank 1, .wait (.word flag) .eq 1 (.atomic .gpu .acquire))⟩] = false := by
   decide
 
-/-- UNSIGNED. Owner: S5.2. Changing the acquire to system scope admits the
+/-- Signed (#56). Owner: S5.2. Changing the acquire to system scope admits the
 same pair in the event interface. -/
 theorem scopeConsistent_crossRankSys :
     let flag : Addr := ⟨.global 0, ⟨"flag"⟩, 0⟩
