@@ -1,4 +1,5 @@
 import VeriTile.Dist.Frontend.TritonExt.PointerCasts
+import VeriTile.Dist.State
 
 namespace VeriTile.Tests.Dist.PointerCasts
 open VeriTile.Dist VeriTile.Triton VeriTile.Dist.Frontend.TritonExt.PointerCasts
@@ -106,7 +107,92 @@ example : (with_pointer_views (args .u64 .u64) in triton {
 
 example : (with_pointer_views (args .i64 .i64) in triton {
     q = tl.cast(p, pi_u64_t, _semantic=_semantic)
-  }) = .error "pointer view: signed signal-word reinterpretation belongs to #549" := rfl
+  }) = .ok [] := rfl
+
+-- The cast forms an address; only the signal wait can reinterpret the stored bits.
+example : (with_pointer_views (args .i64 .i64) in triton {
+    q = tl.cast(p, pi_u64_t, _semantic=_semantic)
+    x = tl.load(q)
+  }) = .error "pointer view: access dtype reinterprets the allocation unit" := rfl
+
+-- T03:72-76 uses the signal's per-peer cell and ignores the successful return.
+-- Tag the neighbouring cells differently to make an incorrect address fail.
+private def signalArgs (declared stored : SourceDType) (target : Int) : Launch :=
+  { pointers := [⟨"symm_flag", scratch stored, declared⟩],
+    integers := [("peer", 3), ("signal_value", target)] }
+
+private def signalState (value : MemCell) : DistState where
+  numRanks := 1
+  cell address := if address == (cells "scratch" 0 3 1).first then value else MemCell.of .bool Bool.false
+  context _ := ⟨fun _ _ _ => none, fun _ _ => 0, fun _ => 1⟩
+
+private def observeOne (code : Except String (List Access)) (cell : MemCell) :
+    Except String (Option (BitVec 64)) := do
+  let [.wait w] ← code | throw "expected a single signal wait"
+  w.observe (signalState cell).cell
+
+private def waitEQ (launch : Launch) := with_pointer_views launch in triton {
+  libshmem_device.signal_wait_until(
+    symm_flag + peer, libshmem_device.NVSHMEM_CMP_EQ, signal_value,
+  )
+}
+
+example : observeOne (waitEQ (signalArgs .i64 .i64 7)) (.of .int 7) = .ok (some 7) := rfl
+example : observeOne (waitEQ (signalArgs .i64 .i64 7)) (.of .int 6) = .ok none := rfl
+example : observeOne (waitEQ (signalArgs .i64 .i64 (2^64 - 1))) (.of .int (-1)) =
+    .ok (some 0xffffffffffffffff) := rfl
+example : observeOne (waitEQ (signalArgs .i64 .i64 (2^63))) (.of .int (-(2^63))) =
+    .ok (some 0x8000000000000000) := rfl
+-- NV:581 casts the comparison value itself to uint64. The returned bits also
+-- recover the signed value exactly through BitVec.toInt.
+example : ((observeOne (waitEQ (signalArgs .u64 .u64 (-1))) (.of .nat (2^64-1))).map
+    (Option.map BitVec.toInt)) = .ok (some (-1)) := rfl
+
+private def orderings := with_pointer_views (signalArgs .i64 .i64 7) in triton {
+  u = tl.cast(symm_flag, pi_u64_t, _semantic=_semantic)
+  libshmem_device.signal_wait_until(u + peer, libshmem_device.NVSHMEM_CMP_NE, signal_value)
+  libshmem_device.signal_wait_until(u + peer, libshmem_device.NVSHMEM_CMP_GT, signal_value)
+  libshmem_device.signal_wait_until(u + peer, libshmem_device.NVSHMEM_CMP_LE, signal_value)
+  libshmem_device.signal_wait_until(u + peer, libshmem_device.NVSHMEM_CMP_LT, signal_value)
+  libshmem_device.signal_wait_until(u + peer, libshmem_device.NVSHMEM_CMP_GE, signal_value)
+}
+private def readyAt (i : Int) : Except String (List Bool) := do
+  (← orderings).mapM fun
+    | .wait w => return (← w.observe (signalState (.of .int i)).cell).isSome
+    | _ => throw "expected a signal wait"
+example : readyAt (-1) = .ok [Bool.true, Bool.true, Bool.false, Bool.false, Bool.true] := rfl
+example : readyAt 7 = .ok [Bool.false, Bool.false, Bool.true, Bool.false, Bool.true] := rfl
+example : readyAt 0 = .ok [Bool.true, Bool.false, Bool.true, Bool.true, Bool.false] := rfl
+
+example : (with_pointer_views (signalArgs .i64 .i64 7) in triton {
+    opaque_signal = tl.cast(symm_flag, tl.pointer_type(tl.void))
+    libshmem_device.signal_wait_until(opaque_signal, libshmem_device.NVSHMEM_CMP_EQ, 7)
+  }) = .error "signal wait: expected an int64 or uint64 pointer" := rfl
+
+example : (with_pointer_views (signalArgs .i64 .i64 7) in triton {
+    libshmem_device.signal_wait_until(symm_flag + 1024, libshmem_device.NVSHMEM_CMP_EQ, 7)
+  }) = .error "pointer view: access outside allocation" := rfl
+
+example : waitEQ (signalArgs .fp64 .i64 7) =
+    .error "signal wait: expected an int64 or uint64 pointer" := rfl
+example : waitEQ (signalArgs .u64 .fp64 7) =
+    .error "signal wait: expected int64 or uint64 storage" := rfl
+example : observeOne (waitEQ (signalArgs .u64 .i64 7)) (.of .nat 7) =
+    .error "signal wait: expected an int64 cell" := rfl
+example : observeOne (waitEQ (signalArgs .i64 .u64 7)) (.of .int 7) =
+    .error "signal wait: expected a uint64 cell" := rfl
+example : observeOne (waitEQ (signalArgs .i64 .i64 0)) (.of .int (2^63)) =
+    .error "signal wait: stored value outside int64 range" := rfl
+example : observeOne (waitEQ (signalArgs .i64 .i64 0)) (.of .int (-(2^63)-1)) =
+    .error "signal wait: stored value outside int64 range" := rfl
+example : observeOne (waitEQ (signalArgs .u64 .u64 0)) (.of .nat (2^64)) =
+    .error "signal wait: stored value outside uint64 range" := rfl
+
+/-- error: signal wait: unsupported comparison -/
+#guard_msgs in
+example := with_pointer_views (signalArgs .i64 .i64 7) in triton {
+  libshmem_device.signal_wait_until(symm_flag, libshmem_device.NVSHMEM_CMP_BAD, signal_value)
+}
 
 -- An access must match the allocation dtype even after erasing the pointee,
 -- recovering a pointer from an aligned integer or accepting its declared type.
@@ -114,21 +200,21 @@ example : (with_pointer_views (args .i64 .i64) in triton {
     v = tl.cast(p, tl.pointer_type(tl.void))
     q = tl.cast(v, pi_u64_t, _semantic=_semantic)
     x = tl.load(q)
-  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+  }) = .error "pointer view: access dtype reinterprets the allocation unit" := rfl
 
 example : (with_pointer_views (args .i64 .i64) in triton {
     q = tl.cast(4104, pi_u64_t, _semantic=_semantic)
     x = tl.load(q)
-  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+  }) = .error "pointer view: access dtype reinterprets the allocation unit" := rfl
 
 example : (with_pointer_views (args .u64 .i64) in triton {
     x = tl.load(p)
-  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+  }) = .error "pointer view: access dtype reinterprets the allocation unit" := rfl
 
 example : (with_pointer_views (args .bf16 .bf16) in triton {
     q = tl.cast(p, tl.pointer_type(tl.float16))
     tl.store(q, 0)
-  }) = .error "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549" := rfl
+  }) = .error "pointer view: access dtype reinterprets the allocation unit" := rfl
 
 example : (with_pointer_views (args .bf16 .f8e4) in triton {
     x = tl.load(p)

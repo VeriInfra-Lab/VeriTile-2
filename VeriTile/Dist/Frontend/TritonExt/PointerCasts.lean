@@ -1,4 +1,5 @@
-import VeriTile.Dist.SymmHeap
+import VeriTile.Dist.Event
+import VeriTile.Triton.Semantics.State
 import VeriTile.Triton.DSL.PythonFullConstructors
 
 /-! Kernel-level typed pointer views (#548). The launch binding supplies allocation
@@ -10,11 +11,12 @@ precondition of #156. See `documents/dist/PointerCasts.md` for the source pins.
 
 `with_pointer_views … in triton { … }` checks one active lane's address operations
 and produces signed-model cell ranges. It does not execute a load, store or
-external transfer. Numeric casts and bitcasts use the ordinary compute frontend.
+external transfer. An NVSHMEM signal wait can observe a single supplied memory
+snapshot through `SignalWait.observe`. Numeric casts and bitcasts use the ordinary compute frontend.
 -/
 namespace VeriTile.Dist.Frontend.TritonExt.PointerCasts
 
-open VeriTile.Triton (SourceDType RegionName)
+open VeriTile.Triton (SourceDType RegionName MemCell)
 open Lean Elab Term
 open VeriTile.Triton.DSL
 
@@ -67,6 +69,7 @@ inductive Instruction where
   | assign (name : String) (value : AddressExpr)
   | load (name : String) (pointer : AddressExpr)
   | store (pointer value : AddressExpr)
+  | wait (signal : AddressExpr) (cmp : Cmp) (target : AddressExpr)
   | transfer (put : Bool) (destination source count peer : AddressExpr)
 
 structure CellRange where
@@ -74,7 +77,37 @@ structure CellRange where
   cells : Nat
   deriving DecidableEq
 
+/-- NV:579 reinterprets the physical integer word at this address for an
+unsigned comparison. The allocation supplies the tag used for the actual read. -/
+structure SignalWait where
+  address : Addr
+  signedStorage : Bool
+  cmp : Cmp
+  target : BitVec 64
+  deriving DecidableEq
+
+/-- One observation of the pinned extern: return its uint64 result when ready,
+or `none` while blocked. Supply the launch's authoritative cell map
+(`DistState.cell`). An unrepresentable mathematical integer is not a word. -/
+def SignalWait.observe (w : SignalWait) (cell : Addr → MemCell) :
+    Except String (Option (BitVec 64)) := do
+  let stored := cell w.address
+  let bits ← if w.signedStorage then do
+    let some i := stored.readAs .int | throw "signal wait: expected an int64 cell"
+    let bits := BitVec.ofInt 64 i
+    unless bits.toInt == i do throw "signal wait: stored value outside int64 range"
+    pure bits
+  else do
+    let some n := stored.readAs .nat | throw "signal wait: expected a uint64 cell"
+    let bits := BitVec.ofNat 64 n
+    unless bits.toNat == n do throw "signal wait: stored value outside uint64 range"
+    pure bits
+  letI : Decidable (w.cmp.holds bits.toNat w.target.toNat) := by
+    cases w.cmp <;> unfold Cmp.holds <;> infer_instance
+  return if w.cmp.holds bits.toNat w.target.toNat then some bits else none
+
 inductive Access where
+  | wait (signal : SignalWait)
   | read (dtype : SourceDType) (range : CellRange)
   | write (dtype : SourceDType) (range : CellRange)
   | put (destination source : CellRange)
@@ -110,7 +143,7 @@ private def Pointer.dereference (p : Pointer) : Except String (SourceDType × Ce
   unless dtype == p.allocation.unit do
     if width != (← byteWidth p.allocation.unit) then
       throw "pointer view: mixed access widths or incorrect launch unit for this buffer"
-    throw "pointer view: access dtype reinterprets the allocation unit; signed signal words belong to #549"
+    throw "pointer view: access dtype reinterprets the allocation unit"
   return (dtype, ← p.range width)
 
 private def indexValue : Operand → Except String Int
@@ -124,10 +157,7 @@ private def ptrValue : Operand → Except String Pointer
 private def convert (allocations : List Allocation) (input : Operand) (target : Option SourceDType) :
     Except String Operand := do
   let p ← match input with
-    | .pointer p => do
-      if p.pointee == some .i64 && target == some .u64 then
-        throw "pointer view: signed signal-word reinterpretation belongs to #549"
-      pure { p with pointee := target }
+    | .pointer p => pure { p with pointee := target }
     | .index i => do
       let n ← natIndex i
       match allocations.filter (fun a => a.baseByte ≤ n && n < a.baseByte + a.extentBytes) with
@@ -196,6 +226,15 @@ def project (launch : Launch) (code : List Instruction) : Except String (List Ac
       | _ => pure ()
       let (dtype, range) ← (← ptr e).dereference
       accesses := accesses.push (.write dtype range)
+    | .wait signal cmp target =>
+      let p ← ptr signal
+      unless p.pointee == some .i64 || p.pointee == some .u64 do
+        throw "signal wait: expected an int64 or uint64 pointer"
+      unless p.allocation.unit == .i64 || p.allocation.unit == .u64 do
+        throw "signal wait: expected int64 or uint64 storage"
+      let word ← p.range 8
+      let rhs ← indexValue (← value target)
+      accesses := accesses.push (.wait ⟨word.first, p.allocation.unit == .i64, cmp, BitVec.ofInt 64 rhs⟩)
     | .transfer put d s n rank =>
       let dst ← ptr d
       let src ← ptr s
@@ -230,6 +269,7 @@ scoped syntax ident "+=" viewExpr : viewStmt
 scoped syntax ident "=" "tl.load(" viewExpr ")" : viewStmt
 scoped syntax "tl.store(" viewExpr "," viewExpr ")" : viewStmt
 scoped syntax ident "(" viewExpr "," viewExpr "," viewExpr "," viewExpr ")" : viewStmt
+scoped syntax (name := signalWaitCall) ident "(" viewExpr "," ident "," viewExpr ","? ")" : viewStmt
 
 private def targetTerm (stx : TSyntax `viewTarget) : MacroM Term := do
   match stx with
@@ -285,6 +325,23 @@ private partial def exprTerm (e : TSyntax `viewExpr) : MacroM Term := do
     else Macro.throwErrorAt e "pointer view: unsupported address expression"
 
 private def stmtTerm (s : TSyntax `viewStmt) : MacroM Term := do
+  if s.raw.isOfKind ``signalWaitCall then
+    let fn := s.raw[0]
+    unless fn.getId == `libshmem_device.signal_wait_until do
+      Macro.throwErrorAt fn "pointer view: unsupported three-argument call"
+    let op := s.raw[4]
+    let name ← match op.getId with
+      | `libshmem_device.NVSHMEM_CMP_EQ => pure ``Cmp.eq
+      | `libshmem_device.NVSHMEM_CMP_NE => pure ``Cmp.ne
+      | `libshmem_device.NVSHMEM_CMP_GT => pure ``Cmp.gt
+      | `libshmem_device.NVSHMEM_CMP_LE => pure ``Cmp.le
+      | `libshmem_device.NVSHMEM_CMP_LT => pure ``Cmp.lt
+      | `libshmem_device.NVSHMEM_CMP_GE => pure ``Cmp.ge
+      | _ => Macro.throwErrorAt op "signal wait: unsupported comparison"
+    let p ← exprTerm ⟨s.raw[2]⟩
+    let target ← exprTerm ⟨s.raw[6]⟩
+    let op := mkIdent name
+    return ← `(Instruction.wait $p $op $target)
   match s with
   | `(viewStmt| $n:ident = tl.load($e:viewExpr)) =>
     let key := quote n.getId.toString
