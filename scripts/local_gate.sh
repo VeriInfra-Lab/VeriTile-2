@@ -59,6 +59,7 @@ if [ "$lean" = 1 ]; then
              "lake env lean tests/lean/InterpBridgeCensus.lean"
              "lake build tests.lean.InterpFPValue"
              "python3 -B -m unittest scripts.test_fp_value_carrier"
+             "uv run --no-project --python 3.11 --script scripts/interp/test_pyexec.py --with-lean"
              "lake build tests.lean.dist.SwizzleSource"
              "lake build tests.lean.dist.JudgmentVariants"
              "lake build tests.lean.dist.TritonExtConstexpr"
