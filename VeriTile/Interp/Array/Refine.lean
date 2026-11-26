@@ -13,33 +13,6 @@ open Structural (Values)
 
 variable {α : Type}
 
-private theorem get_product {β γ : Type} (xs : List β) (ys : List γ)
-    (i j : Nat) (hi : i < xs.length) (hj : j < ys.length) :
-    (xs.flatMap fun x => ys.map (x, ·))[i * ys.length + j]? = some (xs[i], ys[j]) := by
-  induction xs generalizing i with
-  | nil => simp at hi
-  | cons x xs ih =>
-    cases i with
-    | zero =>
-      simp [List.flatMap_cons, List.getElem?_append_left (by simpa using hj : j < (ys.map (x, ·)).length),
-        List.getElem?_eq_getElem hj]
-    | succ i =>
-      simp only [List.flatMap_cons, Nat.succ_mul, List.getElem_cons_succ]
-      rw [List.getElem?_append_right (by simp; omega), List.length_map]
-      convert ih i (by simpa using hi) using 2; omega
-
-private theorem get_allIndices (sh : TileShape) (i : TileIndex sh) :
-    (TileShape.allIndices sh)[TileShape.linearIndex sh i]? = some i := by
-  induction sh with
-  | nil => cases i; rfl
-  | cons n sh ih =>
-    rcases i with ⟨x, y⟩
-    have hy := TileShape.linearIndex_lt sh y
-    have he := get_product (List.finRange n) (TileShape.allIndices sh) x.val
-      (TileShape.linearIndex sh y) (by simp) (by simpa using hy)
-    simpa [TileShape.allIndices_cons, TileShape.linearIndex, List.getElem_finRange,
-      (List.getElem?_eq_some_iff.mp (ih y)).2] using he
-
 /-- Tabulation returns the original value at each index, including rank-zero tiles. -/
 theorem materialize_eq {β : Type} {sh : TileShape} (f : TileIndex sh → β) : materialize f = f := by
   funext i
