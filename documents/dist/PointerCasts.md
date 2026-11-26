@@ -1,12 +1,12 @@
-# Pointer casts in the distributed tutorials and DeepEP v1
+# Pointer casts in the distributed tutorials, DeepEP v1 and P2P reads
 
 ## Scope and counting
 
-This is the source inventory for step 1 of #448. It covers the eight Triton-distributed tutorial files in the map and their reached device kernels, including the seven library kernels/helpers in the tutorial call graph (21 kernel definitions in all). It also covers the five Python files in the pinned TileScale DeepEP v1 intranode directory. The target counts in the original ticket cover other families, including K-M. They count roots, whereas this inventory counts source expressions once across all callers. The source pins are Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a` and TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`. Source inspected 2026-11-23. [Tutorial call graph](EventControlFlow.md#2-sources) · [DeepEP v1 intranode directory](https://github.com/tile-ai/tilescale/tree/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode)
+This inventory covers the 44 sites from step 1 of #448 and 13 additional P2P kernel sites from the partial #593 inventory. Step 1 examined the eight Triton-distributed tutorial files in the map and their reached device kernels, including the seven library kernels/helpers in the tutorial call graph (21 kernel definitions in all). It also examined the five Python files in the pinned TileScale DeepEP v1 intranode directory. The #593 addition covers the fused and non-fused read kernels in the pinned P2P implementation. The original #448 target list also includes other families, including K-M. They count roots, whereas this inventory counts source expressions once across all callers. The source pins are Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a` and TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`. Step-1 sources were inspected on 2026-11-23 and the P2P read sites on 2026-11-25. [Tutorial call graph](EventControlFlow.md#2-sources) · [DeepEP v1 intranode directory](https://github.com/tile-ai/tilescale/tree/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode)
 
 The map excludes tutorial 03a, including its two casts of `symm_ptr` to an int8 pointer. [Map scope](EventControlFlow.md#2-sources) · [T03a:89–91](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03a-inter-node-allgather.py#L89-L91)
 
-A site is one pointer-targeting `tl.cast` or `.to`, one addition to the cast pointer (including an addition in the same expression as the cast, a chained addition or a later `+=`), or one `tl.cast` carrying any of `dtype=`, `bitcast=`, `_semantic=`. An expression matching two cast selectors counts once. Multiplying two integer indices counts as part of the offset. Lines shared by separate additions are identified by the operand. The second table follows reached front-end primitive wrappers to their external-call or inline-assembly boundary and reports their sites separately. No external code was run.
+A site in these tables is one pointer-targeting `tl.cast` or `.to`, one addition to the cast pointer (including an addition in the same expression as the cast, a chained addition or a later `+=`), or one `tl.cast` carrying any of `dtype=`, `bitcast=`, `_semantic=`. An expression matching two cast selectors counts once. Multiplying two integer indices counts as part of the offset. Lines shared by separate additions are identified by the operand. The second table follows reached front-end primitive wrappers to their external-call or inline-assembly boundary and reports their sites separately. No external code was run.
 
 ## Kernel sites
 
@@ -105,7 +105,43 @@ The physical storage and the extern pointer type are separate inputs. T03 alloca
 
 The five inline-assembly sites and eleven scalar keyword sites remain outside the site total. An unsupported source expression, unknown pointer provenance, mismatched cell dtypes, overlapping allocations or failed divisibility check yields a diagnostic.
 
+## Remaining-target inventory: P2P reads (#593, partial)
+
+The two branches of `CommOp.read` select different kernels. The `fused=True` branch dispatches current root 57, `p2p_copy_remote_to_local_kernel` (historical 98). Its status is **rejected with diagnostic, owned by #596, out of scope of #296**. The `fused=False` branch dispatches current root 55, `p2p_copy_kernel` (historical 96), then copies the synchronized communication buffer into the typed output. The table records all three root-55 and ten root-57 kernel-level source sites using the counting rule above. `begin = pid × ceil(nbytes / NUM_SMS)`. [Dispatch and typed copy](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/layers/nvidia/p2p.py#L97-L116) · [Public target numbers](../census/MinimalSyntax.md#triton-distributed) · [Coordinator’s root-57 decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/593#issuecomment-7174675011)
+
+| Site | Root and operation | Before → after | Byte displacement | Adapter disposition and evidence |
+| --- | --- | --- | --- | --- |
+| [P2P:71](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L71) | 55, source cast | BF16 → int8 pointer | 0 | Accepted address view. |
+| [P2P:81](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L81) | 55, get destination | int8 pointer, BF16 storage | begin | Accepted on a complete-cell interval; split case below. |
+| [P2P:82](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L82) | 55, get source on peer | int8 pointer, BF16 storage | begin | Same start, size and diagnostics as the destination. |
+| [P2P:127](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L127) | 57, source cast | BF16 → int8 pointer | 0 | Cast accepted; the active byte load is rejected on BF16 storage. |
+| [P2P:128](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L128) | 57, destination cast | BF16 → int8 pointer | 0 | Cast accepted; the active byte store is rejected on BF16 storage. |
+| [P2P:138](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L138) | 57, blocking get destination | int8 pointer, BF16 storage | begin | Accepted for the one-BF16, one-CTA full-cell control. |
+| [P2P:139](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L139) | 57, blocking get source on peer | int8 pointer, BF16 storage | begin | Same whole-cell interval as the destination. |
+| [P2P:147](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L147) | 57, source load, chunk addition | int8 pointer, BF16 storage | begin | Address arithmetic stays in bytes. |
+| [P2P:147](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L147) | 57, source load, iteration addition | int8 pointer, BF16 storage | begin + i × BLOCK_SIZE | Address arithmetic stays in bytes. |
+| [P2P:147](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L147) | 57, source load, lane addition | int8 pointer, BF16 storage | begin + i × BLOCK_SIZE + offs | Active byte access requires a BF16/byte relation; #596. |
+| [P2P:149](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L149) | 57, destination store, chunk addition | int8 pointer, BF16 storage | begin | Address arithmetic stays in bytes. |
+| [P2P:149](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L149) | 57, destination store, iteration addition | int8 pointer, BF16 storage | begin + i × BLOCK_SIZE | Address arithmetic stays in bytes. |
+| [P2P:149](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L149) | 57, destination store, lane addition | int8 pointer, BF16 storage | begin + i × BLOCK_SIZE + offs | Active byte access requires a BF16/byte relation; #596. |
+
+**Fused control, root 57.** A one-CTA get of one BF16 copies one whole cell. The subsequent active int8 payload load and store cannot observe or update separate bytes of BF16 storage in D. The first access returns `pointer view: mixed access widths or incorrect launch unit for this buffer`. Choosing int8 storage produces two get cells and a one-byte read/write footprint, without relating that state to the BF16 input or output. The published test selects the non-fused branch. The fused Lean client specializes the address operations to iteration 0, lane 0 and one CTA of a one-BF16 launch that the public API permits. All six address additions at P2P:147 and P2P:149 are classified from the pinned source. The Lean client uses the resulting zero-offset addresses directly and does not exercise those six expressions. [Fused kernel](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L119-L150) · [Gated public adapter clients](../../tests/lean/dist/P2PTransferViews.lean)
+
+**Non-fused, root 55.** The caller selects the symmetric BF16 allocation, fills it with a nonuniform tensor on the sending rank, reads it with `fused=False`, and checks the received typed result. At the pinned test defaults (8192 × 6144 BF16, eight CTAs), 100663296 bytes divide into eight 12582912-byte gets. All starts and lengths are even. D gives 6291456 BF16 cells per CTA. Changing only the public `--num_sms` option to 7 produces a 14380471-byte first chunk. CTA 0 copies through byte 14380470 inclusive, the first byte of BF16 cell 7190235; CTA 1 starts at byte 14380471, the second byte of that cell. CTA 0 returns `pointer view: byte count is not divisible by the buffer unit`; CTA 1 returns `pointer view: transfer start is not cell aligned`. The public Lean test calculates the CTA partition in Lean and supplies the start and size as launch integers to the adapter. It checks both diagnostics and the successful ranges of all eight default CTAs. Each tested start is within the allocation, so the test does not exercise negative remaining lengths. [Command-line controls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/test/nvidia/test_pp.py#L38-L47) · [BF16 input and allocation](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/test/nvidia/test_pp.py#L232-L260) · [Producer](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/test/nvidia/test_pp.py#L82-L94) · [Non-fused receiver](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/test/nvidia/test_pp.py#L127-L143) · [Typed comparison](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/test/nvidia/test_pp.py#L284-L295) · [CTA partition and get](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py#L66-L85)
+
+A minimal witness uses one BF16 and two CTAs. They copy bytes [0,1) and [1,2) from the same peer to the corresponding offsets in local storage. After just one get the local BF16 may contain one byte from each rank. Modelling each individual transfer against populated BF16 storage needs a relation for a partial-cell update. An int8-unit control accepts both footprints and leaves this relation open. Unlike root 57, the kernel itself only issues a blocking get. For a whole-launch specification the two byte ranges cover the original word, independently of byte order; grouping the gets would require its own contract and proof of when the partially updated word is observable. This inventory establishes the source path and exact D diagnostics using Lean; it did not run a GPU transfer. [Public adapter controls](../../tests/lean/dist/P2PTransferViews.lean) · [Runtime validation in the pinned client](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/layers/nvidia/p2p.py#L101-L116)
+
+For root 55, #296 covers launches whose per-CTA byte count is a multiple of the element size. Split BF16 cells, as with `--num_sms 7`, are a diagnosed gap owned by #596. [Root-55 launch decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/296#issuecomment-7197417954) Of the 14 current roots, these two P2P reads have the kernel-site dispositions above. The one allreduce, five common_ops, one P2P put, two T03 and three T04 roots still await the complete remaining-target reconciliation (the step-1 tutorial evidence below remains available). The 18 retired roots comprise four ep_all2all_fused, two low_latency_all_to_all_v2 and twelve low_latency_allgather roots. They are retired, not classified; retired root 80 → helper 75 is separately owned by #596. The 14-root scanner count, the reached `getmem_block` → `_getmem_impl` wrapper sites and the 18 retired roots as individual source-path/kernel-name rows remain open. [Continuation decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/593#issuecomment-7169031258)
+
 ## Coverage and totals
+
+| Inventory covered | Kernel casts | Kernel pointer arithmetic | Reached wrapper sites | Total distinct sites |
+| --- | ---: | ---: | ---: | ---: |
+| #448 step 1 | 6 | 15 | 23 | 44 |
+| #593 P2P read roots 55 and 57, kernel sites only | 3 | 10 | — | 13 |
+| **Recorded across both inventories** | **9** | **25** | **23** | **57** |
+
+The interpretation categories below apply to the original step-1 sites.
 
 | Counted source surface | I: same payload interpretation | II: different typed views | III: inline assembly | Scalar keyword conversion | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -114,13 +150,13 @@ The five inline-assembly sites and eleven scalar keyword sites remain outside th
 | Reached CUDA primitive wrappers | 6 | 1 | 5 | 11 | 23 |
 | **Total distinct sites** | **19** | **9** | **5** | **11** | **44** |
 
-II takes precedence when an expression serves both paths. Four of the thirteen kernel I sites belong to the packed FP8 reference output and nine to int8 byte copies. In particular, simply equating “allocated as BF16” with “payload produced as BF16” would change the count. Five III rows identify source locations only. The eleven additional scalar casts are counted for their keyword, separately from pointer operations. The reached sites contain no `dtype=` keyword of `tl.cast`; passing a dtype positionally and using `dtype=` on a different API are distinct. No `.to(tl.pointer_type(...))` occurs in the reached kernel set.
+II takes precedence when an expression serves both paths. Four of the thirteen kernel I sites belong to the packed FP8 reference output and nine to int8 byte copies. In particular, simply equating “allocated as BF16” with “payload produced as BF16” would change the count. Five III rows identify source locations only. The eleven additional scalar casts are counted for their keyword, separately from pointer operations. The reached sites contain no `dtype=` keyword of `tl.cast`; passing a dtype positionally and using `dtype=` on a different API are distinct. No `.to(tl.pointer_type(...))` occurs in the step-1 kernel set. All three P2P read casts use this spelling.
 
 The eight tutorial files contain qualifying kernel expressions only in T03 and T04. Following the seven library kernels in the call graph adds no direct kernel sites. CO:73,76,105,122,125 occur in other grid-barrier helpers; those helpers and the separate low-latency/EP K-M sources belong to the wider parent census. On the reached K16 scalar `st` path, the vector overload at LE:695–696 is not selected. The DeepEP directory contains `get_dispatch_layout.py`, `dispatch.py`, `combine.py`, `example_intranode.py`, and `test_intranode.py`. Its seven kernels use TileScale. None of the five files contains the requested Triton pointer or keyword forms; `T.cast(idx_value, "int32")` in dispatch is a scalar TileScale expression. [Reachable versus unused kernels](EventControlFlow.md#2-sources) · [Wider grid helper](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L61-L142) · [Scalar source call](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L172-L179) · [DeepEP scalar cast](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/dispatch.py#L385)
 
 ### Reproducing the source counts
 
-With the checkout directories of the two pins in `TD` and `TS`, run the following with Python 3.10 or later from the VeriTile root. The scanner reads Python syntax without importing either project. It follows assigned cast pointers and increments inside each function, resets a pointer overwritten in a different branch, and prints distinct casts, arithmetic expressions and source wrapper keywords. The line/column pairs distinguish nested additions beginning on the same line by their end positions.
+With the checkout directories of the two pins in `TD` and `TS`, run the following with Python 3.10 or later from the VeriTile root. The scanner reads Python syntax without importing either project. It follows assigned cast pointers and increments inside each function, resets a pointer overwritten in a different branch, and prints distinct casts, arithmetic expressions and source wrapper keywords. The scanner uses source positions internally to distinguish nested additions. Its table check compares the number of occurrences for each (file alias, line) pair. The check does not compare columns, operator text or classifications.
 
 ```python
 import ast
@@ -135,6 +171,7 @@ nv = base / "kernels/nvidia"
 cuda = base / "language/extra/cuda"
 files = {f: None for f in sorted((td / "tutorials").glob("0[1-8]-*.py"))}
 assert len(files) == 8
+files[nv / "p2p.py"] = {"p2p_copy_kernel", "p2p_copy_remote_to_local_kernel"}
 files[nv / "common_ops.py"] = {
     "barrier_all_intra_node_atomic_cas_block", "barrier_all_intra_node_non_atomic_block",
     "_barrier_all_intra_node_non_atomic_once_block",
@@ -212,17 +249,19 @@ for row in sorted(seen):
     print(*row)
 counts = Counter((file, kind) for file, *_, kind in seen)
 assert counts == {
+    ("p2p.py", "cast"): 3, ("p2p.py", "arithmetic"): 10,
     ("03-inter-node-allgather.py", "cast"): 3, ("03-inter-node-allgather.py", "arithmetic"): 6,
     ("04-deepseek-infer-all2all.py", "cast"): 3, ("04-deepseek-infer-all2all.py", "arithmetic"): 9,
     ("libnvshmem_device.py", "cast"): 18, ("language_extra.py", "cast"): 5,
 }, counts
 aliases = {
+    "p2p.py": "P2P",
     "03-inter-node-allgather.py": "T03", "04-deepseek-infer-all2all.py": "T04",
     "libnvshmem_device.py": "NV", "language_extra.py": "LE",
 }
 expected = Counter((aliases[file], line) for file, line, *_ in seen)
 table = Path("documents/dist/PointerCasts.md").read_text()
 listed = Counter((name, int(line)) for name, line in
-                 re.findall(r"^\| \[(T03|T04|NV|LE):(\d+)\]", table, re.MULTILINE))
+                 re.findall(r"^\| \[(T03|T04|NV|LE|P2P):(\d+)\]", table, re.MULTILINE))
 assert listed == expected, (listed - expected, expected - listed)
 ```
