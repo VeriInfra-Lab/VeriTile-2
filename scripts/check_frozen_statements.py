@@ -6,15 +6,27 @@ Two tables under documents/dist/ record two fingerprints.
 FrozenStatements.tsv has one row per signed declaration. Its fingerprint is
 the SHA-256 of the elaborated statement (the declaration's type: every
 constant, universe level, implicit argument and coercion), up to the names of
-bound variables. This digest survives a move from staging to the main target
-under the same declaration name. The module column must name the new owner.
+bound variables. For a signed inductive or structure, the fingerprint also
+records parameter/index counts, binder annotations and ordered constructors.
+For a structure it also records its own and ancestor field/projection names
+and the effective field-default auxiliary names. This digest survives a move
+from staging to the main target under the same declaration name. The module
+column must name the new owner.
 
 FrozenDefinitions.tsv has one row per project constant that a signed statement
 depends on: every constant the statement mentions, and every constant those
 mention in their types, definition bodies and constructors, as far as they are
 declared in this repository (Lean core and Mathlib are pinned by the
-toolchain and the manifest). Its fingerprint covers the constant's kind, type
-and, for a definition, its body. Proofs are not followed.
+toolchain and the manifest). A directly signed transparent definition or
+inductive type is itself a root; a signed structure adds ancestor structures,
+field/parent projections and effective default-value definitions. Defaults
+are elaboration-time values, but changing one changes the elaboration of
+structure literals. Directly signed opaque, partial or axiom declarations
+are rejected: we do not certify a definition body that is unavailable or
+not transparent (including a partial definition's unsafe implementation).
+The per-constant fingerprint still covers kind, type and a definition's body;
+opaque dependencies of a theorem retain the previous type-only treatment.
+Theorems start only at their types as before; proofs are not followed.
 
 A changed statement always fails. A changed, new or no longer needed
 definition fails too, and names the signed statements it affects, because it
@@ -83,6 +95,68 @@ private def frozenEntry (info : ConstantInfo) : String × Array Name :=
   (s!"{kind} : {frozenSer info.type}" ++ (match value with | some v => s!" := {frozenSer v}" | none => ""),
    info.type.getUsedConstants ++ (match value with | some v => v.getUsedConstants | none => #[]) ++ more)
 
+/-- Binder annotations are recorded only for directly signed inductive
+interfaces. The old expression serializer and theorem digests stay fixed. -/
+private partial def frozenBinderInfos : Expr → List BinderInfo
+  | .forallE _ t b bi | .lam _ t b bi => bi :: (frozenBinderInfos t ++ frozenBinderInfos b)
+  | .app f a => frozenBinderInfos f ++ frozenBinderInfos a
+  | .letE _ t v b _ => frozenBinderInfos t ++ frozenBinderInfos v ++ frozenBinderInfos b
+  | .mdata _ e | .proj _ _ e => frozenBinderInfos e
+  | _ => []
+
+-- The Python reader expects one tab-separated record per line, not a pretty-print layout.
+private def frozenList (xs : List String) : String :=
+  "[" ++ String.intercalate "," (xs.map String.quote) ++ "]"
+
+private def frozenNames (xs : List Name) : String := frozenList (xs.map toString)
+
+private def frozenBinderText (e : Expr) : String :=
+  "[" ++ String.intercalate "," ((frozenBinderInfos e).map (fun bi => toString bi.toUInt64)) ++ "]"
+
+private def frozenInductiveShape (env : Environment) (i : InductiveVal) : String :=
+  let binders := i.ctors.map fun c =>
+    s!"{c} {((env.find? c).map (fun info => frozenBinderText info.type)).getD "missing"}"
+  s!"params {i.numParams} indices {i.numIndices} type binders {frozenBinderText i.type} constructors {frozenNames i.ctors} constructor binders {frozenList binders}"
+
+/-- Traverse the registered parent DAG, including implicit parents of a
+multiple-inheritance structure. Defaults can be overridden by a child, so
+look up effective default functions on each structure's flattened fields. -/
+private partial def frozenStructureShape (env : Environment) (work : List Name)
+    (seen : NameSet) : List String × List Name :=
+  match work with
+  | [] => ([], [])
+  | n :: rest =>
+    if seen.contains n then frozenStructureShape env rest seen else
+    match getStructureInfo? env n with
+    | none => frozenStructureShape env rest (seen.insert n)
+    | some s =>
+      let fields := s.fieldNames.filterMap (getProjFnForField? env n)
+      let projections := fields ++ s.parentInfo.map (·.projFn)
+      let parents := s.parentInfo.map (·.structName)
+      let defaults := (getStructureFieldsFlattened env n).filterMap (getEffectiveDefaultFnForField? env n)
+      let inductiveShape := match env.find? n with
+        | some (.inductInfo i) => frozenInductiveShape env i
+        | _ => ""
+      let shape := s!"{n} {inductiveShape} fields {frozenNames s.fieldNames.toList} parents {frozenNames parents.toList} projections {frozenNames projections.toList} defaults {frozenNames defaults.toList}"
+      let (shapes, roots) := frozenStructureShape env (parents.toList ++ rest) (seen.insert n)
+      (shape :: shapes, n :: (projections.toList ++ defaults.toList ++ roots))
+
+/-- An explicitly signed type or definition is itself a dependency. Keep the
+existing per-constant fingerprint unchanged, including for types already
+under theorem rows. The signed type's own fingerprint records ordered
+member names and interface metadata in addition to the dependency closure. -/
+private def frozenSignedRoot (env : Environment) (info : ConstantInfo) : String × List Name :=
+  let ty := frozenSer info.type
+  match info with
+  | .defnInfo _ => (ty, [info.name])
+  | .inductInfo i =>
+    match getStructureInfo? env i.name with
+    | none => (s!"{ty} (inductive {frozenInductiveShape env i})", [info.name])
+    | some _ =>
+      let (shape, roots) := frozenStructureShape env [i.name] {}
+      (s!"{ty} (structure {frozenList shape})", roots)
+  | _ => (ty, [])
+
 private partial def frozenClosure (env : Environment) (work : List Name) (seen : NameSet) : NameSet :=
   match work with
   | [] => seen
@@ -97,11 +171,19 @@ elab "#frozenStatements " "[" names:str,* "]" : command => do
   let mut all : NameSet := {}
   for name in names.getElems do
     let some info := env.find? name.getString.toName | continue
+    match info with
+    | .opaqueInfo _ | .axiomInfo _ =>
+      throwError "{info.name}: unsupported signed declaration (opaque, partial or axiom); use a transparent definition or a theorem"
+    | .defnInfo d =>
+      if d.safety == .partial then
+        throwError "{info.name}: unsupported signed declaration (partial); use a transparent definition or a theorem"
+    | _ => pure ()
     let owner := match env.getModuleIdxFor? info.name with
       | some idx => env.header.moduleNames[idx.toNat]!
       | none => env.mainModule
-    liftIO <| IO.println s!"S\t{name.getString}\t{owner}\t{frozenSer info.type}"
-    let closure := frozenClosure env info.type.getUsedConstants.toList {}
+    let (fingerprint, roots) := frozenSignedRoot env info
+    liftIO <| IO.println s!"S\t{name.getString}\t{owner}\t{fingerprint}"
+    let closure := frozenClosure env (roots ++ info.type.getUsedConstants.toList) {}
     for constant in closure.toList do
       liftIO <| IO.println s!"M\t{name.getString}\t{constant}"
       all := all.insert constant

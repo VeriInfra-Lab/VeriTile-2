@@ -12,6 +12,11 @@ import sys
 import tempfile
 import unittest
 
+if __package__:
+    from .check_frozen_statements import elaborate
+else:
+    from check_frozen_statements import elaborate
+
 ROOT = Path(__file__).resolve().parents[1]
 SORRY = 'theorem veritileGateProbe (n : Nat) : n + 0 = n := sorry\n'
 
@@ -309,6 +314,180 @@ class ForkTargetGates(unittest.TestCase):
             self.assertNotEqual(check('--accept-definitions').returncode, 0)
             self.assertEqual(check('--fill', '--accept-definitions').returncode, 0)
             self.assertEqual(check().returncode, 0)
+
+
+    def signed_declaration_probe(self, suffix, name, source):
+        """Record a scratch declaration using the elaborator, never a sign-off flag."""
+        module = f'VeriTile.Staging.{suffix}'
+        probe = self.probe(f'VeriTile/Staging/{suffix}.lean', source)
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        tsv = Path(temp.name) / 'Statements.tsv'
+        defs = Path(temp.name) / 'Definitions.tsv'
+        statements, definitions, _ = elaborate([(name, module, '-', 'test')])
+        owner, digest = statements[name]
+        self.assertEqual(owner, module)
+        tsv.write_text(f'statement\tmodule\tsha256\tsigned\n{name}\t{module}\t{digest}\ttest\n')
+        defs.write_text('definition\tsha256\n' + ''.join(
+            f'{n}\t{d}\n' for n, d in sorted(definitions.items())))
+        before = tsv.read_bytes(), defs.read_bytes()
+
+        def check(text):
+            probe.write_text(text)
+            result = run('check_frozen_statements.py', '--tsv', str(tsv), '--definitions', str(defs))
+            self.assertEqual((tsv.read_bytes(), defs.read_bytes()), before)
+            return result
+
+        accepted = check(source)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        return definitions, check
+
+    def test_signed_structure_freezes_constructor_and_projections(self):
+        name = 'VeriTileGateStructure.Record'
+        source = ('namespace VeriTileGateStructure\n'
+                  'structure Parent where\n  payload : Nat\n'
+                  'structure Record extends Parent where\n  extra : Nat\n'
+                  'end VeriTileGateStructure\n')
+        definitions, check = self.signed_declaration_probe('FrozenStructureProbe', name, source)
+        rejected = check(source.replace('extra : Nat', 'extra : Bool'))
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        for member in ('mk', 'extra'):
+            self.assertIn(f'{name}.{member}: definition changed since it was recorded; affects {name}',
+                          rejected.stderr)
+        self.assertTrue({name, f'{name}.mk', f'{name}.extra', f'{name}.toParent'} <= definitions.keys())
+        renamed = check(source.replace('extra : Nat', 'renamed : Nat'))
+        self.assertNotEqual(renamed.returncode, 0, renamed.stdout)
+        self.assertIn(f'{name}.renamed: not recorded, and now under {name}', renamed.stderr)
+        restored = check(source)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_inductive_freezes_constructor_set_and_order(self):
+        name = 'VeriTileGateInductive.Choice'
+        source = ('namespace VeriTileGateInductive\ninductive Choice where\n'
+                  '  | first\n  | second (n : Nat)\nend VeriTileGateInductive\n')
+        definitions, check = self.signed_declaration_probe('FrozenInductiveProbe', name, source)
+        cases = [
+            ('add', source.replace('  | second (n : Nat)\n', '  | second (n : Nat)\n  | third\n'),
+             f'{name}.third: not recorded, and now under {name}'),
+            ('remove', source.replace('  | second (n : Nat)\n', ''),
+             f'{name}.second: recorded, but no signed statement depends on it any more'),
+            ('reorder', source.replace('  | first\n  | second (n : Nat)\n', '  | second (n : Nat)\n  | first\n'),
+             f'{name}: statement changed since sign-off'),
+        ]
+        for label, edited, message in cases:
+            with self.subTest(label=label):
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(message, rejected.stderr)
+        self.assertTrue({name, f'{name}.first', f'{name}.second'} <= definitions.keys())
+        restored = check(source)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_definition_freezes_body_and_its_dependencies(self):
+        name = 'VeriTileGateDefinition.signed'
+        dependency = 'VeriTileGateDefinition.base'
+        source = ('namespace VeriTileGateDefinition\ndef base : Nat := 4\n'
+                  'def signed : Nat := base + 1\nend VeriTileGateDefinition\n')
+        definitions, check = self.signed_declaration_probe('FrozenDefinitionProbe', name, source)
+        for member, edited in [(name, source.replace('base + 1', 'base + 2')),
+                               (dependency, source.replace('base : Nat := 4', 'base : Nat := 5'))]:
+            with self.subTest(member=member):
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{member}: definition changed since it was recorded; affects {name}', rejected.stderr)
+                self.assertNotIn('statement changed', rejected.stderr)
+        self.assertTrue({name, dependency} <= definitions.keys())
+        restored = check(source)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+
+
+    def test_signed_inductive_freezes_parameter_index_and_binder_info(self):
+        name = 'VeriTileGateIndices.T'
+        source = ('namespace VeriTileGateIndices\n'
+                  'inductive T (n : Nat) : Type where\n  | mk (value : Nat) : T n\n'
+                  'end VeriTileGateIndices\n')
+        _, check = self.signed_declaration_probe('FrozenIndicesProbe', name, source)
+        cases = [
+            ('index', source.replace('T (n : Nat) : Type', 'T : Nat → Type')
+             .replace('| mk (value : Nat) : T n', '| mk (n : Nat) (value : Nat) : T n')),
+            ('binder', source.replace('mk (value : Nat)', 'mk {value : Nat}')),
+        ]
+        for label, edited in cases:
+            with self.subTest(label=label):
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+        restored = check(source)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_structure_freezes_all_parent_fields(self):
+        prefix = 'VeriTileGateParents'
+        name = f'{prefix}.Child'
+        source = ('namespace VeriTileGateParents\n'
+                  'structure Grand where\n  payload : Nat\n'
+                  'structure Parent extends Grand where\n  flag : Bool\n'
+                  'structure Child extends Parent where\n  extra : Nat\n'
+                  'end VeriTileGateParents\n')
+        definitions, check = self.signed_declaration_probe('FrozenParentsProbe', name, source)
+        for field, new in [('payload', 'renamedPayload'), ('flag', 'renamedFlag')]:
+            with self.subTest(field=field):
+                rejected = check(source.replace(f'  {field} :', f'  {new} :'))
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+        self.assertTrue({f'{prefix}.Grand.payload', f'{prefix}.Parent.flag'} <= definitions.keys())
+        restored = check(source)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_structure_freezes_default_values(self):
+        prefix = 'VeriTileGateDefaults'
+        name = f'{prefix}.Record'
+        source = ('namespace VeriTileGateDefaults\n'
+                  'structure Parent where\n  payload : Nat := 1\n'
+                  'structure Record extends Parent where\n  value : Nat := 4\n  flag : Bool\n'
+                  'end VeriTileGateDefaults\n')
+        definitions, check = self.signed_declaration_probe('FrozenDefaultsProbe', name, source)
+        cases = [
+            ('add', source.replace('flag : Bool', 'flag : Bool := true'),
+             f'{name}.flag._default: not recorded, and now under {name}'),
+            ('remove', source.replace('value : Nat := 4', 'value : Nat'),
+             f'{name}.value._default: recorded, but no signed statement depends on it any more'),
+            ('value', source.replace('value : Nat := 4', 'value : Nat := 5'),
+             f'{name}.value._default: definition changed since it was recorded; affects {name}'),
+            ('inherited', source.replace('payload : Nat := 1', 'payload : Nat := 2'),
+             f'{prefix}.Parent.payload._default: definition changed since it was recorded; affects {name}'),
+        ]
+        for label, edited, message in cases:
+            with self.subTest(label=label):
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(message, rejected.stderr)
+        self.assertTrue({f'{name}.value._default', f'{prefix}.Parent.payload._default'} <= definitions.keys())
+        restored = check(source)
+        self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_opaque_and_partial_roots_are_rejected(self):
+        module = 'VeriTile.Staging.FrozenHiddenBodyProbe'
+        prefix = 'VeriTileGateHiddenBody'
+        self.probe('VeriTile/Staging/FrozenHiddenBodyProbe.lean',
+                   'namespace VeriTileGateHiddenBody\n'
+                   'opaque hidden : Nat := 1\n'
+                   'partial def loop (n : Nat) : Nat := if n = 0 then 0 else loop (n - 1)\n'
+                   'end VeriTileGateHiddenBody\n')
+        with tempfile.TemporaryDirectory() as temp:
+            tsv = Path(temp) / 'Statements.tsv'
+            definitions = Path(temp) / 'Definitions.tsv'
+            definitions.write_text('definition\tsha256\n')
+            for short, ty in [('hidden', '(C Nat [])'), ('loop', '(P (C Nat []) (C Nat []))')]:
+                with self.subTest(name=short):
+                    name = f'{prefix}.{short}'
+                    digest = hashlib.sha256(ty.encode()).hexdigest()
+                    tsv.write_text(f'statement\tmodule\tsha256\tsigned\n{name}\t{module}\t{digest}\ttest\n')
+                    before = tsv.read_bytes(), definitions.read_bytes()
+                    rejected = run('check_frozen_statements.py', '--tsv', str(tsv),
+                                   '--definitions', str(definitions))
+                    self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                    self.assertIn(f'{name}: unsupported signed declaration', rejected.stderr)
+                    self.assertEqual((tsv.read_bytes(), definitions.read_bytes()), before)
 
 
 class FrozenTablesAgainstBase(unittest.TestCase):
