@@ -237,6 +237,33 @@ private def quoteCall (raw : Syntax) : TermElabM (Option (TSyntax `term)) := do
       | _ => throwErrorAt raw "unsupported dl statement")
   return none
 
+-- Volatile loads are explicitly outside the signed A2.1 source subset.
+private def checkVolatileLoads (stx : Syntax) : TermElabM Unit := do
+  let hasVolatile (raw : Syntax) := match (⟨raw⟩ : TSyntax `tritonMemKwarg) with
+    | `(tritonMemKwarg| $name:ident = $_:tritonExpr)
+    | `(tritonMemKwarg| $name:ident = $_:tritonDType) => name.getId.eraseMacroScopes == `volatile
+    | _ => Bool.false
+  if let some load := stx.find? (fun raw =>
+      raw.getArgs.any (fun arg => arg.isAtom && arg.getAtomVal == "tl.load(") &&
+        (raw.find? hasVolatile).isSome) then
+    let message := "tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, " ++
+      "`boundary_check`, `padding_option`, and `eviction_policy` are recognized."
+    throwErrorAt load message
+
+-- These are the same source-helper passes used by the ordinary Triton block.
+-- Run them for validation only and retain the original syntax and tree paths.
+private def checkSourceCalls (stx : Syntax) : TermElabM Unit := do
+  let `(triton { $stmts:tritonStmt* }) := stx | throwUnsupportedSyntax
+  let checked ← liftMacroM do
+    let normalized ← stmts.toList.mapM fun stmt =>
+      return (⟨← Inference.normalizeControlFlow stmt.raw⟩ : TSyntax `tritonStmt)
+    RandomProfile.prepare (← FiniteHelperSource.prepare normalized)
+  -- The dotted zero-argument parser also admits excluded names. The finite
+  -- helper pass consumes the supported dtype predicate in its declaration.
+  if checked.any fun stmt =>
+      (stmt.raw.find? (·.isOfKind ``tritonSourceIsFP64Dotted)).isSome then
+    throwErrorAt stx "unexpected syntax{indentD stx}"
+
 private partial def quoteSites (stx : Syntax) (path : List Nat)
     (sites : Array (TSyntax `term)) : TermElabM (Array (TSyntax `term)) := do
   let mut result := sites
@@ -256,6 +283,9 @@ open Lean Elab Term
 def elaborateDL : TermElab := fun stx expected => do
   let sites ← DL.quoteSites stx [] #[]
   if sites.isEmpty then throwUnsupportedSyntax
+  checkPendingCalls stx
+  DL.checkSourceCalls stx
+  DL.checkVolatileLoads stx
   let block ← DL.quoteSource stx
   elabTerm (← `(DL.Source.mk $block [$sites,*])) expected
 

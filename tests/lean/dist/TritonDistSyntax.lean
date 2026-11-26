@@ -128,6 +128,13 @@ run_cmd for (qualifier, names) in excluded do
           let diagnostic ← diagnosticOf stx
           unless valuePosition && (args.isEmpty || args == "p") && diagnostic == expected do
             throwError "{body}: unexpected elaborator diagnostic: {diagnostic}"
+          let mixed := "r = dl.rank() " ++ body
+          let .ok mixedStx := parseBlock (← getEnv) mixed
+            | throwError "{mixed}: expected mixed block to parse"
+          let mixedDiagnostic ← diagnosticOf mixedStx
+          unless (if args.isEmpty then mixedDiagnostic.startsWith "unexpected syntax"
+                  else mixedDiagnostic == expected) do
+            throwError "{mixed}: unexpected mixed-block diagnostic: {mixedDiagnostic}"
 
 /-- error: tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, `boundary_check`, `padding_option`, and `eviction_policy` are recognized. -/
 #guard_msgs in
@@ -182,7 +189,8 @@ private def waitModes (source : DL.Source) : List (VeriTile.Dist.Scope × MemOrd
     | .wait _ _ _ scope order => some (scope, order)
     | _ => none
 
--- Tutorial 01's two wait sites at the TD pin, L88–96 and L126–133.
+-- Reduced excerpts of tutorial 01 at the TD pin, L88–96 and L126–133.
+-- Operands are renamed and the surrounding non-DL statements are omitted.
 theorem tutorial01GpuWaitModes :
     waitModes (triton {
       if pid < n {
@@ -262,5 +270,48 @@ example : match lower (triton { ready = dl.consume_token(value, token) }) with
 /-- error: dl.wait: unsupported scope 'cluster' -/
 #guard_msgs in
 #check (triton { token = dl.wait(signal, 2, "cluster", "acquire") } : DL.Source)
+
+/-- error: random source helper requires an explicit tl.source_helper binding -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  x = dl.allocate_smem(1)
+} : DL.Source)
+
+/-- error: random source helper requires an explicit tl.source_helper binding -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  x = undefined_fn(1)
+} : DL.Source)
+
+/-- error: not implemented: #80 -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  libshmem_device.barrier_all_block()
+} : DL.Source)
+
+/-- error: not implemented: #81 -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  __syncthreads()
+} : DL.Source)
+
+/-- error: not implemented: #82 -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  barrier_on_this_grid(p, use_cooperative=1)
+} : DL.Source)
+
+/-- error: tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, `boundary_check`, `padding_option`, and `eviction_policy` are recognized. -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  tl.region p = tl.int32
+  x = tl.load(p + 0, volatile=True)
+} : DL.Source)
 
 end VeriTile.Tests.TritonDistSyntax
