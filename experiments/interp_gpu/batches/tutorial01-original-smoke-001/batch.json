@@ -1,0 +1,66 @@
+{
+  "protocol": 1,
+  "batch_id": "tutorial01-original-smoke-001",
+  "mode": "dist",
+  "supersedes": null,
+  "requires": {
+    "sm": 90,
+    "gpus": 2,
+    "nodes": 1,
+    "env": "triton-dist"
+  },
+  "timeout_s": 600,
+  "notes": [
+    "Use one NVLink pair. Original producer_consumer_kernel at Triton-distributed 7908e4ea, grid 20, 16 producer and 4 consumer CTAs, 2025 blocks of 128 FP32 values, 32 reusable queue slots. Each repeat starts a fresh two-rank launch. Rank r sends send{r} and should receive the complete previous rank input."
+  ],
+  "tests": [
+    {
+      "id": "tutorial01/original",
+      "frontend": "triton-dist",
+      "entry": "experiments/interp_gpu/smoke/tutorial01.py::run",
+      "launch": {},
+      "inputs": [
+        {
+          "name": "send0",
+          "dtype": "fp32",
+          "shape": [
+            259200
+          ],
+          "gen": {
+            "class": "normal",
+            "seed": 14200
+          },
+          "sha256": "beb2bbb411abfaa949f2aa284f5b2a8abdcdc985013e5faee762151d288410b5"
+        },
+        {
+          "name": "send1",
+          "dtype": "fp32",
+          "shape": [
+            259200
+          ],
+          "gen": {
+            "class": "normal",
+            "seed": 14201
+          },
+          "sha256": "75daf0d35df379c6a38bc8ecbf097903dd59cf96cb7aac60d866f5f4a8d875d6"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "received",
+          "dtype": "fp32",
+          "shape": [
+            259200
+          ],
+          "sentinel": "0x7fc0dead"
+        }
+      ],
+      "reference": {
+        "kind": "none"
+      },
+      "ranks": 2,
+      "launcher": "triton-dist",
+      "repeats": 2
+    }
+  ]
+}

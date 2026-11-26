@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Self-test of gpurun's dist mode with the CPU mock launcher: no GPU, torch or NVSHMEM needed."""
+import copy
 import importlib
 import json
 import os
@@ -10,10 +11,14 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
+sys.path.insert(0, str(SCRIPTS.parent))
+from experiments.interp_gpu.internode_logical import harness
+from experiments.interp_gpu.smoke import tutorial01 as tutorial
 from gpurun import dist, env as environment, run
 from interp import tensorfile
 
@@ -330,6 +335,106 @@ class Dist(unittest.TestCase):
             versions = environment.collect()['versions']
         self.assertEqual((versions['nvshmem_library'], versions['nvshmem_bindings']), ('3.3.20', '0.3.0'))
         self.assertNotIn('nvshmem', versions)
+
+
+class OriginalTutorialSmoke(unittest.TestCase):
+    def test_both_rank_entries_launch_the_original_abi_and_release_resources(self):
+        for rank in range(2):
+            with self.subTest(rank=rank):
+                runtime = mock.MagicMock()
+                torch = mock.MagicMock()
+                runtime.initialize_distributed.return_value = SimpleNamespace(rank=lambda: rank, size=lambda: 2)
+                queue, signal = mock.Mock(), mock.Mock()
+                runtime.nvshmem_create_tensor.side_effect = [queue, signal]
+                kernel = mock.MagicMock()
+                inputs = {'send0': object(), 'send1': object()}
+                outputs = {'received': object()}
+                with mock.patch.dict(sys.modules, {'torch':torch, 'triton_dist.utils':runtime}), \
+                     mock.patch.object(tutorial, 'pinned_kernel', return_value=kernel):
+                    tutorial.run(rank, 2, inputs, outputs, {})
+                args = kernel.__getitem__
+                args.assert_called_once_with((20,))
+                args.return_value.assert_called_once_with(rank, 2, inputs[f'send{rank}'], outputs['received'],
+                    2025, queue, signal, 32, 128, 16, 4, num_warps=4)
+                self.assertEqual(runtime.nvshmem_create_tensor.call_args_list, [
+                    mock.call((4096,), torch.float32), mock.call((32,), runtime.NVSHMEM_SIGNAL_DTYPE)])
+                queue.fill_.assert_called_once_with(-1)
+                signal.fill_.assert_called_once_with(0)
+                self.assertEqual(runtime.nvshmem_barrier_all_on_stream.call_args_list,
+                                 [mock.call(torch.cuda.current_stream.return_value)] * 2)
+                self.assertEqual(runtime.nvshmem_free_tensor_sync.call_args_list, [mock.call(signal),mock.call(queue)])
+                runtime.finalize_distributed.assert_called_once()
+
+    def test_wrong_source_is_rejected_before_loading_code(self):
+        with tempfile.TemporaryDirectory() as temp:
+            wrong = Path(temp) / tutorial.TUTORIAL
+            wrong.write_text('raise Exception("must not be evaluated")')
+            with mock.patch.object(harness, 'tutorial_file', return_value=wrong), mock.patch.object(harness, 'definitions') as loader:
+                with self.assertRaisesRegex(ValueError, 'differs'):
+                    tutorial.pinned_kernel()
+                loader.assert_not_called()
+
+    def test_mock_rank_outputs_and_repeats_have_to_match_bytes(self):
+        real = run.load_batch(tutorial.BATCH)
+        request = copy.deepcopy(real)
+        spec, = request['tests']
+        spec.update(frontend='mock', launcher='mock', entry='exchange.py::run')
+        request['requires'] = {}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            batch = root / 'request'
+            batch.mkdir()
+            (batch / 'batch.json').write_text(json.dumps(request))
+            (root / 'exchange.py').write_text("def run(rank, ranks, inputs, outputs, launch):\n"
+                "    outputs['received'] = inputs[f'send{(rank - 1) % ranks}']\n")
+            out = root / 'out'
+            with mock.patch.object(run, 'request_commit', return_value='e' * 40):
+                self.assertEqual(run.run_batch(batch, out, root=root, env={'gpus':[], 'versions':{}}), 0)
+            case = out / spec['id']
+            refs = tutorial.check_outputs(spec, case)
+            self.assertEqual(refs, {'rank0/received': spec['inputs'][1]['sha256'],
+                                    'rank1/received': spec['inputs'][0]['sha256']})
+            with self.assertRaisesRegex(ValueError, 'pinned two-rank'):
+                tutorial.judge(tutorial.BATCH, out, 'e' * 40)
+            with self.assertRaisesRegex(ValueError, 'wrong request'):
+                tutorial.judge(tutorial.BATCH, out, 'a' * 40)
+            meta = case / 'meta.json'
+            original = json.loads(meta.read_text())
+            # In-memory shape of a hypothetical successful GPU bundle. Every file
+            # belongs to this disposable fixture. Real evidence comes from gpu-results.
+            fresh = copy.deepcopy(original)
+            fresh['launcher'] = 'triton-dist'
+            env_path = out / 'env.json'
+            cpu_env = env_path.read_text()
+            env_path.write_text(json.dumps({'nodes': 1, 'gpus': [{'sm': 90}] * 2,
+                'versions': {'triton_dist': '3.7.1+git7908e4ea'}}))
+            meta.write_text(json.dumps(fresh))
+            self.assertEqual(tutorial.judge(tutorial.BATCH, out, 'e' * 40), refs)
+            cli = subprocess.run([sys.executable, tutorial.__file__, str(out), 'e' * 40],
+                                 env=run.child_env(), text=True, capture_output=True, check=True)
+            for name, digest in refs.items():
+                self.assertIn(f'{name}: exact {digest}', cli.stdout)
+            env_path.write_text(cpu_env)
+            meta.write_text(json.dumps(original))
+            for field in ('outputs', 'rank_status', 'distinct'):
+                data = copy.deepcopy(original)
+                if field == 'outputs':
+                    data['runs'][1]['outputs']['rank0/received'] = refs['rank1/received']
+                elif field == 'rank_status':
+                    data['runs'][1]['rank_status'][1] = None
+                else:
+                    data['distinct']['rank1/received'][refs['rank1/received']] = 1
+                meta.write_text(json.dumps(data))
+                with self.subTest(field=field), self.assertRaises(ValueError):
+                    tutorial.check_outputs(spec, case)
+            meta.write_text(json.dumps(original))
+            path = case / 'out' / 'rank0/received' / (refs['rank0/received'] + '.tensor')
+            path.write_bytes((case / 'out' / 'rank1/received' / (refs['rank1/received'] + '.tensor')).read_bytes())
+            with self.assertRaisesRegex(ValueError, 'stored tensor differs'):
+                tutorial.check_outputs(spec, case)
+            (out / 'DONE').unlink()
+            with self.assertRaisesRegex(ValueError, 'incomplete bundle'):
+                tutorial.judge(tutorial.BATCH, out, 'e' * 40)
 
 
 if __name__ == '__main__':
