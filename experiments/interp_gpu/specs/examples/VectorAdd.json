@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "VectorAdd",
+    "lean": "VeriTile.Bench.Examples.VectorAdd.Kernels.originalKernel",
+    "source": "bench/examples/VectorAdd/VectorAdd.py::add_kernel"
+  },
+  "grid": [2],
+  "launch": {"carrier": "fp32-basic"},
+  "constexpr": {"BLOCK_SIZE": 2},
+  "arguments": [
+    {"parameter": "x_ptr", "buffer": "x"},
+    {"parameter": "y_ptr", "buffer": "y"},
+    {"parameter": "out_ptr", "buffer": "out"}
+  ],
+  "input_classes": [{
+    "class": "normal",
+    "inputs": {
+      "x": {"dtype": "fp32", "shape": [4], "file": "tests/interp/fixtures/vector-x.tensor"},
+      "y": {"dtype": "fp32", "shape": [4], "file": "tests/interp/fixtures/vector-y.tensor"}
+    },
+    "expected": {"out": "tests/interp/fixtures/vector-sum.tensor"}
+  }],
+  "output_buffers": [{"name": "out", "dtype": "fp32", "shape": [4]}]
+}

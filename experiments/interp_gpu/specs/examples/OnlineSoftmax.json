@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "OnlineSoftmax",
+    "lean": "VeriTile.Bench.Examples.OnlineSoftmax.Kernels.onlineSoftmaxKernel",
+    "source": "bench/examples/OnlineSoftmax/OnlineSoftmax.py::onlineSoftmaxKernel"
+  },
+  "grid": [3, 1, 1],
+  "launch": {"carrier": "fp32-basic", "enable_fp_fusion": false},
+  "constexpr": {"N": 2},
+  "arguments": [
+    {"parameter": "xReg", "buffer": "x"},
+    {"parameter": "yReg", "buffer": "y"}
+  ],
+  "input_classes": [{
+    "class": "boundary",
+    "inputs": {
+      "x": {"dtype": "fp32", "shape": [3, 2], "file": "tests/interp/fixtures/softmax-input.tensor"}
+    },
+    "expected": {"y": "tests/interp/fixtures/softmax-output.tensor"}
+  }],
+  "output_buffers": [{"name": "y", "dtype": "fp32", "shape": [3, 2]}]
+}
