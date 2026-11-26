@@ -84,9 +84,13 @@ def run_case(spec, case, runner, work):
         raise ValueError("VectorAdd: BLOCK_SIZE must match the block bound by the registry")
     if kernel == "OnlineSoftmax" and spec["constexpr"] != {"N": shape[-1]}:
         raise ValueError("OnlineSoftmax: N must match the row width bound by the registry")
+    constants = []
+    if kernel in ("FlatVectorAdd", "FloatDTypeAdd"):
+        for key, value in spec["constexpr"].items():
+            constants.extend(["--constexpr", f"{key}={value}"])
     destination = work / "result.tensor"
     subprocess.run([runner, "--carrier", spec["launch"]["carrier"], "--grid",
-                    ",".join(map(str, grid)), kernel, *paths, destination], check=True)
+                    ",".join(map(str, grid)), *constants, kernel, *paths, destination], check=True)
     check_layout(destination, output)
     expected = ROOT / case["expected"][output["name"]]
     if destination.read_bytes() != expected.read_bytes():

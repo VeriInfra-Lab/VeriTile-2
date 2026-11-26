@@ -1,9 +1,11 @@
 /- Native executable registry. Reflected example kernels live outside the
-interpreter target. The host binary32 fragment serves these two entries
+interpreter target. The host binary32 fragment serves the registered entries
 until the general-purpose carriers are registered. -/
 import VeriTile.Interp.Reflect
 import VeriTile.Interp.Run.Main
 import VeriTile.Interp.Run.GridOrder
+import bench.examples.FlatVectorAdd.Kernels
+import bench.examples.FloatDTypeAdd.Kernels
 import bench.examples.VectorAdd.Kernels
 import bench.examples.OnlineSoftmax.Kernels
 
@@ -17,11 +19,17 @@ namespace VeriTile.Interp.Run
 def vectorProgram (block : Nat) := VectorAdd.Kernels.originalKernel block
 def softmaxProgram (cols : Nat) := OnlineSoftmax.Kernels.onlineSoftmaxKernel "x" "y" cols
 
+def flatVectorProgram (width length : Nat) :=
+  FlatVectorAdd.Kernels.addMaskedKernel "x" "y" "out" width length
+def floatAddProgram (width : Nat) := FloatDTypeAdd.Kernels.floatAddKernel "x" "y" "out" width
+
+reflect_kernel flatVectorProgram
+reflect_kernel floatAddProgram
 reflect_kernel vectorProgram
 reflect_kernel softmaxProgram
 
 -- An unsupported numeric operation produces no value. No numeric placeholder
--- can reach a result file. The table below admits only the two reflected kernels.
+-- can reach a result file. The table below admits only the reflected registry kernels.
 private def fp32 : CAlgebra (Option Float32) where
   literal := fun _ _ q => if q == 0 then some 0 else none
   negInf := some (-1 / 0)
@@ -58,6 +66,8 @@ private def runFP32 : RunCarrier := fun grid k inputs out shape => do
     pids := fun _ => 0, numPids := fun _ => 1
     undef := fun d _ _ => FP.Structural.defaultValue d }
   let some state := runGrid fp32 k grid initial | throw "kernel execution failed"
+  if state.cells.toList.any (fun ((region, offset), _) => region == out && offset ≥ count) then
+    throw s!"kernel wrote outside output {out.name}"
   let mut bytes := ByteArray.empty
   for i in [:count] do
     let some cell := state.cells[(out,i)]? | throw s!"kernel did not write {out.name}[{i}]"
@@ -70,6 +80,11 @@ private def runFP32 : RunCarrier := fun grid k inputs out shape => do
 #guard !(runFP32 [1] (.mk [] [] []) [] "out" [1]).isOk
 #guard !(runFP32 [1] (.mk [] [] [.store .real [] (.region "out" (.constNat 0))
   (.alg (.const (1/3))) .none]) [] "out" [1]).isOk
+
+-- Even if every declared output was written, an unmasked tail store is an error.
+#guard !(runFP32 [1] (.mk [] [] [
+  .store .real [] (.region "out" (.constNat 0)) (.alg (.const 0)) .none,
+  .store .real [] (.region "out" (.constNat 1)) (.alg (.const 0)) .none]) [] "out" [1]).isOk
 
 private def programs (dims : List Nat) : Except String Nat := do
   let x := dims.headD 0
@@ -127,8 +142,39 @@ private def softmax : KernelEntry where
     unless rows == x && cols > 0 do throw "OnlineSoftmax needs one program per row and a nonempty row"
     return softmaxProgram.mirror cols
 
+private def vectorLength (shape : List Nat) : Except String Nat := do
+  let [length] := shape | throw "expected one-dimensional vector inputs"
+  unless length > 0 do throw "expected nonempty vector inputs"
+  return length
+
+private def flatVectorAdd : KernelEntry where
+  inputs := ["x", "y"]
+  output := "out"
+  bind := fun _ _ => throw "FlatVectorAdd requires blockSize and nElements"
+  bindConstants := fun constants dims shape => do
+    let blocks ← programs dims
+    let size ← vectorLength shape
+    let some width := constants.lookup "blockSize" | throw "FlatVectorAdd requires blockSize"
+    let some length := constants.lookup "nElements" | throw "FlatVectorAdd requires nElements"
+    unless constants.length == 2 && width > 0 && length == size && blocks == (length + width - 1) / width do
+      throw "FlatVectorAdd needs nElements equal to the tensor length and grid X = ceil(nElements/blockSize)"
+    return flatVectorProgram.mirror width length
+
+private def floatDTypeAdd : KernelEntry where
+  inputs := ["x", "y"]
+  output := "out"
+  bind := fun _ _ => throw "FloatDTypeAdd requires BLOCK_SIZE"
+  bindConstants := fun constants dims shape => do
+    let blocks ← programs dims
+    let size ← vectorLength shape
+    let [("BLOCK_SIZE", width)] := constants | throw "FloatDTypeAdd requires only BLOCK_SIZE"
+    unless width > 0 && blocks * width == size do
+      throw "FloatDTypeAdd needs grid X * BLOCK_SIZE equal to the tensor length"
+    return floatAddProgram.mirror width
+
 def exampleCli (args : List String) : IO UInt32 :=
-  runCli [("VectorAdd", vectorAdd), ("OnlineSoftmax", softmax)] [("fp32-basic", runFP32)] args
+  runCli [("VectorAdd", vectorAdd), ("OnlineSoftmax", softmax),
+    ("FlatVectorAdd", flatVectorAdd), ("FloatDTypeAdd", floatDTypeAdd)] [("fp32-basic", runFP32)] args
 
 end VeriTile.Interp.Run
 

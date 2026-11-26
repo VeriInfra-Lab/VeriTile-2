@@ -26,13 +26,13 @@ The [assignment table](../ASSIGNMENT.tsv) gives each of the 183 tritonbench task
 
 ## Source and binding coverage
 
-There are 18 local worked-example directories. The [source inventory](../../../../documents/InterpReflectCoverage.md) identifies all 68 Lean definitions, 62 of which have checked mirrors. The registry binds two of those mirrors. The [file interface](../../../../VeriTile/Interp/Run/Main.lean) accepts inputs of a common shape and returns one tensor of that shape. Its [FP32 carrier and bindings](../../../../tests/interp/Main.lean) implement only the arithmetic needed by those two programs. The additional historic TritonBenchVectorAddition group listed in the [worked-example catalogue](../../../../bench/examples/README.md) is hosted in VeriTileBench.
+There are 18 local worked-example directories. The [source inventory](../../../../documents/InterpReflectCoverage.md) identifies all 68 Lean definitions, 62 of which have checked mirrors. The registry binds four of those mirrors. The [file interface](../../../../VeriTile/Interp/Run/Main.lean) accepts inputs of a common shape and returns one tensor of that shape. Its [FP32 carrier and bindings](../../../../tests/interp/Main.lean) implement only the arithmetic needed by the registered programs. The additional historic TritonBenchVectorAddition group listed in the [worked-example catalogue](../../../../bench/examples/README.md) is hosted in VeriTileBench.
 
 | Local family and source | Reflected / defined | File-runner binding or required work |
 | --- | ---: | --- |
 | [AdamUpdateGridLaunch](../../../../bench/examples/AdamUpdateGridLaunch/AdamUpdateGridLaunch.py) | 4/4 | Unregistered. Bind the scalar update parameters and preserve both in-place outputs, parameters and exponential averages. |
-| [FlatVectorAdd](../../../../bench/examples/FlatVectorAdd/FlatVectorAdd.py) | 4/4 | Unregistered. Bind the logical element count and block width separately for the masked tail. |
-| [FloatDTypeAdd](../../../../bench/examples/FloatDTypeAdd/FloatDTypeAdd.py) | 4/4 | Unregistered. Bind the explicit FP32 load/store and cast variant. |
+| [FlatVectorAdd](../../../../bench/examples/FlatVectorAdd/FlatVectorAdd.py) | 4/4 | [Runnable spec](FlatVectorAdd.json). Independent `blockSize=4` and `nElements=5` bindings exercise one active lane in the last block. |
+| [FloatDTypeAdd](../../../../bench/examples/FloatDTypeAdd/FloatDTypeAdd.py) | 4/4 | [Runnable spec](FloatDTypeAdd.json). The FP32 loads, sum, explicit output cast and store run over signed pairs including halfway rounding and negative zero. |
 | [FloatDTypeSoftmax](../../../../bench/examples/FloatDTypeSoftmax/FloatDTypeSoftmax.py) | 4/5 | Unregistered. Arithmetic uses FP64 with FP32 inputs/outputs. The body projection in `commonPrefix` has no mirror. |
 | [FusedLayerNorm](../../../../bench/examples/FusedLayerNorm/FusedLayerNorm.py) | 2/2 | Unregistered. Bind the row matrix and two channel vectors separately, along with epsilon and stride. The output is BF16. |
 | [FusedSiLU](../../../../bench/examples/FusedSiLU/FusedSiLU.py) | 4/5 | Unregistered. Bind the fused inputs, BF16 output and the unfused pipeline's intermediates. The body projection in `unfusedSiLUKernel` has no mirror. |
@@ -50,3 +50,5 @@ There are 18 local worked-example directories. The [source inventory](../../../.
 | [Welford](../../../../bench/examples/Welford/Welford.py) | 2/2 | Unregistered. Return two BF16 statistics, mean and variance, from the input row. |
 
 Running an unregistered family by name exits with an unknown-kernel diagnostic. Additional file-runner registrations, support for the necessary operations and a generalized buffer interface are prerequisites for executing the other families through this client.
+
+Reproduce the two vector fixtures with `python3 tests/interp/fixtures/vector_add_cases.py --check`. The generator uses Python arithmetic and IEEE binary32 packing independently of Lean. For these bindings, the driver forwards source constexpr names and values to `veritile-run` as repeated `--constexpr NAME=N` options before the kernel name.

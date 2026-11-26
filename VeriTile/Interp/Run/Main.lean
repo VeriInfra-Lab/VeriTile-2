@@ -12,6 +12,11 @@ structure KernelEntry where
   output : RegionName
   /-- Given the grid and the common tensor shape, instantiate the kernel. -/
   bind : List Nat → List Nat → Except String QKernel
+  /-- Opt-in explicit source constexpr bindings. Existing entries still specialize from the shape. -/
+  bindConstants : List (String × Nat) → List Nat → List Nat → Except String QKernel :=
+    fun constants dims shape => do
+      unless constants.isEmpty do throw "this kernel does not accept explicit constexpr parameters"
+      bind dims shape
 
 /-- A carrier owns the tensor encoding of its cells and the output readback. -/
 abbrev RunCarrier := List Nat → QKernel → List (RegionName × Tensor) → RegionName →
@@ -20,7 +25,7 @@ abbrev RunCarrier := List Nat → QKernel → List (RegionName × Tensor) → Re
 private def usage (kernels : List (String × KernelEntry)) (carriers : List String) : String :=
   let forms := kernels.map fun (name, entry) =>
     "  " ++ " ".intercalate (name :: (entry.inputs.map (·.name)) ++ [entry.output.name])
-  "veritile-run --carrier NAME --grid X[,Y[,Z]] KERNEL INPUT... OUTPUT\n" ++
+  "veritile-run --carrier NAME --grid X[,Y[,Z]] [--constexpr NAME=N]... KERNEL INPUT... OUTPUT\n" ++
     "\n".intercalate forms ++ "\nCarriers: " ++ ", ".intercalate carriers
 
 private def writeOutput (path : System.FilePath) (tensor : Tensor) : IO Unit := do
@@ -37,6 +42,16 @@ private def writeOutput (path : System.FilePath) (tensor : Tensor) : IO Unit := 
     IO.FS.removeFile temp
     throw e
 
+private def parseConstants (args : List String) (seen : List (String × Nat) := []) :
+    Except String (List (String × Nat) × List String) := do
+  match args with
+  | "--constexpr" :: setting :: rest =>
+    let [name, text] := setting.splitOn "=" | throw s!"invalid constexpr {setting}; expected NAME=N"
+    let some value := text.toNat? | throw s!"invalid natural constexpr {setting}"
+    unless !name.isEmpty && !(seen.any (·.1 == name)) do throw s!"empty or repeated constexpr {name}"
+    parseConstants rest ((name, value) :: seen)
+  | _ => return (seen, args)
+
 def runCli (kernels : List (String × KernelEntry)) (carriers : List (String × RunCarrier))
     (args : List String) : IO UInt32 := do
   let help := usage kernels (carriers.map Prod.fst)
@@ -44,8 +59,10 @@ def runCli (kernels : List (String × KernelEntry)) (carriers : List (String × 
     IO.println help
     return (0 : UInt32)
   try
-    let "--carrier" :: carrier :: "--grid" :: grid :: kernel :: files := args
+    let "--carrier" :: carrier :: "--grid" :: grid :: rest := args
       | throw <| IO.userError help
+    let (constants, positional) ← IO.ofExcept (parseConstants rest)
+    let kernel :: files := positional | throw <| IO.userError help
     let some run := carriers.lookup carrier | throw <| IO.userError s!"unknown carrier {carrier}"
     let some entry := kernels.lookup kernel | throw <| IO.userError s!"unknown kernel {kernel}"
     let some dims := (grid.splitOn ",").mapM String.toNat?
@@ -57,7 +74,7 @@ def runCli (kernels : List (String × KernelEntry)) (carriers : List (String × 
     let tensors ← files.dropLast.mapM fun path => Tensor.read path
     let first :: _ := tensors | throw <| IO.userError "expected at least one input tensor"
     unless tensors.all (·.shape == first.shape) do throw <| IO.userError "input tensor shapes differ"
-    let k ← IO.ofExcept (entry.bind dims first.shape)
+    let k ← IO.ofExcept (entry.bindConstants constants dims first.shape)
     let result ← IO.ofExcept (run dims k (entry.inputs.zip tensors) entry.output first.shape)
     writeOutput output result
     return (0 : UInt32)
