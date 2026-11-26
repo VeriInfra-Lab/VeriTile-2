@@ -84,6 +84,59 @@ class ForkTargetGates(unittest.TestCase):
             rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
             self.assertIn(f'SORRY\t{relative}\texample\t({relative}:2:0)', rejected.stderr)
 
+    def test_test_axiom_sources(self):
+        relative = 'tests/lean/AxiomProbe.lean'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            probe, allow = root / relative, root / 'allowed'
+            probe.parent.mkdir(parents=True)
+            for label, code in (
+                ('plain', 'axiom plain : True'),
+                ('hidden', 'private axiom hidden : True'),
+                ('nested', 'namespace N\naxiom nested : True\nend N'),
+                ('scoped', 'section\naxiom /- binder -/\n scoped : True\nend'),
+            ):
+                with self.subTest(label=label):
+                    probe.write_text(code + '\n-- axiom ignored : False\n')
+                    allow.write_text('')
+                    args = ['--sources', '--root', str(root), '--allowlist', str(allow)]
+                    result = run('check_test_sorry.py', *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f'axiom {label}', result.stderr)
+                    allow.write_text(f'{relative}\t{label}\ttest fixture\n')
+                    result = run('check_test_sorry.py', *args)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_test_axiom_output(self):
+        relative = 'tests/lean/GateAxiomPrint.lean'
+        self.probe(relative, 'axiom localWitness : True\n'
+                             'theorem usesWitness : True := localWitness\n#print axioms usesWitness\n')
+        direct = subprocess.run(['lake', 'env', 'lean', relative], cwd=ROOT,
+                                text=True, capture_output=True, check=True).stdout
+        self.assertIn('depends on axioms:', direct)
+        with tempfile.TemporaryDirectory() as temp:
+            log, allow = Path(temp) / 'log', Path(temp) / 'allow'
+            allow.write_text('')
+            for prefix, extra in [('', ['--test-file', relative]), (f'info: {relative}:3:0: ', [])]:
+                with self.subTest(prefix=prefix):
+                    log.write_text(prefix + direct)
+                    result = run('check_test_sorry.py', str(log), '--allowlist', str(allow), *extra)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f'{relative}\tusesWitness\tlocalWitness', result.stderr)
+            log.write_text(f"info: {relative}:3:0: 'T.cert' depends on axioms: [propext,\n"
+                           " Classical.choice, Quot.sound, sorryAx]\n"
+                           "info: foreign/Module.lean:1:0: 'outside' depends on axioms: [other]\n")
+            result = run('check_test_sorry.py', str(log), '--allowlist', str(allow))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('T.cert\tsorryAx', result.stderr)
+            allow.write_text(f'{relative}\tT.cert\tintentional test case\n')
+            result = run('check_test_sorry.py', str(log), '--allowlist', str(allow))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log.write_text(log.read_text().replace('sorryAx]', 'sorryAx, other]'))
+            result = run('check_test_sorry.py', str(log), '--allowlist', str(allow))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('T.cert\tother', result.stderr)
+
     def test_sources_that_hide_sorry_warnings_fail(self):
         # Each of these silenced the warning in a real build or `lake env lean` run (PR #605 reviews).
         # A body without any sorry source, so that each case depends only on its own rule.
