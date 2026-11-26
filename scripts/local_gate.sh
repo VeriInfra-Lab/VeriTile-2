@@ -50,6 +50,7 @@ if [ "$lean" = 1 ]; then
              "python3 scripts/test_fork_targets.py"
              # Fork-owned regression modules that no target gate builds.
              "bash tests/interp/run_regression.sh"
+             "lake env lean --run tests/interp/ReshapeOrder.lean"
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpReflectBench"
              "lake build tests.lean.InterpEvalSmoke"
