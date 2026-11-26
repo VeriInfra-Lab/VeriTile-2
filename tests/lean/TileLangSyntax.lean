@@ -1,104 +1,158 @@
 import VeriTile.TileLang
 
 open Lean VeriTile.TileLang
-
 namespace TileLangSyntaxTests
 
--- Source-only identifiers must stay usable as ordinary Lean after import.
 example (as : List Nat) : as = as := rfl
 def tilelang : Nat := 1
-example : tilelang = 1 := rfl
+def tilescale : Nat := 2
+example : tilelang + tilescale = 3 := rfl
 example : True := trivial
 example : ¬ False := id
 example (pass_configs out_idx : Option Nat) : Option Nat := pass_configs <|> out_idx <|> none
 
--- These cases exercise the public term parser. An elaborator error would
--- accept the parse and fail these regressions.
-private def sample (body : String) : String :=
-  "tilelang { @tilelang.jit def demo(X, Y): {with T.Kernel(1, threads=32) as b: {" ++ body ++ "}}}"
+private def eager (device : String) (prelude := "") (ret := "; return X") : String :=
+  "tilelang { @tilelang.jit def f(X, Y): {" ++ prelude ++
+  "with T.Kernel(1, threads=32) as b: {" ++ device ++ "}" ++ ret ++ "} }"
+
+private def factory (macros := "") (body := "T.copy(X, X)") : String :=
+  "tilelang { def f(n): {" ++ macros ++
+  "@T.prim_func def run(X: T.Tensor([n], T.float32)): {" ++ body ++ "}; return run} }"
+
+private def checkAdmission (txt : String) (expected : Bool) : Elab.Command.CommandElabM Unit := do
+  let code := "#guard (" ++ txt ++ ").accepted == " ++ toString expected
+  let stx ← match Parser.runParserCategory (← getEnv) `command code with
+    | .ok stx => pure stx
+    | .error e => throwError "expected a quoted typed program: {e}: {txt}"
+  Elab.Command.elabCommand stx
+
+private def parseFails (txt : String) : Elab.Command.CommandElabM Unit := do
+  if (Parser.runParserCategory (← getEnv) `term txt).isOk then throwError "unexpected parse: {txt}"
+
+-- Each pair starts with an admitted program and mutates one contract condition.
+run_cmd
+  let direct := eager "T.copy(X, Y)"
+  let mac := "@T.macro def move(A): {T.clear(A)}; "
+  let f := factory mac "move(X)"
+  let pureHelper := "def layout_of(A): {return T.Layout(A.shape, lambda i: [i % 4])}; "
+  let pureUse := (eager "L = layout_of(X)").replace "tilelang { " ("tilelang { " ++ pureHelper)
+  let cs := [
+    (f, f.replace "return run" "return f"),
+    (f, f.replace "move(X)" "move(X, X)"),
+    (f, f.replace mac (mac ++ mac)),
+    (f, f.replace "move" "run"),
+    (f, f.replace "move" "range"),
+    (f, f.replace "X: T.Tensor([n], T.float32)" "X: T.Tensor([n], T.float32), X: T.Tensor([n], T.float32)"),
+    (f, f.replace "move(X)" "Z = move(X)"),
+    (pureUse, pureUse.replace "L = layout_of(X)" "layout_of(X)"),
+    (pureUse, pureUse.replace "L = layout_of(X)" "L = layout_of(X, X)"),
+    (pureUse, pureUse.replace pureHelper (pureHelper ++ pureHelper)),
+    (direct, direct.replace "1, threads" "1, 2, threads"),
+    (direct, direct.replace "1, threads=32) as b" "1, 1, 1, 1) as (a, b, c, d)"),
+    (direct.replace "1, threads=32) as b" "1, 1) as (b, c)",
+      direct.replace "1, threads=32) as b" "1, 1) as (b, b)"),
+    (eager "for i, j in T.Parallel(1, 2): {T.clear(X)}", eager "for i, i in T.Parallel(1, 2): {T.clear(X)}"),
+    (eager "for i in range(2): {T.clear(X)}", eager "for i, j in range(2): {T.clear(X)}"),
+    (eager "for i in range(2): {T.clear(X)}", eager "for i in arbitrary(2): {T.clear(X)}"),
+    (direct, direct.replace "T.copy(X, Y)" "with T.Kernel(1) as j: {T.copy(X, Y)}"),
+    (direct, direct.replace "with T.Kernel" "for i in range(1): {with T.Kernel" |>.replace "; return X" "}; return X"),
+    (direct, eager "T.copy(X, Y)" "" ""),
+    (direct, eager "T.copy(X, Y)" "T.copy(X, Y); "),
+    (direct, eager "T.copy(X, Y)" "with T.ws(0): {T.clear(X)}; "),
+    (direct, eager "return X"),
+    (direct, eager "T.copy(X, Y)" "" "; with T.Kernel(1) as j: {T.clear(X)}; return X"),
+    (direct, direct.replace "with T.Kernel(1, threads=32) as b: {T.copy(X, Y)}; " ""),
+    (direct, direct.replace "X, Y)" "X, X)"),
+    (direct, direct.replace "f(X, Y)" "f(X=1, Y)"),
+    (direct, direct.replace "f(X, Y)" "f(X, Y=T.alloc_shared([1], T.float16))"),
+    (direct.replace "@tilelang.jit" "@tilelang.jit(out_idx=[1])",
+      direct.replace "@tilelang.jit" "@tilelang.jit(out_idx=[1], out_idx=[2])"),
+    (direct.replace "@tilelang.jit" "@tilelang.jit(pass_configs={\"tl.disable_warp_specialized\": True})",
+      direct.replace "@tilelang.jit" "@tilelang.jit(pass_configs={\"unlisted\": True})"),
+    (eager "T.gemm(X, Y, X, policy=a)", eager "T.gemm(X, Y, X, policy=a, policy=b)"),
+    (eager "T.gemm(X, Y, X, policy=a)", eager "T.gemm(X, Y, X, other=a)"),
+    (eager "T.copy(X, Y)", eager "T.copy(X, Y, 1)"),
+    (eager "T.mbarrier_arrive(mbarrier=X)", eager "T.mbarrier_arrive(mbarrier=X, X)"),
+    (eager "T.copy(X, Y)", eager "T.copy(X, unknown(Y))"),
+    (eager "X = T.exp2(Y)", eager "X = T.call_extern(Y)"),
+    (eager "X = T.exp2(Y)", eager "X = T.dynamic(Y)"),
+    (eager "X = T.alloc_shared([1], T.float16)", eager "X = T.alloc_shared([1], T.float16, scope=Y)")]
+  for (before, after) in cs do
+    if before == after then throwError "an ineffective mutation: {before}"
+    checkAdmission before true
+    checkAdmission after false
+  -- A value-returning macro can be used as a value.
+  checkAdmission (factory "@T.macro def first(A): {return A}; " "Z = first(X)") true
 
 run_cmd
+  let direct := eager "T.clear(X)"
+  for body in ["T.wgmma_gemm(X, Y, X)", "T.ptx_wgmma_ss(X, Y, X)", "T.tcgen05_gemm(X, Y, X)",
+      "T.wgmma(X, Y)", "T.tcgen05(X)", "T.fence_proxy_async()", "unknown.T.copy(X, Y)",
+      "L = T.Layout(X.shape, lambda i: T.tcgen05_gemm(i))", "with T.ws(T.ptx_wgmma_ss(X)): {T.clear(X)}",
+      "while X: {T.clear(X)}", "break", "continue", "X = X and Y", "X = not Y", "X = X or Y",
+      "X, Y += 1", "X = a --b\n", "X = a /- hidden -/"] do
+    parseFails (eager body)
+  parseFails (direct.replace "tilelang { " "tilelang { -- before the function\n")
+  parseFails (direct.replace "tilelang { " "tilelang { /- before the function -/ ")
+  parseFails (direct.replace "} }" "} -- after the function\n }")
+  checkAdmission (eager "X = \"-- /-\"") true
+  parseFails (direct.replace "f(X, Y)" "f(X, Y=T.wgmma_gemm(X))")
+  parseFails (factory "@T.macro def m(A): {T.fence_proxy_async()}; " "m(X)")
+  for pureBody in ["return T.Layout(A.shape, lambda i: T.exp2(i))",
+      "return T.Layout(A.shape, lambda i: [other % 4])", "return T.Layout(B.shape, lambda i: [i])",
+      "return T.Layout(A.shape, lambda i,i: [i])", "return T.Layout(A.shape, lambda i: [A[i]])",
+      "T.clear(A); return T.Layout(A.shape, lambda i: [i])"] do
+    parseFails (direct.replace "tilelang { " ("tilelang { def layout_of(A): {" ++ pureBody ++ "}; "))
+  for body in ["while X and not Y: {break}; while Y: {continue}", "X = X or Y",
+      "X = T.alloc_shared([1], T.float16, scope=Y)", "T.atomic_add(X, Y, dst_pe=b)"] do
+    checkAdmission ((eager body).replace "tilelang {" "tilescale {") true
+
+-- For every exported spelling, check the real parser, including the classes and
+-- double-underscore exports. A bare, zero-argument value call has no admitted row.
+run_cmd
   let env ← getEnv
-  for body in ["T.copy(X, Y)", "for i in T.Pipelined(2, num_stages=k): {Y[i] = X[i] + 1}",
-    "T.mbarrier_wait_parity(parity=(k // n) % n, mbarrier=X[b])",
-    "with T.ws(1): {T.tma_copy(X[:, :], Y[:, :], barrier=X[b])}",
-    "L = T.Layout(X.shape, lambda i, j: [j, i]); T.annotate_layout({X: L})"] do
-    if let .error e := Parser.runParserCategory env `term (sample body) then
-      throwError "expected TileLang syntax to parse: {body}: {e}"
-  for body in ["T.wgmma_gemm(A, B, C)", "T.ptx_wgmma_ss(A, B, C)", "T.tcgen05_gemm(A, B, C)",
-    "T.wgmma(X, Y)", "T.tcgen05(X)", "T.fence_proxy_async()",
-    "T.gemm(X, Y, X, future_kw=True)", "T.gemm(X, Y, X, policy=a, policy=b)",
-    "T.copy(X, Y, 1)", "T.copy(X, unknown(Y))", "unknown.T.copy(X, Y)",
-    "T.mbarrier_arrive(mbarrier=X, X)", "while k: {T.clear(X)}",
-    "for i in arbitrary(k): {T.clear(X)}", "T.copy(X, T.tcgen05(Y))",
-    "for i, j in range(n): {T.clear(X)}", "X, Y += 1"] do
-    if (Parser.runParserCategory env `term (sample body)).isOk then
-      throwError "accepted outside TileLang syntax: {body}"
+  for n in exportedNames do
+    let src := eager ("X = T." ++ n ++ "()")
+    let low := ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
+      fun opcode => n == opcode || n.startsWith (opcode ++ "_")
+    if low then parseFails src else
+      unless (Parser.runParserCategory env `term src).isOk do throwError "missing exported spelling: {n}"
+      checkAdmission src false
 
-  for params in ["X, X", "n=1, X", "X=T.alloc_shared([1], T.float16)"] do
-    let source := "tilelang { @tilelang.jit def demo(" ++ params ++
-      "): {with T.Kernel(1) as b: {T.clear(X)}} }"
-    if (Parser.runParserCategory env `term source).isOk then
-      throwError "accepted invalid eager parameters: {params}"
+-- One additional keyword invalidates every accepted operation family below.
+-- The TMA case additionally needs distinct source/shared spaces and completion;
+-- its positive, altered signatures and negatives use the full transfer client.
+run_cmd
+  for primitive in ["T.clear(X)", "T.use_swizzle(1)", "T.annotate_layout({X: L})",
+      "T.copy(X,Y)", "T.fill(X,1)", "T.atomic_add(X,Y)", "T.mbarrier_arrive(mbarrier=X)",
+      "T.mbarrier_wait_parity(mbarrier=X,parity=b)", "T.reduce_sum(X,Y,0)",
+      "T.reduce_sum(X,Y,dim=0)", "T.reduce_max(X,Y,dim=0,clear=True)",
+      "T.gemm(X,Y,X,transpose_A=True)", "T.gemm(X,Y,X,transpose_B=True,policy=b)",
+      "Z = T.alloc_shared([1],T.float16)", "Z = T.alloc_fragment([1],dtype=T.float32)",
+      "Z = T.ceildiv(X,Y)", "Z = T.max(X,Y)", "Z = T.min(X,Y)", "Z = T.empty([1],T.float16)",
+      "Z = T.floordiv(X,Y)", "Z = T.exp2(X)", "Z = T.const(X)", "Z = T.infinity(X)",
+      "Z = T.alloc_barrier(X)", "Z = T.log2(X)", "Z = math.ceil(X)", "Z = T.if_then_else(X,Y,X)"] do
+    checkAdmission (eager primitive) true
+    let mutated := (primitive.dropEnd 1).toString ++ ",unknown_kw=0)"
+    checkAdmission (eager mutated) false
+  checkAdmission (eager "T.clear(X)" "assert Y, \"size\"; ") true
+  checkAdmission (eager "assert Y, \"size\"; T.clear(X)") false
+  for name in ["one", "two"] do
+    checkAdmission (eager ("Z = T.call_extern(\"int32\", \"" ++ name ++ "\", X)")) false
 
-/-- A declaration and use retain the formal arguments and both constexpr arms. -/
-private def factoryExample : Source := tilelang {
-  def demo(n, enabled): {
-    if enabled: {k = n} else: {k = 1};
-    @T.macro def stage(X, Y): {T.copy(X, Y)};
-    @T.prim_func def run(X: T.Tensor([k], T.float32), Y: T.Tensor([k], T.float32)): {
-      with T.Kernel(k) as b: {stage(X, Y)}
-    };
-    return run
+-- The quotation returns source categories directly. Parentheses are grouping,
+-- literal values and the exact decimal spelling remain distinguishable.
+private def literalReadback : Program := tilelang {
+  @tilelang.jit(pass_configs={tilelang.PassConfigKey.TL_ENABLE_FAST_MATH: True}) def demo(X): {
+    with T.Kernel(2) as b: {X = 1 + 2.5}; return X
   }
 }
-
-
-private def factoryClient (helpers params body returned : String) : String :=
-  "tilelang { def demo(n): {" ++ helpers ++ "@T.prim_func def run(" ++ params ++
-    "): {" ++ body ++ "}; return " ++ returned ++ "} }"
-
--- Start from valid public clients and change only the condition under test.
-run_cmd
-  let env ← getEnv
-  let tensor := "X: T.Tensor([n], T.float32)"
-  let helper := "@T.macro def stage(A): {T.clear(A)}; "
-  let factory := factoryClient helper tensor
-  let valid := factory "stage(X)" "run"
-  unless (Parser.runParserCategory env `term valid).isOk do throwError "invalid factory control"
-  let negatives := [
-    ("factory return", factory "stage(X)" "other"),
-    ("duplicate JIT option", "tilelang { @tilelang.jit(out_idx=[1], out_idx=[2]) def f(): " ++
-      "{with T.Kernel(1) as b: {T.clear(X)}} }"),
-    ("macro arity", factory "stage(X, X)" "run"),
-    ("prim_func parameters", factoryClient helper (tensor ++ ", " ++ tensor) "stage(X)" "run"),
-    ("repeated macro name", factoryClient (helper ++ helper) tensor "stage(X)" "run"),
-    ("macro shadows prim_func", factoryClient "@T.macro def run(A): {T.clear(A)}; " tensor "run(X)" "run"),
-    ("grid rank", sample "with T.Kernel(n,n,n,n) as (a,b,c,d): {T.clear(X)}"),
-    ("missing eager kernel", "tilelang { @tilelang.jit def f(X): {T.clear(X)} }"),
-    ("parallel binders", sample "for i in T.Parallel(n,n): {T.clear(X)}"),
-    ("excluded layout lambda", sample "L = T.Layout(X.shape, lambda i: T.tcgen05_gemm(i))"),
-    ("excluded role", sample "with T.ws(T.ptx_wgmma_ss(X)): {T.clear(X)}"),
-    ("excluded default", "tilelang { @tilelang.jit def f(n=T.wgmma_gemm(X)): " ++
-      "{with T.Kernel(1) as b: {T.clear(X)}} }"),
-    ("excluded macro body", factoryClient "@T.macro def stage(A): {T.fence_proxy_async()}; " tensor "stage(X)" "run")]
-  for (label, input) in negatives do
-    if (Parser.runParserCategory env `term input).isOk then
-      throwError "accepted outside TileLang syntax ({label}): {input}"
-
-private partial def containsTree (wanted tree : Source) : Bool :=
-  tree == wanted || match tree with
-  | .node _ children => children.any (containsTree wanted)
-  | _ => false
-
--- A downstream consumer can distinguish the two literal productions, their
--- token spellings, operand order, and the operator even as the grammar grows.
-private def literalReadback : Source := tilelang {
-  @tilelang.jit def demo(X): {with T.Kernel(2) as b: {X = 1 + 2.5}}
-}
-#guard containsTree (.node `VeriTile.TileLang.addExpr [
-    .node `VeriTile.TileLang.integerLiteral [.node `num [.token "1"]],
-    .token "+",
-    .node `VeriTile.TileLang.scientificLiteral [.node `scientific [.token "2.5"]]]) literalReadback
+#guard literalReadback.fastMath == some true
+#guard (match literalReadback.definition with
+  | .direct ⟨_, _, [.kernel _ _ [.assign (.variable `X) (.binary .add (.integer 1) (.decimal "2.5"))], .ret _]⟩ => true
+  | _ => false)
+#guard !({ literalReadback with jit := none }).accepted
+#guard ({ literalReadback with jit := some [.flag (.symbol `tilelang.PassConfigKey.TL_ENABLE_FAST_MATH) false] }).fastMath == some false
+#guard ({ literalReadback with jit := none }).fastMath == none
 
 end TileLangSyntaxTests
