@@ -8,6 +8,8 @@ the SHA-256 of the elaborated statement (the declaration's type: every
 constant, universe level, implicit argument and coercion), up to the names of
 bound variables. For a signed inductive or structure, the fingerprint also
 records parameter/index counts, binder annotations and ordered constructors.
+A directly signed class also records its class marker; non-class fingerprints
+retain their format.
 For a structure it also records its own and ancestor field/projection names
 and the effective field-default auxiliary names. This digest survives a move
 from staging to the main target under the same declaration name. The module
@@ -150,11 +152,14 @@ private def frozenSignedRoot (env : Environment) (info : ConstantInfo) : String 
   match info with
   | .defnInfo _ => (ty, [info.name])
   | .inductInfo i =>
+    -- Only the directly signed root gets the marker: non-class rows must
+    -- remain byte-identical, even if an ancestor happens to be a class.
+    let marker := if isClass env i.name then " (class)" else ""
     match getStructureInfo? env i.name with
-    | none => (s!"{ty} (inductive {frozenInductiveShape env i})", [info.name])
+    | none => (s!"{ty} (inductive {frozenInductiveShape env i}){marker}", [info.name])
     | some _ =>
       let (shape, roots) := frozenStructureShape env [i.name] {}
-      (s!"{ty} (structure {frozenList shape})", roots)
+      (s!"{ty} (structure {frozenList shape}){marker}", roots)
   | _ => (ty, [])
 
 private partial def frozenClosure (env : Environment) (work : List Name) (seen : NameSet) : NameSet :=

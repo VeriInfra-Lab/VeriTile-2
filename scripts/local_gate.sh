@@ -31,8 +31,11 @@ commands=("python3 scripts/check_docs.py"
           "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
           "python3 -B -m unittest scripts.test_fork_replay"
+          "python3 -B -m unittest scripts.test_benchmark_assignment"
           "python3 scripts/check_frozen_base.py"
-          "python3 scripts/check_test_sorry.py --sources")
+          "python3 scripts/check_test_sorry.py --sources"
+          "python3 scripts/check_forbidden_references.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done
@@ -48,6 +51,7 @@ if [ "$lean" = 1 ]; then
              "python3 scripts/test_fork_targets.py"
              # Fork-owned regression modules that no target gate builds.
              "bash tests/interp/run_regression.sh"
+             "lake env lean --run tests/interp/ReshapeOrder.lean"
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpReflectBench"
              "lake build tests.lean.InterpEvalSmoke"
@@ -80,8 +84,16 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.Location"
              "lake build tests.lean.dist.TritonDistShmem"
              "lake build tests.lean.dist.SegmentFootprint"
+             "python3 scripts/check_trust_kernel_labels.py"
              "lake build tests.lean.dist.TrustAssumptions"
-             "lake build tests.lean.dist.TrustAssumptionDuplicateImports")
+             "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
+             "lake build tests.lean.dist.CountMonotoneVacuous"
+             "lake build tests.lean.dist.NonWordObservation"
+             "lake build tests.lean.dist.FetchAddObservation"
+             "lake build tests.lean.dist.WordCounterCheck"
+             "lake build tests.lean.dist.DeepEPChannel"
+             "lake build tests.lean.dist.Tutorial01"
+             "lake build tests.lean.dist.StorePublication")
 fi
 
 log=$(mktemp -d)
@@ -98,8 +110,12 @@ for index in "${!commands[@]}"; do
     ${commands[$index]} >"$log/$index.log" 2>&1
   fi
   code=$?
-  # A `sorry` in a tests/lean file fails the command that built or ran it.
-  python3 scripts/check_test_sorry.py "$log/$index.log" >>"$log/$index.log" 2>&1 || [ "$code" != 0 ] || code=1
+  # Direct runs such as InterpSymbolic and InterpBridgeCensus need a file for bare #print axioms.
+  test_args=()
+  if [[ ${commands[$index]} == "lake env lean tests/lean/"*.lean ]]; then
+    test_args=(--test-file "${commands[$index]#lake env lean }")
+  fi
+  python3 scripts/check_test_sorry.py ${test_args[@]+"${test_args[@]}"} "$log/$index.log" >>"$log/$index.log" 2>&1 || [ "$code" != 0 ] || code=1
   echo "exit $code  ${commands[$index]}"
   if [ "$code" != 0 ]; then
     failed=$((failed + 1))
