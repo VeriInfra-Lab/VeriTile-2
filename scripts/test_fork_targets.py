@@ -580,6 +580,25 @@ class ForkTargetGates(unittest.TestCase):
                 restored = check(source)
                 self.assertEqual(restored.returncode, 0, restored.stderr)
 
+    def test_signed_structure_ancestor_class_marker(self):
+        ordinary = ('namespace VeriTileGateClassAncestor\n'
+                    'structure Parent where\n  field : Nat\n'
+                    'structure Child extends Parent where\n  flag : Bool\n'
+                    'structure Grandchild extends Child where\n  extra : Nat\n'
+                    'end VeriTileGateClassAncestor\n')
+        is_class = ordinary.replace('structure Parent', 'class Parent')
+        for leaf in ('Child', 'Grandchild'):
+            name = f'VeriTileGateClassAncestor.{leaf}'
+            for label, source, edited in [('toClass', ordinary, is_class), ('fromClass', is_class, ordinary)]:
+                with self.subTest(leaf=leaf, direction=label):
+                    _, check = self.signed_declaration_probe(f'FrozenClassAncestor_{leaf}_{label}', name, source)
+                    rejected = check(edited)
+                    self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                    self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+                    self.assertNotIn('definition changed', rejected.stderr)
+                    restored = check(source)
+                    self.assertEqual(restored.returncode, 0, restored.stderr)
+
     def test_signed_inductive_class_marker(self):
         name = 'VeriTileGateClassInductive.Choice'
         ordinary = ('namespace VeriTileGateClassInductive\n'
