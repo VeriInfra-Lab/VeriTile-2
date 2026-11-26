@@ -16,6 +16,7 @@ abbrev Statement := TSyntax `tritonStmt
 
 private inductive Kind where
   | pointer
+  | otherPointer
   | scalar
   | constant
   | signedScalar
@@ -46,9 +47,11 @@ private def initial (signature : Syntax) : TermElabM (Facts × List Name) := do
       if field == ``CallSignature.scalars then
         let dtype ← whnf (← mkAppM ``Prod.snd #[pair])
         facts := (name.toName, if dtype.isAppOf ``ScalarType.i32 then .signedScalar else .scalar) :: facts
-      if field == ``CallSignature.pointers then
-        if (← whnf (← mkAppM ``Prod.snd #[pair])).isAppOf ``SourceDType.i32 then
-          facts := (name.toName, .pointer) :: facts
+      if field != ``CallSignature.scalars then
+        let signed ← if field == ``CallSignature.pointers then
+          pure ((← whnf (← mkAppM ``Prod.snd #[pair])).isAppOf ``SourceDType.i32)
+          else pure Bool.false
+        facts := (name.toName, if signed then .pointer else .otherPointer) :: facts
   for e in ← entries (← mkAppM ``CallSignature.constexpr #[profile]) do
     let .lit (.strVal name) ← whnf e | throwError "expected constexpr name"
     reserved := name.toName :: reserved
@@ -175,39 +178,134 @@ private def signedName (facts : Facts) (id : Ident) : Bool :=
 private def isConst (facts : Facts) (e : Operand) : Bool :=
   if let some .constant := kind facts e then Bool.true else Bool.false
 
-private def sameName (a b : Ident) := a.getId.eraseMacroScopes == b.getId.eraseMacroScopes
+/-- The core uses mathematical integers for ordinary arithmetic. Retain the
+source width at each operation, before its result can enter a comparison,
+division, pointer displacement or another register. -/
+private inductive RangeType where
+  | word | constant | address | flag | other
+  deriving BEq, Inhabited
 
-/-- Keep the source int32 operations before the memory frontend combines signed
-displacements. The row/column views are recognized only for recorded aranges. -/
-private partial def rowArithmetic (facts : Facts) (idx : Ident) (width count : Operand)
-    (stx : Syntax) : MacroM Syntax := do
-  let e : Operand := ⟨stx⟩
-  let lanes := fun (id : Ident) => (facts.lookup id.getId.eraseMacroScopes).any fun
-    | .lanes _ => Bool.true
-    | _ => Bool.false
-  let same := fun (a b : Operand) => PythonFullConstructors.render a.raw == PythonFullConstructors.render b.raw
+private abbrev RangeLocals := List (Name × RangeType)
+
+private def rangeType : Kind → RangeType
+  | .pointer | .otherPointer => .address
+  | .constant => .constant
+  | .mask _ => .flag
+  | .signedScalar | .programIndex | .lanes _ | .signed _ => .word
+  | _ => .other
+
+private def rangeBinary? (e : Operand) : Option (Operand × Operand) :=
   match e with
-  | `(tritonExpr| ($off:ident + $i:ident * $w:tritonExpr + $r:ident[:, None]) * $h:tritonExpr) =>
-    if signedName facts off && sameName i idx && same w width && lanes r && isConst facts h then
-      return (← `(tritonExpr| tl.cast($e, tl.int32))).raw
-  | `(tritonExpr| $i:ident * $w:tritonExpr + $r:ident[:, None] < $n:tritonExpr) =>
-    if sameName i idx && same w width && lanes r && same n count then
-      return (← `(tritonExpr| tl.cast($i:ident * $w:tritonExpr + $r:ident[:, None], tl.int32) < $n)).raw
-  | `(tritonExpr| $i:ident * $w:tritonExpr * $h:tritonExpr) =>
-    let program := (facts.lookup i.getId.eraseMacroScopes).any fun
-      | .programIndex => Bool.true
-      | _ => Bool.false
-    if (sameName i idx && same w width || program && isConst facts w) && isConst facts h then
-      return (← `(tritonExpr| tl.cast($e, tl.int32))).raw
-  | `(tritonExpr| $r:ident[:, None] * $h:tritonExpr) =>
-    if lanes r && isConst facts h then return (← `(tritonExpr| tl.cast($e, tl.int32))).raw
+  | `(tritonExpr| $a:tritonExpr + $b:tritonExpr) | `(tritonExpr| $a:tritonExpr - $b:tritonExpr)
+  | `(tritonExpr| $a:tritonExpr * $b:tritonExpr) | `(tritonExpr| $a:tritonExpr // $b:tritonExpr)
+  | `(tritonExpr| $a:tritonExpr % $b:tritonExpr) => some (a, b)
+  | _ => none
+
+private partial def rangeExpr (locals : RangeLocals) (derived : List Name) (s : Syntax) :
+    MacroM (Syntax × RangeType) := do
+  let e : Operand := ⟨s⟩
+  if s.getKind == choiceKind then
+    for alt in s.getArgs do
+      let (out, ty) ← rangeExpr locals derived alt
+      if out != alt || ty != .other then return (out, ty)
+  match e with
+  | `(tritonExpr| $v:ident) =>
+    return (s, (locals.lookup v.getId.eraseMacroScopes).getD .other)
+  | `(tritonExpr| $v:num) =>
+    return (s, if v.getNat < 2^31 then .constant else .other)
+  | `(tritonExpr| ($v:tritonExpr)) =>
+    let (value, ty) ← rangeExpr locals derived v
+    let arg : Operand := ⟨value⟩
+    return ((← `(tritonExpr| ($arg:tritonExpr))).raw, ty)
+  | `(tritonExpr| $v:ident[:, None]) | `(tritonExpr| $v:ident[None, :]) =>
+    return (s, (locals.lookup v.getId.eraseMacroScopes).getD .other)
   | _ => pure ()
-  return stx.setArgs (← stx.getArgs.mapM (rowArithmetic facts idx width count))
+  let dependent := (names s).any derived.contains
+  if let some (a, b) := rangeBinary? e then
+    let (lhs, l) ← rangeExpr locals derived a
+    let (rhs, r) ← rangeExpr locals derived b
+    let expr : Operand := ⟨s.setArgs #[lhs, s[1]!, rhs]⟩
+    if l == .address then
+      match e with
+      | `(tritonExpr| $_ + $_) | `(tritonExpr| $_ - $_) => return (expr.raw, .address)
+      | _ => pure ()
+    let op := s[1]!.getAtomVal.trimAscii.toString
+    if l == .constant && r == .constant then
+      -- Nat constexprs can subtract to a negative Python integer.
+      return (expr.raw, if op == "-" then .other else .constant)
+    if (l == .word || l == .constant) && (r == .word || r == .constant) then
+      -- Program IDs and aranges use a natural carrier in the core. Establish
+      -- a signed operand before an operation that distinguishes Nat from Int.
+      let expr ← if op == "-" || op == "//" || op == "%" then do
+        let arg : Operand := ⟨if l == .word then lhs else rhs⟩
+        let signed ← `(tritonExpr| tl.cast($arg, tl.int32))
+        pure (⟨expr.raw.setArg (if l == .word then 0 else 2) signed.raw⟩ : Operand)
+        else pure expr
+      return ((← `(tritonExpr| tl.cast($expr, tl.int32))).raw, .word)
+    if dependent then Macro.throwErrorAt s "signed cdiv range: unestablished integer promotion in index arithmetic"
+    return (expr.raw, .other)
+  match e with
+  | `(tritonExpr| tl.cast($v:tritonExpr, $dtype:tritonDType)) =>
+    let (v, _) ← rangeExpr locals derived v
+    let ty := match dtype with | `(tritonDType| tl.int32) => RangeType.word | _ => .other
+    let arg : Operand := ⟨v⟩
+    return ((← `(tritonExpr| tl.cast($arg:tritonExpr, $dtype:tritonDType))).raw, ty)
+  | _ => pure ()
+  if let `(tritonExpr| $a:tritonExpr & $b:tritonExpr) := e then
+    let (lhs, l) ← rangeExpr locals derived a
+    let (rhs, r) ← rangeExpr locals derived b
+    if dependent && l != .flag && r != .flag then
+      Macro.throwErrorAt s "signed cdiv range: unsupported integer bitwise use of the int32 index"
+    return (s.setArgs #[lhs, s[1]!, rhs], if l == .flag || r == .flag then .flag else .other)
+  let out := s.setArgs (← s.getArgs.mapM fun c => return (← rangeExpr locals derived c).1)
+  match e with
+  | `(tritonExpr| $_ < $_) | `(tritonExpr| $_ <= $_) | `(tritonExpr| $_ == $_)
+  | `(tritonExpr| $_ != $_) | `(tritonExpr| $_ > $_) | `(tritonExpr| $_ >= $_) =>
+    return (out, .flag)
+  | _ => pure ()
+  if dependent then
+    match e with
+    | `(tritonExpr| tl.load($_:tritonExpr $[, $_:tritonMemKwarg]*)) => pure ()
+    | _ =>
+      -- Keyword/optional argument nodes carry already checked child expressions.
+      let keyword := match s with | `(tritonMemKwarg| $_:ident = $_:tritonExpr) => Bool.true | _ => Bool.false
+      unless s.getKind == nullKind || keyword || (s.getNumArgs == 2 && s[0]!.getAtomVal == ",") do
+        Macro.throwErrorAt s ("signed cdiv range: unsupported use of the int32 index in " ++ PythonFullConstructors.render s)
+  return (out, .other)
+
+private def rangeBody (facts : Facts) (idx : Ident) (body : Array Statement) :
+    MacroM (Array Statement) := do
+  let written := body.toList.flatMap fun stmt => writes stmt.raw
+  let mut locals := facts.filterMap fun (n,k) =>
+    if written.contains n then none else some (n, rangeType k)
+  let binder := idx.getId.eraseMacroScopes
+  locals := (binder, .word) :: locals
+  let mut derived := [binder]
+  let mut out := #[]
+  for stmt in body do
+    if let `(tritonStmt| $dst:ident = $rhs:tritonExpr) := stmt then
+      let (value, ty) ← rangeExpr locals derived rhs
+      let name := dst.getId.eraseMacroScopes
+      let fromIndex := (names rhs.raw).any derived.contains
+      locals := (name, ty) :: locals
+      derived := derived.erase name
+      if fromIndex && ty == .word then derived := name :: derived
+      let arg : Operand := ⟨value⟩
+      out := out.push (← `(tritonStmt| $dst:ident = $arg:tritonExpr))
+    else if stmt.raw[0]?.any (fun a => a.getAtomVal == "tl.store(") then
+      out := out.push ⟨stmt.raw.setArgs (← stmt.raw.getArgs.mapM fun c => return (← rangeExpr locals derived c).1)⟩
+    else
+      if (names stmt.raw).any derived.contains then
+        Macro.throwErrorAt stmt "signed cdiv range: unsupported statement using the int32 index"
+      let overwritten := writes stmt.raw
+      locals := locals.filter fun (n, _) => !overwritten.contains n
+      out := out.push stmt
+  return out
 
 /-- Triton v3.5.1 standard.py:32–41 and semantic.py:311–322. For a positive
 int32 tile extent, reduce the numerator modulo 2^32 before signed division.
-Widening that word preserves its sign for the core range and loop index. -/
-private def signedRange? (facts : Facts) (s : Syntax) : TermElabM (Option Syntax) := do
+Widen that word for the core range. Each trip binds the source index as int32. -/
+private def signedRange? (facts : Facts) (s : Syntax) : Rewrite (Option Syntax) := do
   let `(tritonStmt| for $idx:ident in range(0, tl.cdiv($n:tritonExpr, $w:tritonExpr)) { $body:tritonStmt* }) := s
     | return none
   unless isSignedScalar facts n do return none
@@ -215,20 +313,12 @@ private def signedRange? (facts : Facts) (s : Syntax) : TermElabM (Option Syntax
     | `(tritonExpr| $v:num) => 0 < v.getNat && v.getNat < 2^31
     | _ => isConst facts w
   unless supported do return none
-  let written := body.toList.flatMap fun stmt => writes stmt.raw
-  let stable := facts.filter fun f => !written.contains f.1
-  let shadowed := (idx.getId.eraseMacroScopes :: (names n.raw ++ names w.raw)).any written.contains
-  let adjusted ← body.mapM fun stmt => do
-    -- Nested control or an unfamiliar statement retains its own typing.
-    if shadowed then return stmt
-    let raw := stmt.raw
-    let load := raw.getNumArgs > 2 && raw[1]!.getAtomVal == "=" &&
-      (PythonFullConstructors.render raw[2]!).startsWith "tl.load("
-    if (raw.getNumArgs > 0 && raw[0]!.getAtomVal == "tl.store(") || load then
-      return (⟨← liftMacroM (rowArithmetic stable idx w n raw)⟩ : Statement)
-    return stmt
-  let next ← `(tritonStmt| for $idx:ident in range(0,
-    (tl.cast(tl.cast($n:tritonExpr + ($w:tritonExpr - 1), tl.int32), tl.int64) // $w:tritonExpr)) { $adjusted* })
+  let rawIndex ← fresh "vt_range_index"
+  let adjusted ← (liftMacroM (rangeBody facts idx body) : TermElabM _)
+  let next ← `(tritonStmt| for $rawIndex:ident in range(0,
+    (tl.cast(tl.cast($n:tritonExpr + ($w:tritonExpr - 1), tl.int32), tl.int64) // $w:tritonExpr)) {
+    $idx:ident = tl.cast($rawIndex:ident, tl.int32)
+    $adjusted* })
   return some next.raw
 
 private partial def lower (facts : Facts) (call : Helper) (s : Syntax) :

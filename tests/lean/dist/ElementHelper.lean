@@ -286,13 +286,14 @@ def widenedCopy (output_split_ptr recv_buf_ptr output_ptr : RegionName)
     offset_m = tl.arange(0, BLOCK_SIZE_M)
     offset = tl.arange(0, BLOCK_SIZE)
 
-    for bid in range(0, (tl.cast(tl.cast(n_row + (BLOCK_SIZE_M - 1), tl.int32), tl.int64) // BLOCK_SIZE_M)):
+    for vt_range_index0 in range(0, (tl.cast(tl.cast(n_row + (BLOCK_SIZE_M - 1), tl.int32), tl.int64) // BLOCK_SIZE_M)):
+        bid = tl.cast(vt_range_index0, tl.int32)
         data = tl.load(
-            recv_buf_ptr + tl.cast(pid * MAX_M * HIDDEN_DIM, tl.int32) + tl.cast(bid * BLOCK_SIZE_M * HIDDEN_DIM, tl.int32) + tl.cast(offset_m[:, None] * HIDDEN_DIM, tl.int32) +
-            offset[None, :], mask=mask[None, :] & (tl.cast(bid * BLOCK_SIZE_M + offset_m[:, None], tl.int32) < n_row))
+            recv_buf_ptr + tl.cast(tl.cast(pid * MAX_M, tl.int32) * HIDDEN_DIM, tl.int32) + tl.cast(tl.cast(bid * BLOCK_SIZE_M, tl.int32) * HIDDEN_DIM, tl.int32) + tl.cast(offset_m[:, None] * HIDDEN_DIM, tl.int32) +
+            offset[None, :], mask=mask[None, :] & (tl.cast(tl.cast(bid * BLOCK_SIZE_M, tl.int32) + offset_m[:, None], tl.int32) < n_row))
         tl.store(
-            output_ptr + tl.cast((output_row_offset + bid * BLOCK_SIZE_M + offset_m[:, None]) * HIDDEN_DIM, tl.int32) + offset[None, :],
-            data, mask=mask[None, :] & (tl.cast(bid * BLOCK_SIZE_M + offset_m[:, None], tl.int32) < n_row))
+            output_ptr + tl.cast(tl.cast(tl.cast(output_row_offset + tl.cast(bid * BLOCK_SIZE_M, tl.int32), tl.int32) + offset_m[:, None], tl.int32) * HIDDEN_DIM, tl.int32) + offset[None, :],
+            data, mask=mask[None, :] & (tl.cast(tl.cast(bid * BLOCK_SIZE_M, tl.int32) + offset_m[:, None], tl.int32) < n_row))
   }
 
 example (split src dst : RegionName) (ranks capacity cols rows block : Nat) :
@@ -349,9 +350,36 @@ example (split : RegionName) (N : Nat) :
           value = i
     } : ComputeKernel) = (with_triton_call numericProfile call_args [] in triton {
       n = tl.load(split)
-      for i in range(0, (tl.cast(tl.cast(n + (N - 1), tl.int32), tl.int64) // N)):
+      for vt_range_index0 in range(0, (tl.cast(tl.cast(n + (N - 1), tl.int32), tl.int64) // N)):
+          i = tl.cast(vt_range_index0, tl.int32)
           value = i
     } : ComputeKernel) := rfl
+
+-- An alias remains a word at the next operation, and a source register may
+-- already occupy the first proposed internal induction name.
+example (split : RegionName) (N : Nat) :
+    (with_triton_call numericProfile call_args [] in triton {
+      n = tl.load(split)
+      for i in range(0, tl.cdiv(n, N)):
+          vt_range_index0 = i * N
+          value = (vt_range_index0 + 1) // 2
+    } : ComputeKernel) = (with_triton_call numericProfile call_args [] in triton {
+      n = tl.load(split)
+      for vt_range_index1 in range(0, (tl.cast(tl.cast(n + (N - 1), tl.int32), tl.int64) // N)):
+          i = tl.cast(vt_range_index1, tl.int32)
+          vt_range_index0 = tl.cast(i * N, tl.int32)
+          value = tl.cast(tl.cast(vt_range_index0 + 1, tl.int32) // 2, tl.int32)
+    } : ComputeKernel) := rfl
+
+/-- error: signed cdiv range: unestablished integer promotion in index arithmetic -/
+#guard_msgs in
+example (split : RegionName) (N : Nat) : ComputeKernel :=
+  with_triton_call numericProfile call_args [] in triton {
+    n = tl.load(split)
+    for i in range(0, tl.cdiv(n, N)):
+        product = N * i
+        value = product * 2147483648
+  }
 
 private def wide : CallSignature where
   pointers := [("split", .i64)]
@@ -408,5 +436,20 @@ private def runIndex (k : QKernel) (n : Int) (reg : String) : Option Int := do
 -- gives a negative stop and leaves the register at its initial value.
 #guard runIndex (scalarIndex.mirror "splits" 1 (2^30+1)) 3 "value" == some (-2147483646)
 #guard runIndex (scalarIndex.mirror "splits" 2 (2^30+1)) 2147483647 "value" == some (-1)
+
+-- The wrapped product is used at a sign-sensitive operation boundary.
+private def signedDivision (split : RegionName) (W N : Nat) : ComputeKernel :=
+  with_triton_call productProfile call_args [] in triton {
+    n = tl.load(split)
+    for i in range(0, tl.cdiv(n, W)):
+        product = N * i
+        quotient = product // 5
+        remainder = product % 5
+  }
+
+reflect_kernel signedDivision
+
+#guard runIndex (signedDivision.mirror "splits" 1 (2^30+1)) 3 "quotient" == some (-429496729)
+#guard runIndex (signedDivision.mirror "splits" 1 (2^30+1)) 3 "remainder" == some (-1)
 
 end VeriTile.Tests.Dist.ElementHelper
