@@ -77,6 +77,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.PointerCasts"
              "lake build tests.lean.dist.UnguardedShared"
              "lake build tests.lean.dist.Location"
+             "lake build tests.lean.dist.TritonDistShmem"
              "lake build tests.lean.dist.SegmentFootprint")
 fi
 

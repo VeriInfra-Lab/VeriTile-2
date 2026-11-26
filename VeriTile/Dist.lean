@@ -23,3 +23,4 @@ import VeriTile.Dist.Spec.ReduceScatter
 import VeriTile.Dist.Spec.AllToAll
 import VeriTile.Dist.Segment
 import VeriTile.Dist.Frontend.TritonDist.DL
+import VeriTile.Dist.Frontend.TritonDist.Shmem

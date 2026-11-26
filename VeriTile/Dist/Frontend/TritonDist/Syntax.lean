@@ -25,16 +25,22 @@ scoped syntax lookahead(ident) &"dl.notify" "(" tritonExpr "," tritonExpr "," &"
 scoped syntax "with" lookahead(ident) &"dl.simt_exec_region" "(" ")" "as" "(" ident "," ident ")" "{" tritonStmt* "}" : distributedCallStmt
 scoped syntax (name := dlStmt) (priority := high) distributedCallStmt : tritonStmt
 
+declare_syntax_cat shmemPtr
+scoped syntax tritonExpr : shmemPtr
+-- The tutorial 03 byte view is an operand of a memory transfer.
+scoped syntax (name := shmemByteView) (priority := high)
+  "tl.cast(" tritonExpr "," "tl.pointer_type(" "tl.int8" ")" ")" ("+" tritonExpr)? : shmemPtr
+
 declare_syntax_cat shmemCallStmt
 scoped syntax lookahead(ident) &"libshmem_device.barrier_all_block" "(" ")" : shmemCallStmt
 scoped syntax lookahead(ident) &"libshmem_device.fence" "(" ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.getmem_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.getmem_nbi_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.putmem_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.putmem_nbi_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.putmem_signal_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.putmem_signal_nbi_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
-scoped syntax lookahead(ident) &"libshmem_device.putmem_signal_nbi_warp" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.getmem_block" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.getmem_nbi_block" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.putmem_block" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.putmem_nbi_block" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.putmem_signal_block" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.putmem_signal_nbi_block" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
+scoped syntax lookahead(ident) &"libshmem_device.putmem_signal_nbi_warp" "(" shmemPtr "," shmemPtr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
 scoped syntax lookahead(ident) &"libshmem_device.signal_op" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
 scoped syntax lookahead(ident) &"libshmem_device.signal_wait_until" "(" tritonExpr "," tritonExpr "," tritonExpr ")" : shmemCallStmt
 scoped syntax (name := pendingShmemStmt) (priority := high) shmemCallStmt : tritonStmt
@@ -92,13 +98,59 @@ private def owner? (k : Name) : Option String :=
   | _ => none
 
 /-- Preserve pending-family diagnostics when another frontend handles the block. -/
-def checkPendingCalls (stx : Syntax) : TermElabM Unit := do
-  if let some call := stx.find? fun s => (owner? s.getKind).isSome then
+def checkPendingCalls (stx : Syntax) (currentFamily : Option String := none) : TermElabM Unit := do
+  if let some call := stx.find? (fun s =>
+      match owner? s.getKind with
+      | some ticket => currentFamily != some ticket
+      | none => Bool.false) then
     throwErrorAt call "not implemented: {(owner? call.getKind).get!}"
 
 @[scoped term_elab VeriTile.Triton.DSL.tritonBlock]
 def pending : TermElab := fun stx _ => do
   checkPendingCalls stx
   throwUnsupportedSyntax
+
+partial def quoteDistSyntax (stx : Syntax) : TermElabM (TSyntax `term) := do
+  match stx with
+  | .missing => `(Syntax.missing)
+  | .atom _ token =>
+    let token := quote token
+    `(Syntax.atom SourceInfo.none $token)
+  | .ident _ spelling name _ =>
+    let spelling := quote spelling.toString
+    let name := quote name.eraseMacroScopes
+    `(Syntax.ident SourceInfo.none (String.toRawSubstring $spelling) $name [])
+  | .node _ kind args =>
+    let args ← args.mapM quoteDistSyntax
+    let kind := quote kind
+    `(Syntax.node SourceInfo.none $kind #[$args,*])
+
+-- Volatile loads are explicitly outside the signed A2.1 source subset.
+private def checkDistVolatileLoads (stx : Syntax) : TermElabM Unit := do
+  let hasVolatile (raw : Syntax) := match (⟨raw⟩ : TSyntax `tritonMemKwarg) with
+    | `(tritonMemKwarg| $name:ident = $_:tritonExpr)
+    | `(tritonMemKwarg| $name:ident = $_:tritonDType) => name.getId.eraseMacroScopes == `volatile
+    | _ => Bool.false
+  if let some load := stx.find? (fun raw =>
+      raw.getArgs.any (fun arg => arg.isAtom && arg.getAtomVal == "tl.load(") &&
+        (raw.find? hasVolatile).isSome) then
+    let message := "tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, " ++
+      "`boundary_check`, `padding_option`, and `eviction_policy` are recognized."
+    throwErrorAt load message
+
+-- These are the same source-helper passes used by the ordinary Triton block.
+-- Run them for validation only and retain the original syntax and tree paths.
+def checkDistSourceCalls (stx : Syntax) : TermElabM Unit := do
+  let `(triton { $stmts:tritonStmt* }) := stx | throwUnsupportedSyntax
+  let checked ← liftMacroM do
+    let normalized ← stmts.toList.mapM fun stmt =>
+      return (⟨← Inference.normalizeControlFlow stmt.raw⟩ : TSyntax `tritonStmt)
+    RandomProfile.prepare (← FiniteHelperSource.prepare normalized)
+  -- The dotted zero-argument parser also admits excluded names. The finite
+  -- helper pass consumes the supported dtype predicate in its declaration.
+  if checked.any fun stmt =>
+      (stmt.raw.find? (·.isOfKind ``tritonSourceIsFP64Dotted)).isSome then
+    throwErrorAt stx "unexpected syntax{indentD stx}"
+  checkDistVolatileLoads stx
 
 end VeriTile.Dist.Frontend.TritonDist

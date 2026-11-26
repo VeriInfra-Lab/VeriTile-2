@@ -509,6 +509,7 @@ globs = [
   "tests.lean.dist.PointerCasts",
   "tests.lean.dist.UnguardedShared",
   "tests.lean.dist.Location",
+  "tests.lean.dist.TritonDistShmem",
   "tests.lean.dist.SegmentFootprint",
 ]
 
