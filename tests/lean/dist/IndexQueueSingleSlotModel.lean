@@ -26,7 +26,11 @@ def QueueView.Put (V : QueueView) : History → Nat → Nat → Prop := NthAt V.
 def QueueView.Take (V : QueueView) : History → Nat → Nat → Prop := NthAt V.isTake
 
 /-- Every take observes its matching put with no intervening write, and the
-next use of the slot happens after its previous take. -/
+next use of the slot happens after its previous take.
+The [G1 decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/651#issuecomment-7201459525)
+omits `Abs` and the projection to an abstract queue run because the
+[planned clients](https://github.com/VeriInfra-Lab/VeriTile-2/issues/651#issuecomment-7201721549)
+use only hand-off and reuse. -/
 def QueueRefines {P : Type} (l : Launch P) (s : DistState) (V : QueueView) : Prop :=
   ∀ sched final, Run l (l.initial s) sched final →
     (∀ k j, V.Take final.history k j → ∃ i, V.Put final.history k i ∧ i < j ∧
