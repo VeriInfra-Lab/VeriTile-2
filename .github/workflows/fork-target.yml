@@ -31,6 +31,12 @@ jobs:
         env:
           LIBRARY: ${{ inputs.library }}
         run: python3 scripts/check_fork_target.py "$LIBRARY" --replay
+      - name: Run Dist location regression
+        if: inputs.library == 'VeriTileDist'
+        run: |
+          set -o pipefail
+          lake build tests.lean.dist.Location 2>&1 | tee "$RUNNER_TEMP/location-regression.log"
+          python3 scripts/check_test_sorry.py "$RUNNER_TEMP/location-regression.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
