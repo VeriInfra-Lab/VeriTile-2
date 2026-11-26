@@ -377,14 +377,6 @@ def Fault (l : Launch P) (s : Config P) : Prop :=
     | .ready _ => True
     | .waiting h t _ => ¬ ((∀ x ∈ h :: t, x.actor.within a) ∧ BlockedGroup l a s.toMachine (h :: t))
 
-def Safe (l : Launch P) (s : DistState) : Prop :=
-  DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final
-
-/-- S4.4/#50. A race is a failure even if another schedule completes. Deadlock
-alone leaves the universal postcondition vacuous; Completes is separate. -/
-def ImplementsAll (l : Launch P) (s : DistState) (spec : Config P → Prop) : Prop :=
-  Safe l s ∧ ∀ sched final, Run l (l.initial s) sched final → Complete final → spec final
-
 def Completes (l : Launch P) (s : DistState) : Prop :=
   ∃ sched final, Run l (l.initial s) sched final ∧ Complete final ∧ ¬ DataRace l final.history
 
@@ -443,6 +435,14 @@ structure SoundLaunch (l : Launch P) : Prop where
   uniqueThreadPath : ∀ s sched f, Run l (l.initial s) sched f →
     ∀ x ∈ f.history, ∀ y ∈ f.history, ∀ c g t, x.owner = .thread c g t →
       y.owner = .thread c g t → ∀ a b, x.program? = some a → y.program? = some b → a = b
+
+def Safe (l : Launch P) (s : DistState) : Prop :=
+  SoundLaunch l ∧ DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final
+
+/-- S4.4/#50. A race is a failure even if another schedule completes. Deadlock
+alone leaves the universal postcondition vacuous; Completes is separate. -/
+def ImplementsAll (l : Launch P) (s : DistState) (spec : Config P → Prop) : Prop :=
+  Safe l s ∧ ∀ sched final, Run l (l.initial s) sched final → Complete final → spec final
 
 /-- Signed (#47), statement only; the proof is owed by #51. C1, S4.5/#51. Histories record the swapped order, so the
 equality asserted is on memory and continuations. -/
