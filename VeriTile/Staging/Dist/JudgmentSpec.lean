@@ -8,10 +8,16 @@ Signed on 2026-11-25 (user decisions of 2026-11-24 and 2026-11-25, recorded on
 `SyncEdge.hb_of_readsFrom` and the add-only counting edge `CountingEdge.hb`,
 with the definitions under them. C3, `implementsAll_of_canonical`,
 `DetRaceFree`, `UnorderedAtomicRace` and `Occurrence.discardedAddAt` stay
-unsigned and are signed with #54. The 2026-11-25 fixes of #47 (`CountMonotone`
-restricted to reachable configurations, `Fire.wait` and `Fire.bump` returning
-no count of a non-word counter) change `threshold_stays_enabled` and the
-definitions under `step_comm`; they await re-signing. Everything else in this file is a candidate
+unsigned and are signed with #54.
+
+Re-signed on 2026-11-26 (user decision E1 of 2026-11-26, recorded on #47;
+the agent recorded the signature on the user's delegation): this round signs
+the new statement of C2 `threshold_stays_enabled`, whose `CountMonotone` is
+restricted to configurations reachable from `l.initial σ₀` (decision 一 (a) of
+2026-11-25), and re-accepts the definitions `Fire.wait` and `Fire.bump` under
+`step_comm` with fix (a): a phase, rendezvous or delivery counter returns no
+count. C3 `detRaceFree_complete_eq_canonical` stays UNSIGNED, with `sorry`.
+Everything else in this file is a candidate
 statement to review, not a certificate. The five source/control comparisons are in
 tests/lean/dist/JudgmentVariants.lean. -/
 import VeriTile.Staging.Dist.SegmentSpec
@@ -104,7 +110,8 @@ private def bumpMem (w : CellWrites) (s : DistState) (b : Bump) (old : Nat) : Di
   | .word p => w.put s p (.of .nat (b.op.apply old b.amount))
   | _ => s
 
-/-- N5. Loads and updates return their old cell. A wait and an adding bump
+/-- Signed (#47, via step_comm; `wait` and `bump` re-signed 2026-11-26). N5. Loads and
+updates return their old cell. A wait and an adding bump
 return the old count only for a memory word; on a phase, rendezvous or
 delivery counter they return none, as `__syncthreads`, `barrier_all` and
 `quiet` return no count (#47, 2026-11-25). Stores, fences, set bumps and
@@ -451,7 +458,7 @@ theorem wait_enabled_mono {init : Counter → Nat} {c : Counter} {n : Nat} {pre 
     (enabled : Cmp.ge.holds (c.value init pre) n) : Cmp.ge.holds (c.value init post) n :=
   Counter.ge_stable monotone prefixOf enabled
 
-/-- S4.6/#52. State-level C2 covers physical words as well as abstract
+/-- Signed (#47, re-signed 2026-11-26, via threshold_stays_enabled). S4.6/#52. State-level C2 covers physical words as well as abstract
 counters. Every step from a configuration reachable from `l.initial σ₀` that
 can modify the counter must preserve its type and not decrease it. Equality
 waits do not satisfy threshold stability. Unreachable configurations are
@@ -468,7 +475,7 @@ private theorem Run.snoc {l : Launch P} {s t u : Config P} {xs : Schedule} {c : 
 
 /-- C2 at state level, S4.6/#52: a threshold that holds at a reachable
 configuration stays enabled along any run whose steps never decrease the
-counter. Re-signing with the reachable `CountMonotone` is pending (#47). -/
+counter. Signed (#47), re-signed 2026-11-26 with the reachable `CountMonotone`. -/
 theorem threshold_stays_enabled {l : Launch P} {σ₀ : DistState} {c : Counter} {s t : Config P}
     {pre sched n old} (mono : CountMonotone l σ₀ c) (reach : Run l (l.initial σ₀) pre s)
     (run : Run l s sched t) (seen : s.count? l.initialCount c = some old) (enabled : n ≤ old) :
