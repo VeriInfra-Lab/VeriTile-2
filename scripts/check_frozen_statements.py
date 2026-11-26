@@ -6,15 +6,19 @@ Two tables under documents/dist/ record two fingerprints.
 FrozenStatements.tsv has one row per signed declaration. Its fingerprint is
 the SHA-256 of the elaborated statement (the declaration's type: every
 constant, universe level, implicit argument and coercion), up to the names of
-bound variables. This digest survives a move from staging to the main target
+bound variables. For a signed inductive or structure, the fingerprint also
+records its ordered constructor names and, for a structure, its field and
+projection names. This digest survives a move from staging to the main target
 under the same declaration name. The module column must name the new owner.
 
 FrozenDefinitions.tsv has one row per project constant that a signed statement
 depends on: every constant the statement mentions, and every constant those
 mention in their types, definition bodies and constructors, as far as they are
 declared in this repository (Lean core and Mathlib are pinned by the
-toolchain and the manifest). Its fingerprint covers the constant's kind, type
-and, for a definition, its body. Proofs are not followed.
+toolchain and the manifest). A signed definition or inductive type is also
+itself a root; a signed structure adds its field and parent projections.
+The constant fingerprint covers its kind, type and, for a definition, body.
+Theorems start only at their types as before; proofs are not followed.
 
 A changed statement always fails. A changed, new or no longer needed
 definition fails too, and names the signed statements it affects, because it
@@ -83,6 +87,24 @@ private def frozenEntry (info : ConstantInfo) : String × Array Name :=
   (s!"{kind} : {frozenSer info.type}" ++ (match value with | some v => s!" := {frozenSer v}" | none => ""),
    info.type.getUsedConstants ++ (match value with | some v => v.getUsedConstants | none => #[]) ++ more)
 
+/-- An explicitly signed type or definition is itself a dependency. Keep the
+existing per-constant fingerprint unchanged, including for types already
+under theorem rows. The signed type's own fingerprint records the ordered
+member names as well: a union of dependency names would lose that order. -/
+private def frozenSignedRoot (env : Environment) (info : ConstantInfo) : String × List Name :=
+  let ty := frozenSer info.type
+  match info with
+  | .defnInfo _ => (ty, [info.name])
+  | .inductInfo i =>
+    let (shape, projections) : String × Array Name := match getStructureInfo? env i.name with
+      | none => ("inductive", #[])
+      | some s =>
+        let fields := s.fieldNames.filterMap (getProjFnForField? env i.name)
+        let projections := fields ++ s.parentInfo.map (·.projFn)
+        (s!"structure fields {s.fieldNames} projections {projections}", projections)
+    (s!"{ty} ({shape} constructors {i.ctors})", i.name :: projections.toList)
+  | _ => (ty, [])
+
 private partial def frozenClosure (env : Environment) (work : List Name) (seen : NameSet) : NameSet :=
   match work with
   | [] => seen
@@ -100,8 +122,9 @@ elab "#frozenStatements " "[" names:str,* "]" : command => do
     let owner := match env.getModuleIdxFor? info.name with
       | some idx => env.header.moduleNames[idx.toNat]!
       | none => env.mainModule
-    liftIO <| IO.println s!"S\t{name.getString}\t{owner}\t{frozenSer info.type}"
-    let closure := frozenClosure env info.type.getUsedConstants.toList {}
+    let (fingerprint, roots) := frozenSignedRoot env info
+    liftIO <| IO.println s!"S\t{name.getString}\t{owner}\t{fingerprint}"
+    let closure := frozenClosure env (roots ++ info.type.getUsedConstants.toList) {}
     for constant in closure.toList do
       liftIO <| IO.println s!"M\t{name.getString}\t{constant}"
       all := all.insert constant
