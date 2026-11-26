@@ -1179,11 +1179,15 @@ were open in the first form of this block; the user decided each on
 
 ## 7. Named assumptions
 
-These entries are registered in `VeriTile/Dist/Assumptions.lean`. Import
+These entries and the separate translation-correctness entry N5′
+(`documented_atomic_update_lowering`, #43 and #608) are registered in
+`VeriTile/Dist/Assumptions.lean`. Import
 `VeriTile.Dist.Meta.PrintTrustAssumptions` and run `#print_trust_assumptions T`
 to see the names and classes of the registered assumptions reached from
 the type and proof of theorem `T` through their Lean dependencies. An
-unregistered declaration reached in `VeriTile.Dist.Assumption` is an error.
+unregistered declaration reached in `VeriTile.Dist.Assumption` is an error
+unless it is a theorem or a Lean-generated auxiliary. The types and bodies
+of proofs and auxiliaries are still inspected, including across imports.
 
 Each entry has the fields of the registry of ticket S5.3 as the map states
 them: name, statement, source or rationale, affected kernels. The class of

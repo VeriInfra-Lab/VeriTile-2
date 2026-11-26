@@ -37,11 +37,11 @@ def rewriteFixture.unregistered : Prop := True
 opaque notify_atomic_release.match_9 : Prop
 def translationFixture.match_9 : Prop := unregisteredFixture
 
-theorem unregisteredProof : True := True.intro
+theorem ordinaryProof : True := True.intro
 
 def proofFixture : Prop :=
   (fun (_ : True) => True) (by
-    as_aux_lemma => exact unregisteredProof)
+    as_aux_lemma => exact ordinaryProof)
 
 def proofMetadata : TrustAssumption where
   name := `proofFixture
@@ -51,6 +51,22 @@ def proofMetadata : TrustAssumption where
   assumptionClass := .translationCorrectness
 
 attribute [trust_assumption proofMetadata] proofFixture
+
+-- Unlike a theorem, this definition must still pass the namespace check.
+def unregisteredProof : True ∧ True := ⟨True.intro, True.intro⟩
+
+def badProofFixture : Prop :=
+  (fun (_ : True ∧ True) => True) (by
+    as_aux_lemma => exact unregisteredProof)
+
+def badProofMetadata : TrustAssumption where
+  name := `badProofFixture
+  statement := badProofFixture
+  sourceOrRationale := "Regression fixture"
+  affectedKernels := []
+  assumptionClass := .translationCorrectness
+
+attribute [trust_assumption badProofMetadata] badProofFixture
 
 end VeriTile.Dist.Assumption
 
@@ -208,9 +224,9 @@ theorem usingFakeMatcherDefinition (h : Assumption.translationFixture.match_9) :
 #guard_msgs (error) in
 #print_trust_assumptions usingFakeMatcherDefinition
 
-theorem usingGeneratedProof (_h : Assumption.proofFixture) : True := True.intro
+theorem usingGeneratedProof (_h : Assumption.badProofFixture) : True := True.intro
 
--- The helper's type is True. The unregistered dependency occurs only in its proof.
+-- The helper's type is True ∧ True. The unregistered dependency occurs only in its proof.
 /-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredProof' -/
 #guard_msgs (error) in
 #print_trust_assumptions usingGeneratedProof

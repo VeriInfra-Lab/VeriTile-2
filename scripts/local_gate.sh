@@ -80,7 +80,8 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TritonDistShmem"
              "lake build tests.lean.dist.SegmentFootprint"
              "lake build tests.lean.dist.TrustAssumptions"
-             "lake build tests.lean.dist.TrustAssumptionDuplicateImports")
+             "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
+             "lake build tests.lean.dist.TrustAssumptionImports")
 fi
 
 log=$(mktemp -d)
