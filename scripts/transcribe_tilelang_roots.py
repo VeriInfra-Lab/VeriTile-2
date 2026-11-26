@@ -5,6 +5,9 @@ import ast
 import hashlib
 import io
 import json
+import os
+import subprocess
+import tempfile
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +25,6 @@ FILES = {
     "warp_specialize/example_warp_specialize_gemm_barrierpipe_stage2.py":
         "a8010ca7cd95430d18317aa9b62800e4d5b0e9b6",
 }
-LAYOUT_CLIENTS = {"flashattn_bwd", "flashattn_bwd_postprocess"}
 
 
 def inline(node):
@@ -76,9 +78,63 @@ def stmt(node, level):
 class Root:
     path: str
     function: ast.FunctionDef
-    helper: ast.FunctionDef | None
+    helpers: list[ast.FunctionDef]
     spans: list[tuple[int, int]]
     source: str
+
+
+def referenced_layouts(function, functions):
+    """Select called module functions in source order and require the T2 helper form."""
+    def calls_in_scope(scope, enclosing):
+        # Python binds assignment targets and function names throughout their scope.
+        bound = enclosing | {arg.arg for arg in (*scope.args.posonlyargs, *scope.args.args,
+                                                  *scope.args.kwonlyargs)}
+        calls, nested = set(), []
+        pending = list(scope.body) if isinstance(scope.body, list) else [scope.body]
+        while pending:
+            node = pending.pop()
+            if isinstance(node, ast.FunctionDef):
+                bound.add(node.name)
+                nested.append(node)
+            elif isinstance(node, ast.Lambda):
+                nested.append(node)
+            else:
+                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                    bound.add(node.id)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                    calls.add(node.func.id)
+                pending.extend(ast.iter_child_nodes(node))
+        globals_called = calls - bound
+        for child in nested:
+            globals_called.update(calls_in_scope(child, bound))
+        return globals_called
+
+    calls = calls_in_scope(function, {function.name})
+    helpers = [f for f in functions if f.name in calls and not any(
+        inline(d.func if isinstance(d, ast.Call) else d) == "tilelang.jit" for d in f.decorator_list)]
+    for h in helpers:
+        a = h.args
+        if (h.decorator_list or len(a.args) != 1 or a.args[0].annotation or a.posonlyargs
+                or a.kwonlyargs or a.vararg or a.kwarg or a.defaults or len(h.body) != 1 or not isinstance(h.body[0], ast.Return)):
+            raise ValueError(f"unsupported referenced layout helper {h.name}")
+        call = h.body[0].value
+        if (not isinstance(call, ast.Call) or ast.unparse(call.func) != "T.Layout"
+                or call.keywords or len(call.args) != 2
+                or ast.unparse(call.args[0]) != a.args[0].arg + ".shape"
+                or not isinstance(call.args[1], ast.Lambda)):
+            raise ValueError(f"unsupported referenced layout helper {h.name}")
+        lam = call.args[1]
+        coords = {arg.arg for arg in lam.args.args}
+        allowed = (ast.Name, ast.Load, ast.Constant, ast.List, ast.Tuple, ast.BinOp,
+                   ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.Mod)
+        if (lam.args.posonlyargs or lam.args.kwonlyargs or lam.args.vararg or lam.args.kwarg
+                or lam.args.defaults or not coords or len(coords) != len(lam.args.args)
+                or any(not isinstance(n, allowed)
+                       or isinstance(n, ast.Name) and n.id not in coords
+                       or isinstance(n, ast.Constant) and (type(n.value) is not int or n.value < 0)
+                       for n in ast.walk(lam.body))):
+            raise ValueError(f"unsupported mapping in referenced layout helper {h.name}")
+    return helpers
 
 
 def pinned_roots():
@@ -97,15 +153,12 @@ def pinned_roots():
             if not decorators:
                 continue
             function.decorator_list = decorators
-            helper = None
-            spans = []
-            if function.name in LAYOUT_CLIENTS:
-                helper = next(f for f in functions if f.name == "make_dq_layout")
-                spans.append((helper.lineno, helper.end_lineno))
+            helpers = referenced_layouts(function, functions)
+            spans = [(h.lineno, h.end_lineno) for h in helpers]
             spans.append((decorators[0].lineno, function.end_lineno))
             # Slice the original verified bytes independently of the quotation printer.
             source = "\n\n".join("\n".join(lines[a - 1:b]) for a, b in spans)
-            roots.append(Root(path, function, helper, spans, source))
+            roots.append(Root(path, function, helpers, spans, source))
     if len(roots) != 9:
         raise ValueError(f"expected nine JIT roots; found {len(roots)}")
     return roots
@@ -116,20 +169,24 @@ def generate(roots):
     tests = []
     for i, root in enumerate(roots, 1):
         ranges[root.path].extend(f"{a}-{b}" for a, b in root.spans)
-        functions = ([root.helper] if root.helper else []) + [root.function]
+        functions = [*root.helpers, root.function]
         body = ";\n  ".join(stmt(f, 1) for f in functions)
         # Both fused MoE eager roots have two top-level kernels (T1).
         expected = "false" if i in (6, 7) else "true"
         tests.append(f"-- Census root {i}, {root.path}, {root.function.name}.\n"
                      f"private def pinnedRoot{i} : Program := tilelang {{\n  {body}\n}}\n"
-                     f"#guard pinnedRoot{i}.accepted == {expected}")
+                     f"example : pinnedRoot{i}.accepted = {expected} := by decide +kernel")
     sites = [f"tile-ai/tilelang@{PIN} examples/{p}:" + ",".join(dict.fromkeys(v))
              for p, v in ranges.items()]
     header = ("-- Source: " + "; ".join(sites) + "\n-- Licence: MIT\n"
               "-- Changes: transcribed to Lean; nine original JIT roots with their referenced layout helper\n"
               "import VeriTile.TileLang\n\nopen VeriTile.TileLang\n"
               "\n-- Generated by scripts/transcribe_tilelang_roots.py from verified upstream blobs.\n")
-    return (header + "\n" + "\n\n".join(tests) + "\n").encode()
+    footer = ("namespace VeriTile.TileLang.PinnedRoots\n\n"
+              "def programs : List Program := [" + ", ".join(f"pinnedRoot{i}" for i in range(1, 10))
+              + "]\n\nend VeriTile.TileLang.PinnedRoots\n")
+    return (header + "\nset_option maxRecDepth 16384\nset_option maxHeartbeats 16000000\n\n"
+            + "\n\n".join(tests) + "\n\n" + footer).encode()
 
 
 def as_python(quotation):
@@ -170,7 +227,7 @@ def check_reverse(generated, roots):
     text = generated.decode()
     for i, root in enumerate(roots, 1):
         start = f"private def pinnedRoot{i} : Program := "
-        end = f"\n#guard pinnedRoot{i}.accepted"
+        end = f"\nexample : pinnedRoot{i}.accepted"
         if text.count(start) != 1 or text.count(end) != 1:
             raise ValueError(f"expected one public quotation for root {i}")
         quotation = text.split(start, 1)[1].split(end, 1)[0]
@@ -183,13 +240,38 @@ def check_reverse(generated, roots):
             raise ValueError(f"reverse transcription differs from pinned {root.path}::{root.function.name}")
 
 
+def check_typed(roots):
+    """Compare the elaborated Lean Programs, rendered by an independent client, with the pin."""
+    subprocess.run(["lake", "build", "VeriTileTileLang"], cwd=ROOT, check=True)
+    with tempfile.TemporaryDirectory(prefix="tilelang-typed-roots-") as tmp:
+        module = Path(tmp) / "tests/lean/TileLangPinnedRoots.olean"
+        module.parent.mkdir(parents=True)
+        subprocess.run(["lake", "env", "lean", "-o", str(module), str(OUTPUT)], cwd=ROOT, check=True)
+        lake_path = subprocess.check_output(["lake", "env", "printenv", "LEAN_PATH"],
+                                            cwd=ROOT, text=True).strip()
+        search_path = os.pathsep.join((tmp, lake_path))
+        output = subprocess.check_output(
+            ["lake", "env", "env", f"LEAN_PATH={search_path}", "lean", "--run",
+             "tests/lean/TileLangTypedRoundTrip.lean"], cwd=ROOT, text=True)
+    sources = json.loads(output)
+    if len(sources) != len(roots):
+        raise ValueError(f"typed client returned {len(sources)} roots, expected {len(roots)}")
+    for index, (source, root) in enumerate(zip(sources, roots), 1):
+        if ast.dump(ast.parse(source)) != ast.dump(ast.parse(root.source)):
+            raise ValueError(f"typed Program differs from pinned root {index}: {root.function.name}")
+    print("all nine elaborated Programs match the Python ASTs of the pinned source spans")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="check reverse source and forward bytes")
+    parser.add_argument("--check-typed", action="store_true", help="round-trip the elaborated Programs")
     args = parser.parse_args()
     roots = pinned_roots()
     generated = generate(roots)
-    if args.check:
+    if args.check_typed:
+        check_typed(roots)
+    elif args.check:
         actual = OUTPUT.read_bytes()
         check_reverse(actual, roots)
         if actual != generated:

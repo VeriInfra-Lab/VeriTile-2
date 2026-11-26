@@ -1,4 +1,5 @@
 """Exercise the two independent directions of the pinned TileLang transcriber."""
+import ast
 import unittest
 from unittest.mock import patch
 
@@ -30,6 +31,21 @@ class PinnedTranscription(unittest.TestCase):
         wrong = self.committed.replace(b"  def make_dq_layout", b"  @T.macro def make_dq_layout", 1)
         with self.assertRaisesRegex(ValueError, "reverse transcription differs.*flashattn_bwd_postprocess"):
             transcriber.check_reverse(wrong, self.roots)
+
+    def test_selects_referenced_pure_helpers_by_name(self):
+        module = ast.parse("""
+def first(buf): return T.Layout(buf.shape, lambda i: i)
+def second(buf): return T.Layout(buf.shape, lambda i, j: (j, i))
+def unused(buf): raise RuntimeError()
+def kernel(X):
+    T.annotate_layout({X: second(X)})
+    T.annotate_layout({X: first(X)})
+""").body
+        self.assertEqual([h.name for h in transcriber.referenced_layouts(module[-1], module)],
+                         ["first", "second"])
+        module[-1].body.append(ast.parse("unused(X)").body[0])
+        with self.assertRaisesRegex(ValueError, "unsupported referenced layout helper unused"):
+            transcriber.referenced_layouts(module[-1], module)
 
     def test_formatting_only_drift(self):
         # Reverse normalization ignores parentheses, while forward bytes still detect drift.
