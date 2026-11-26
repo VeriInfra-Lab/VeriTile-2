@@ -1,17 +1,59 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["jsonschema==4.25.1"]
+# ///
 """Run a file-backed example through the normal veritile-run entry point."""
 import argparse
+import ast
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 
-from jsonschema import Draft7Validator
+from jsonschema import Draft7Validator, ValidationError
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
 from interp import tensorfile
+
+
+def check_kernel(kernel):
+    source, function = kernel["source"].rsplit("::", 1)
+    path = Path(source)
+    if path.is_absolute() or not (ROOT / path).resolve().is_relative_to(ROOT):
+        raise ValueError(f"{kernel['name']}: kernel.source must be repository-relative: {source}")
+    if not (ROOT / path).is_file():
+        raise ValueError(f"{kernel['name']}: kernel.source file does not exist: {source}")
+    module = ast.parse((ROOT / path).read_text(), filename=source)
+    functions = [node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == function]
+    decorators = [dec.func if isinstance(dec, ast.Call) else dec
+                  for node in functions for dec in node.decorator_list]
+    if not any(ast.unparse(dec) == "triton.jit" for dec in decorators):
+        raise ValueError(f"{kernel['name']}: kernel.source is not a top-level @triton.jit function: {kernel['source']}")
+
+    # Lean declaration namespaces use VeriTile.Bench.Examples, while Lake module
+    # paths for these mirrors start at bench/examples. Resolve the actual
+    # declaration in the compiled environment, including its declared name.
+    name = kernel["lean"]
+    prefix = "VeriTile.Bench.Examples."
+    parts = name.removeprefix(prefix).split(".")
+    if not name.startswith(prefix) or len(parts) < 3 or not all(
+            re.fullmatch(r"[A-Za-z_][A-Za-z0-9_']*", part) for part in parts):
+        raise ValueError(f"{kernel['name']}: invalid qualified kernel.lean example name: {name}")
+    module_path = Path("bench", "examples", *parts[:-1])
+    if not (ROOT / module_path.with_suffix(".lean")).is_file():
+        raise ValueError(f"{kernel['name']}: kernel.lean file does not exist: {module_path}.lean")
+    if path.parent != module_path.parent:
+        raise ValueError(f"{kernel['name']}: kernel.lean and kernel.source name different example directories")
+    lookup = f"import {'.'.join(module_path.parts)}\n#check @{name}\n"
+    checked = subprocess.run(["lake", "env", "lean", "--stdin"], cwd=ROOT, input=lookup,
+                             capture_output=True, text=True)
+    if checked.returncode:
+        raise ValueError(f"{kernel['name']}: kernel.lean lookup failed for {name}: "
+                         + (checked.stdout + checked.stderr).strip())
 
 
 def check_layout(path, descriptor):
@@ -24,6 +66,9 @@ def run_case(spec, case, runner, work):
     kernel = spec["kernel"]["name"]
     output, = spec["output_buffers"]
     inputs = case["inputs"]
+    for arg in spec["arguments"]:
+        if "value" in arg:
+            raise ValueError(f"{kernel}: scalar argument {arg['parameter']!r} is unsupported by the file runner")
     ports = [arg["buffer"] for arg in spec["arguments"]]
     if (len(ports) != len(inputs) + 1 or set(ports[:-1]) != inputs.keys()
             or ports[-1] != output["name"] or case["expected"].keys() != {output["name"]}):
@@ -56,11 +101,15 @@ def main():
     args = parser.parse_args()
     validator = Draft7Validator(json.loads((HERE.parent / "schema.json").read_text()))
     for path in args.spec or sorted(HERE.glob("*.json")):
-        spec = json.loads(path.read_text())
-        validator.validate(spec)
-        for case in spec["input_classes"]:
-            with tempfile.TemporaryDirectory(prefix="veritile-spec-") as work:
-                run_case(spec, case, args.runner.resolve(), Path(work))
+        try:
+            spec = json.loads(path.read_text())
+            validator.validate(spec)
+            check_kernel(spec["kernel"])
+            for case in spec["input_classes"]:
+                with tempfile.TemporaryDirectory(prefix="veritile-spec-") as work:
+                    run_case(spec, case, args.runner.resolve(), Path(work))
+        except (ValueError, OSError, SyntaxError, ValidationError, subprocess.CalledProcessError) as exc:
+            parser.exit(1, f"{path}: {exc}\n")
 
 
 if __name__ == "__main__":
