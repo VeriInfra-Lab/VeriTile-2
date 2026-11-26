@@ -1,0 +1,33 @@
+# Accepted command-level metaprogramming (macro, macro_rules, syntax, elab,
+# elab_rules, notation, infix, infixl, infixr, prefix, postfix) in tests/lean
+# sources. Checked by scripts/check_test_sorry.py --sources.
+#
+# Format (tab-separated):
+#   tests/lean/File.lean	name	one-line reason
+#
+# The name is the declared atom or identifier (`(name := n)` if given), or
+# `macro_rules`. A metaprogram can assemble a `sorry` or a hiding #guard_msgs
+# from pieces no source rule sees, so each entry is reviewed like gate code.
+# Kept apart from test-sorry-allowlist.txt so that an accepted macro name does
+# not exempt the lines that use it from the sorry rules.
+tests/lean/ConditionalCast.lean	cast_run_simp	tactic macro: the shared simp set of the conditional-cast runs
+tests/lean/DTypeLayoutHints.lean	hintedPointer%	term syntax for the dtype-hinted pointer source fixture
+tests/lean/DTypeLayoutHints.lean	macro_rules	expands hintedPointer% into its triton source
+tests/lean/FPMultinomialSource.lean	multinomialFrontend%	term syntax for the multinomial frontend source per storage dtype
+tests/lean/FPMultinomialSource.lean	macro_rules	expands multinomialFrontend% into its triton source
+tests/lean/InterpBridgeCensus.lean	certify	tactic macro: proves each census kernel's finite-bridge Code certificate
+tests/lean/InterpBridgeInvariant.lean	finite_code	tactic macro: follows a transcribed kernel's syntax to build its Code proof
+tests/lean/InterpBridgeInvariant.lean	check_sites	tactic macro: discharges the checked-expression side conditions
+tests/lean/IsfiniteBlockLoadCast.lean	finiteBlockLoad%	term macro for the isfinite block-load source per storage dtype and mode
+tests/lean/IsfiniteHelperSource.lean	finiteHelperSource%	term syntax for the isfinite helper source per storage dtype
+tests/lean/IsfiniteHelperSource.lean	macro_rules	expands finiteHelperSource% into its triton source
+tests/lean/IsfinitePointerElementCast.lean	pointerTypeCase%	term macro for the isfinite pointer-element-cast source per storage dtype
+tests/lean/PointerElementCast.lean	pointerCast%	term macro for the pointer-element cast source per dtype and version
+tests/lean/PointerElementCast.lean	rebound%	term macro for the rebound cast source per version
+tests/lean/ReduceMaxPromotion.lean	smallMax%	term syntax for the small-dtype max source
+tests/lean/ReduceMaxPromotion.lean	macro_rules	expands smallMax% into its triton source
+tests/lean/RegisterDTypeWhere.lean	registerCast%	term macro for the register-dtype cast source
+tests/lean/RegisterDTypeWhere.lean	explicitCast%	term macro for the explicit-cast source
+tests/lean/ScalarPrecision.lean	scalarMultiply%	term syntax for the scalar-multiply source per dtype
+tests/lean/ScalarPrecision.lean	macro_rules	expands scalarMultiply% into its triton source
+tests/lean/StaticConditions.lean	static_run_simp	tactic macro: the shared simp set of the static-condition runs
