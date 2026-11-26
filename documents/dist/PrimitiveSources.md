@@ -1105,8 +1105,8 @@ were open in the first form of this block; the user decided each on
   nothing either way (I2). What the barrier gives tutorial 01 is the order
   from each thread's store to the notify of the one thread (LIT-b03). Whether
   a chain through that edge, which has block scope, reaches a consumer on
-  another rank is the scope check of ticket S5.2 (header of
-  `EventSpec.lean`). The two waits of tutorial 01 are at scope `gpu` on words
+  another rank is the scope check of ticket S5.2
+  ([`SyncEdge.covers`](../../VeriTile/Dist/Event/Access.lean)). The two waits of tutorial 01 are at scope `gpu` on words
   that a thread of another rank writes (`T01:88–96`, `T01:126–133`); I3 still
   gives them no edge (LIT-b02).
 - I8. A4 and A5. A4 gives `T.sync_threads(id, count)` a rendezvous and no
