@@ -17,13 +17,13 @@ scoped syntax lookahead(ident) &"dl.symm_at" "(" tritonExpr "," tritonExpr ")" :
 scoped syntax lookahead(ident) &"dl.wait" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : distributedCallExpr
 scoped syntax lookahead(ident) &"dl.wait" "(" tritonExpr "," tritonExpr "," &"scope" "=" tritonExpr "," &"semantic" "=" tritonExpr "," &"waitValue" "=" tritonExpr ")" : distributedCallExpr
 scoped syntax lookahead(ident) &"dl.wait" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr "," &"waitValue" "=" tritonExpr ")" : distributedCallExpr
-scoped syntax (name := pendingDistributedExpr) (priority := high) distributedCallExpr : tritonExpr
+scoped syntax (name := dlExpr) (priority := high) distributedCallExpr : tritonExpr
 
 declare_syntax_cat distributedCallStmt
 scoped syntax lookahead(ident) &"dl.notify" "(" tritonExpr "," tritonExpr "," &"signal" "=" tritonExpr "," &"sig_op" "=" tritonExpr "," &"comm_scope" "=" tritonExpr ")" : distributedCallStmt
 scoped syntax lookahead(ident) &"dl.notify" "(" tritonExpr "," tritonExpr "," &"signal" "=" tritonExpr "," &"comm_scope" "=" tritonExpr ")" : distributedCallStmt
 scoped syntax "with" lookahead(ident) &"dl.simt_exec_region" "(" ")" "as" "(" ident "," ident ")" "{" tritonStmt* "}" : distributedCallStmt
-scoped syntax (name := pendingDistributedStmt) (priority := high) distributedCallStmt : tritonStmt
+scoped syntax (name := dlStmt) (priority := high) distributedCallStmt : tritonStmt
 
 declare_syntax_cat shmemCallStmt
 scoped syntax lookahead(ident) &"libshmem_device.barrier_all_block" "(" ")" : shmemCallStmt
@@ -85,16 +85,20 @@ scoped syntax (name := pendingProfilerStmt) (priority := high) profilerCallStmt 
 -- without registering them as global tokens. The existing `tl.atomic_add(` token is reused.
 private def owner? (k : Name) : Option String :=
   match k with
-  | ``pendingDistributedExpr | ``pendingDistributedStmt => some "#79"
   | ``pendingShmemStmt => some "#80"
   | ``pendingExtraExpr | ``pendingExtraStmt => some "#81"
   | ``pendingCommonStmt => some "#82"
   | ``pendingProfilerExpr | ``pendingProfilerStmt => some "#452"
   | _ => none
 
+/-- Preserve pending-family diagnostics when another frontend handles the block. -/
+def checkPendingCalls (stx : Syntax) : TermElabM Unit := do
+  if let some call := stx.find? fun s => (owner? s.getKind).isSome then
+    throwErrorAt call "not implemented: {(owner? call.getKind).get!}"
+
 @[scoped term_elab VeriTile.Triton.DSL.tritonBlock]
 def pending : TermElab := fun stx _ => do
-  let some call := stx.find? fun s => (owner? s.getKind).isSome | throwUnsupportedSyntax
-  throwErrorAt call "not implemented: {(owner? call.getKind).get!}"
+  checkPendingCalls stx
+  throwUnsupportedSyntax
 
 end VeriTile.Dist.Frontend.TritonDist
