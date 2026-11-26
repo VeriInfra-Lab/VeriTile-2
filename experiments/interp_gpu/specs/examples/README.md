@@ -1,13 +1,13 @@
 # Interpreter example specs
 
-Build the file runner from the repository root, then execute the specs with Python 3 and `jsonschema` (draft 7).
+Build the file runner from the repository root, then execute the specs with uv. The script declares its Draft 7 validator, `jsonschema==4.25.1`.
 
 ```sh
 lake build veritile-run
-python3 experiments/interp_gpu/specs/examples/run.py
+uv run --no-project --python 3.11 --script experiments/interp_gpu/specs/examples/run.py
 ```
 
-Pass specific JSON paths to select examples. The driver validates each [spec](../schema.json), reads the declared version-1 input tensors and calls the public executable with its grid, carrier and ordered files. It reads each returned tensor, checks its declared dtype and shape, and compares the complete bytes with the case's independent fixture. It creates and removes a temporary directory per case. The optional Triton launch fields document the corresponding GPU launch configuration. This command runs locally on the CPU.
+Pass specific JSON paths to select examples. The driver validates each [spec](../schema.json), checks the qualified Lean declaration and the top-level `@triton.jit` function in the checked-out example source, reads the declared version-1 input tensors and calls the public executable with its grid, carrier and ordered files. It reads each returned tensor, checks its declared dtype and shape, and compares the complete bytes with the case's independent fixture. It creates and removes a temporary directory per case. The optional Triton launch fields document the corresponding GPU launch configuration. This command runs locally on the CPU.
 
 [VectorAdd](VectorAdd.json) runs two programs over aligned FP32 vectors of length four. [OnlineSoftmax](OnlineSoftmax.json) runs one program per row on equal, increasing and decreasing pairs. Two rows produce underflow at one lane. The expected buffers are the checked-in file-runner fixtures.
 
