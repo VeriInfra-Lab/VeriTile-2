@@ -66,10 +66,9 @@ theorem prefixBound {n h} (p : Prefix n h) : n ≤ 11 := by
   | noise _ _ ih => exact ih
   | advance _ bound _ => omega
 
-local macro "phase_cases " n:ident : tactic => `(tactic|
-  (have phases : $n = 0 ∨ $n = 1 ∨ $n = 2 ∨ $n = 3 ∨ $n = 4 ∨ $n = 5 ∨
-      $n = 6 ∨ $n = 7 ∨ $n = 8 ∨ $n = 9 ∨ $n = 10 := by omega
-   rcases phases with hyp | hyp | hyp | hyp | hyp | hyp | hyp | hyp | hyp | hyp | hyp <;> subst $n))
+private theorem phaseCases {n : Nat} (bound : n < 11) :
+    n = 0 ∨ n = 1 ∨ n = 2 ∨ n = 3 ∨ n = 4 ∨ n = 5 ∨
+    n = 6 ∨ n = 7 ∨ n = 8 ∨ n = 9 ∨ n = 10 := by omega
 
 private abbrev queue := Q1 rel
 private def puts (n : Nat) : Nat := if 6 < n then 2 else if 0 < n then 1 else 0
@@ -92,7 +91,7 @@ private theorem stats {n h} (p : Prefix n h) :
   | @advance n h prev bound ih =>
     obtain ⟨wp,rd,pub⟩ := ih
     simp only [List.countP_append, List.filterMap_append, List.getLast?_append, wp, rd, pub]
-    phase_cases n <;> exact ⟨rfl,rfl,rfl⟩
+    rcases phaseCases (n := n) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> exact ⟨rfl,rfl,rfl⟩
 
 private theorem slotWrite {n h k i} (p : Prefix n h) (atPut : queue.view.Put h k i) :
     (k = 0 ∧ Prefix 0 (h.take i) ∧ h[i]? = some (milestone 0)) ∨
@@ -105,7 +104,7 @@ private theorem slotWrite {n h k i} (p : Prefix n h) (atPut : queue.view.Put h k
   · change (h.take i).countP queue.isPut = k at count
     rw [(stats before).1] at count
     have := prefixBound p
-    phase_cases m <;> first | contradiction | exact Or.inl ⟨count.symm,before,hx⟩ |
+    rcases phaseCases (n := m) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | exact Or.inl ⟨count.symm,before,hx⟩ |
       exact Or.inr ⟨count.symm,before,hx⟩
 
 private theorem slotRead {n h k j} (p : Prefix n h) (atTake : queue.view.Take h k j) :
@@ -119,24 +118,24 @@ private theorem slotRead {n h k j} (p : Prefix n h) (atTake : queue.view.Take h 
   · change (h.take j).countP queue.isTake = k at count
     rw [(stats before).2.1] at count
     have := prefixBound p
-    phase_cases m <;> first | contradiction | exact Or.inl ⟨count.symm,before,hx⟩ |
+    rcases phaseCases (n := m) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | exact Or.inl ⟨count.symm,before,hx⟩ |
       exact Or.inr ⟨count.symm,before,hx⟩
 
 private theorem alwaysAllowed {m} (bounded : m < 11) : queue.Allowed (milestone m) := by
-  phase_cases m <;>
+  rcases phaseCases (n := m) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
     simp [milestone, IndexQueue.Allowed, writeSlot, readSlot, publishTail, storeHead,
       loadTail, waitRoom, Q1, IndexQueue.isSlot, List.finRange_succ, List.finRange_zero]
 
 private theorem releaseValue {m v} (bounded : m < 11)
     (ev : milestone m = .issued sender ⟨sender, .access .store tail rel, .store v⟩) :
     v.readAs .nat = some (puts m) := by
-  phase_cases m <;> first | (cases ev <;> rfl) |
+  rcases phaseCases (n := m) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> first | (cases ev <;> rfl) |
     (simp [milestone, writeSlot, slot, tail] at ev)
 
 private theorem ackValue {m v} (bounded : m < 11)
     (ev : milestone m = .issued receiver ⟨receiver, .access .store head rel, .store v⟩) :
     v.readAs .nat = some (takes m) := by
-  phase_cases m <;> cases ev <;> rfl
+  rcases phaseCases (n := m) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> cases ev <;> rfl
 
 private theorem earlierMilestone {phase j m : Nat} {h : History} (before : Prefix phase (h.take j)) (hm : m < phase) :
     ∃ i, i < j ∧ h[i]? = some (milestone m) ∧ Prefix m (h.take i) := by

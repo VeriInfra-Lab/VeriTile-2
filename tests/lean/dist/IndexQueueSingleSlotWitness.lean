@@ -44,16 +44,6 @@ private theorem accessOK' (ack : Mode) (w : CellWrites) (e : Emission)
     e.event.AccessibleBy (launch ack w).symm e.actor :=
   fun kd p m hm => DeepEPChannel.reachable _ _ (h (kd, p, m) hm)
 
-local macro "noTransfer" : tactic =>
-  `(tactic| exact fun _ _ _ _ => notInFlight _ _ (by
-      simp [Machine.trace, opened, fired, Launch.initial, segOcc, Occurrence.event?, loadTail,
-        writeSlot, publishTail, waitRoom, readSlot, storeHead]))
-
-local macro "atPC" : tactic =>
-  `(tactic| simp [fired, opened, Launch.initial, launch, Function.update, sender, receiver, more,
-      tokens, afterPoll, CellWrites.read_same])
-
-
 private theorem finishTurn (w : CellWrites) (s : Config PC) (a : Agent)
     (ready : s.pc a = some (.ready .done)) :
     Run (launch rel w) s [.agent a] (opened rel s a .done) :=
@@ -113,31 +103,15 @@ theorem completeScheduled (w : CellWrites) (s : DistState) :
     (oneEvent rel w _ receiver (.ack 1) (storeHead rel receiver 1) (fun _ => more 1 (.poll 2)) _ _ ?_ rfl rfl rfl
       (accessOK' rel w _ (by simp [storeHead, Event.accesses, head])) ?_ (.store _ _ _ _))
     (appendRuns (finishTurn w _ sender ?_) (finishTurn w _ receiver ?_)))))))))))), ?_, ?_⟩
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · simp [Machine.count?, fired, opened, Launch.initial, launch, CellWrites.read_same, storeHead]
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · noTransfer
-  · atPC
-  · atPC
+  all_goals first
+    | exact allMilestones
+    | exact fun _ _ _ _ => notInFlight _ _ (by
+        simp [Machine.trace, opened, fired, Launch.initial, segOcc, Occurrence.event?, loadTail,
+          writeSlot, publishTail, waitRoom, readSlot, storeHead])
+    | solve | simp [fired, opened, Launch.initial, launch, Function.update, sender, receiver,
+          more, tokens, afterPoll, CellWrites.read_same]
+    | solve | simp [Machine.count?, fired, opened, Launch.initial, launch, CellWrites.read_same, storeHead]
+    | skip
   · constructor
     · intro a
       by_cases hs : a = sender
@@ -146,7 +120,6 @@ theorem completeScheduled (w : CellWrites) (s : DistState) :
       · subst a; simp [opened, Function.update, nextOf, Next.cursor]
       simp [opened, fired, Function.update, Launch.initial, launch, hs, hr]
     · simp [fired, opened, Launch.initial]
-  · exact allMilestones
 
 #print axioms completeScheduled
 
