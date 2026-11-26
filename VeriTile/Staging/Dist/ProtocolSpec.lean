@@ -74,6 +74,23 @@ theorem launch_realizes (env : Launch P) (body : Agent → Option (List Instr)) 
   intro a
   cases h : body a <;> simp [launch, h]
 
+/-- Realizes checks only the encoded source cursors. A fresh, unreachable
+cursor can emit an event for a different rank and invalidate SoundLaunch.groups
+without changing any protocol action or environmental obligation. Thus the
+four protocol results need launch soundness as an input to establish Safe. -/
+theorem realizes_without_sound (env : Launch (Option (List Instr))) (body : Agent → Option (List Instr))
+    (s : DistState) : ∃ l : Launch (Option (List Instr)), Realizes l body ∧ ¬ SoundLaunch l := by
+  let foreign : Emission := ⟨.rank 1, .fence .plain, .noValue⟩
+  let l : Launch (Option (List Instr)) := { env with
+    start := fun a => (body a).map some
+    program := fun a => ⟨fun _ => idleSegment a, fun pc _ => match pc with
+      | some code => nextAction a some code
+      | none => .emitGroup foreign [] (fun _ => none)⟩ }
+  refine ⟨l, ⟨fun _ => some, fun _ => rfl, fun _ _ _ _ _ => ⟨rfl, fun _ => rfl⟩⟩, ?_⟩
+  intro sound
+  have owner := (sound.groups (.rank 0) none s foreign [] (fun _ => none) rfl).2 foreign (by simp)
+  exact (by decide : ¬ (Agent.rank 1).within (.rank 0)) owner
+
 private theorem withinSelf (a : Agent) : a.within a := by
   cases a <;> simp [Agent.within, Agent.cta?, Agent.rankOf]
 
@@ -224,10 +241,15 @@ theorem Projection.completed {source : Launch P} {target : Launch Q}
     obtain ⟨bs, dest, hb, hd⟩ := ih hm
     exact ⟨as ++ bs, dest, appendRun ha hb, hd⟩
 
-/-- Race freedom on all prefixes, existence of a completing schedule, and the
-specified memory observation for every completing schedule. -/
+/-- A sound launch, race and fault freedom on all prefixes, existence of a
+completing schedule, and the specified memory observation on every completion. -/
 def Outcome (l : Launch P) (s : DistState) (post : DistState → Prop) : Prop :=
   ImplementsAll l s (fun final => post final.mem) ∧ Completes l s
+
+/-- The three safety obligations established by every protocol outcome. -/
+theorem Outcome.safety (h : Outcome l s post) :
+    SoundLaunch l ∧ DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final :=
+  h.1.1
 
 namespace Examples
 
