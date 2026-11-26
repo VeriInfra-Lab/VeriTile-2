@@ -194,7 +194,7 @@ def signatureNames (signature : Syntax) : TermElabM (List Name × List Name) := 
     | .ok body => pure body
     | .error e => throwErrorAt raw "{e}"
   let parsed ← if caller.isOfKind ``CallSignature.withCall &&
-      (source.contains "get_element_at" || source.contains "tl.cumsum" || source.contains "tl.sum") then do
+      (source.contains "get_element_at" || source.contains "tl.cumsum" || source.contains "tl.sum" || source.contains "tl.cdiv") then do
     let (next, _) ← SignedSum.prepare caller[1] parsed fun arg => do
       let some (name, args) := call? arg | return none
       unless name == `get_element_at do return none
