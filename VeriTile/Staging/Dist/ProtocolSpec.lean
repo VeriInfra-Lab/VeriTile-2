@@ -714,7 +714,7 @@ private def orderedChoices : List Agent :=
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 6000000 in
-/-- Replay ten items on three slots, including both parity wraps and both
+/-- Replay ten items on three slots, spanning four epochs and both
 participants' return steps. The entire final memory equals the independent
 sequential fold, including every full/empty word and all untouched cells. -/
 theorem threeStage_complete_replay :
@@ -737,7 +737,11 @@ theorem threeStage_complete_replay :
   · intro o member
     rw [w.1.pending] at member
     cases member
-  · rfl
+  · -- Check the last reuse of slot zero before comparing the entire memory.
+    let empty0 := threeStage.address (.empty ⟨0, by decide⟩)
+    guard_expr (decide ((w.1.cfg.mem.cell empty0).readAs .nat =
+      ((threeStage.sequential writes threeStageInitial).cell empty0).readAs .nat)) =~ true
+    rfl
 
 end ParityRace
 
