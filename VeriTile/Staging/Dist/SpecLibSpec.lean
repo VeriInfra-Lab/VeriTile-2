@@ -188,7 +188,14 @@ theorem moeCombine_of_moeDispatch {numRanks numTokens : Nat} {ι : Type}
     (hback : MoEStoreBack rows results back)
     (horder : ∀ s t, ∀ d ∈ (order s t).leaves, d ∈ R.dest s t) :
     moeCombine order back =
-      fun s i => (order s i.1).eval fun d => R.weight s i.1 d * tokens s i := sorry
+      fun s i => (order s i.1).eval fun d => R.weight s i.1 d * tokens s i := by
+  funext s ⟨t, j⟩
+  simp only [moeCombine, ReduceOrder.eval_eq_sum_leaves]
+  apply congrArg List.sum
+  apply List.map_congr_left
+  intro d hd
+  obtain ⟨p, row, _⟩ := hdispatch.1.existsUnique_row s t d (horder s t d hd)
+  rw [hback d p s t row j, hexpert d p s t row j, hdispatch.2 d p s t row j]
 
 /-- UNSIGNED. Owner: S7.5. The attention result of one query row over one
 chunk of keys: `weight` is the softmax denominator, the sum of the

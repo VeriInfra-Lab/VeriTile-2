@@ -148,6 +148,15 @@ example : observeOne (waitEQ (signalArgs .i64 .i64 (2^63))) (.of .int (-(2^63)))
 example : ((observeOne (waitEQ (signalArgs .u64 .u64 (-1))) (.of .nat (2^64-1))).map
     (Option.map BitVec.toInt)) = .ok (some (-1)) := rfl
 
+-- NV:581 accepts both source integer ranges before conversion to uint64.
+example : observeOne (waitEQ (signalArgs .i64 .i64 (-(2^63)))) (.of .int (-(2^63))) =
+    .ok (some 0x8000000000000000) := rfl
+example : waitEQ (signalArgs .i64 .i64 (-(2^63) - 1)) =
+    .error "signal wait: target outside int64 and uint64 ranges" := rfl
+example : (with_pointer_views (signalArgs .u64 .u64 0) in triton {
+    libshmem_device.signal_wait_until(symm_flag + peer, libshmem_device.NVSHMEM_CMP_EQ, 18446744073709551616)
+  }) = .error "signal wait: target outside int64 and uint64 ranges" := rfl
+
 private def orderings := with_pointer_views (signalArgs .i64 .i64 7) in triton {
   u = tl.cast(symm_flag, pi_u64_t, _semantic=_semantic)
   libshmem_device.signal_wait_until(u + peer, libshmem_device.NVSHMEM_CMP_NE, signal_value)

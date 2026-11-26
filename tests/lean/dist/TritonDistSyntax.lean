@@ -1,4 +1,4 @@
-import VeriTile.Dist.Frontend.TritonDist.Syntax
+import VeriTile.Dist.Frontend.TritonDist.DL
 
 namespace VeriTile.Tests.TritonDistSyntax
 open Lean Elab Command
@@ -9,9 +9,9 @@ private def forms : List (String × String) := [
   ("x = dl.num_ranks()", "#79"),
   ("x = dl.rank()", "#79"),
   ("x = dl.symm_at(p, v)", "#79"),
-  ("x = dl.wait(p, v, n, q)", "#79"),
+  ("x = dl.wait(p, v, \"gpu\", \"acquire\")", "#79"),
   ("x = dl.wait(p, v, scope=\"gpu\", semantic=\"acquire\", waitValue=v)", "#79"),
-  ("x = dl.wait(p, v, n, q, waitValue=v)", "#79"),
+  ("x = dl.wait(p, v, \"gpu\", \"acquire\", waitValue=v)", "#79"),
   ("dl.notify(p, v, signal=v, sig_op=\"set\", comm_scope=\"gpu\")", "#79"),
   ("dl.notify(p, v, signal=v, comm_scope=\"gpu\")", "#79"),
   ("with dl.simt_exec_region() as (lane, size) { x = lane }", "#79"),
@@ -90,8 +90,9 @@ run_cmd for (body, ticket) in forms do
   let .ok stx := parseBlock (← getEnv) body | throwError "failed to parse: {body}"
   unless hasDistNode stx do throwError "upstream fallback for distributed call: {body}"
   let diagnostic ← diagnosticOf stx
-  unless diagnostic == "not implemented: " ++ ticket do
-    throwError "{body}: expected {ticket}, got {diagnostic}"
+  let expected := if ticket == "#79" then "" else "not implemented: " ++ ticket
+  unless diagnostic == expected do
+    throwError "{body}: expected '{expected}', got '{diagnostic}'"
 
 -- Excluded surface names from PrimitiveSources §§5.1–5.8. Exercise both statement
 -- and value positions without counting a generic upstream identifier-call as a distributed form.
@@ -127,6 +128,13 @@ run_cmd for (qualifier, names) in excluded do
           let diagnostic ← diagnosticOf stx
           unless valuePosition && (args.isEmpty || args == "p") && diagnostic == expected do
             throwError "{body}: unexpected elaborator diagnostic: {diagnostic}"
+          let mixed := "r = dl.rank() " ++ body
+          let .ok mixedStx := parseBlock (← getEnv) mixed
+            | throwError "{mixed}: expected mixed block to parse"
+          let mixedDiagnostic ← diagnosticOf mixedStx
+          unless (if args.isEmpty then mixedDiagnostic.startsWith "unexpected syntax"
+                  else mixedDiagnostic == expected) do
+            throwError "{mixed}: unexpected mixed-block diagnostic: {mixedDiagnostic}"
 
 /-- error: tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, `boundary_check`, `padding_option`, and `eviction_policy` are recognized. -/
 #guard_msgs in
@@ -137,5 +145,173 @@ run_cmd for (qualifier, names) in excluded do
 /-- error: random source helper requires an explicit tl.source_helper binding -/
 #guard_msgs in
 #check (triton { x = dl.allocate_smem(1) } : ComputeKernel)
+
+open VeriTile.Dist
+open VeriTile.Dist.Frontend.TritonDist
+
+private def inputWord : Addr := ⟨.global 1, ⟨"signal"⟩, 9⟩
+private def peerWord : Addr := ⟨.global 2, ⟨"signal"⟩, 9⟩
+private def context : DL.CallContext where
+  agent := .thread ⟨1, [0]⟩ 0 3
+  numRanks := 4
+  blockSize := 32
+  symmetric := fun _ => Bool.true
+  evalAddr := fun _ => some inputWord
+  evalNat := fun stx =>
+    match stx[0][0].getAtomVal with
+    | "1" => some 1
+    | "2" => some 2
+    | "7" => some 7
+    | "11" => some 11
+    | _ => none
+
+private def lower (source : DL.Source) : List (Option DL.Result) :=
+  source.sites.map fun site => site.call.lower context
+
+example :
+    lower (triton {
+      r = dl.rank()
+      n = dl.num_ranks()
+      peer = dl.symm_at(signal, 2)
+      with dl.simt_exec_region() as (lane, size) { x = lane }
+    }) = [some (.scalar 1), some (.scalar 4), some (.address peerWord),
+      some (.simt `lane `size 3 32)] := rfl
+
+example :
+    lower (triton {
+      dl.notify(signal, 2, signal=11, comm_scope="intra_node")
+      dl.notify(signal, 2, signal=7, sig_op="add", comm_scope="gpu")
+    }) = [some (.event (.bump ⟨.word peerWord, .set, 11, .atomic .sys .release⟩)),
+      some (.event (.bump ⟨.word peerWord, .add, 7, .atomic .gpu .release⟩))] := rfl
+
+private def waitModes (source : DL.Source) : List (VeriTile.Dist.Scope × MemOrder) :=
+  source.sites.filterMap fun site => match site.call with
+    | .wait _ _ _ scope order => some (scope, order)
+    | _ => none
+
+-- Reduced excerpts of tutorial 01 at the TD pin, L88–96 and L126–133.
+-- Operands are renamed and the surrounding non-DL statements are omitted.
+theorem tutorial01GpuWaitModes :
+    waitModes (triton {
+      if pid < n {
+        for j in range(pid, count, stride) {
+          token = dl.wait(dl.symm_at(flag, peer) + offset, 1, "gpu", "acquire", waitValue=round * 2)
+          payload = dl.consume_token(payload, token)
+        }
+      } else {
+        for j in range(pid, count, stride) {
+          token = dl.wait(flag + offset, 1, "gpu", "acquire", waitValue=round * 2 + 1)
+          queue = dl.consume_token(queue, token)
+        }
+      }
+    }) = [(.gpu, .acquire), (.gpu, .acquire)] := rfl
+
+theorem tutorial01SystemWaitModes :
+    waitModes (triton {
+      if pid < n {
+        for j in range(pid, count, stride) {
+          token = dl.wait(dl.symm_at(flag, peer) + offset, 1, "sys", "acquire", waitValue=round * 2)
+          payload = dl.consume_token(payload, token)
+        }
+      } else {
+        for j in range(pid, count, stride) {
+          token = dl.wait(flag + offset, 1, "sys", "acquire", waitValue=round * 2 + 1)
+          queue = dl.consume_token(queue, token)
+        }
+      }
+    }) = [(.sys, .acquire), (.sys, .acquire)] := rfl
+
+#print axioms tutorial01GpuWaitModes
+
+#print axioms tutorial01SystemWaitModes
+
+private abbrev bulkWait : DL.Wait := ⟨inputWord, 2, 1, .gpu, .acquire⟩
+
+example :
+    lower (triton { tok = dl.wait(signal, 2, "gpu", "acquire") }) =
+      [some (.wait bulkWait)] := rfl
+
+example :
+    bulkWait.event .eq 0 = .wait (.word inputWord) .eq 1 (.atomic .gpu .acquire) ∧
+      bulkWait.event .ge 1 =
+        .wait (.word { inputWord with offset := 10 }) .ge 1 (.atomic .gpu .acquire) :=
+  ⟨rfl, rfl⟩
+
+private def reader : Agent := .rank 1
+
+example : ¬ bulkWait.Observed reader .eq 0 [] := by
+  intro ⟨_, index, _, _⟩
+  exact Fin.elim0 (index 0)
+
+private abbrev observations (reading : DL.WaitReading) : Trace :=
+  [(reader, bulkWait.event reading 1), (reader, bulkWait.event reading 0)]
+
+private theorem allObserved (reading : DL.WaitReading) :
+    bulkWait.Observed reader reading 0 (observations reading) := by
+  refine ⟨Nat.zero_le _, Fin.rev, fun _ _ equal => Fin.rev_inj.mp equal, ?_⟩
+  intro i
+  refine ⟨Nat.zero_le _, ?_⟩
+  refine Fin.cases rfl (fun j => ?_) i
+  have equal : j = 0 := Subsingleton.elim _ _
+  subst j
+  rfl
+
+example : ¬ bulkWait.Observed reader .eq 2 (observations .eq) := by
+  intro ⟨_, index, _, observed⟩
+  exact Nat.not_le_of_gt (index 0).isLt (observed 0).1
+
+example (reading : DL.WaitReading) :
+    DL.consumeToken inputWord ⟨allObserved reading⟩ = inputWord := rfl
+
+example : match lower (triton { ready = dl.consume_token(value, token) }) with
+    | [some (.afterWait value token)] => value[0].getId = `value ∧ token[0].getId = `token
+    | _ => False := ⟨rfl, rfl⟩
+
+/-- error: dl.wait: unsupported scope 'cluster' -/
+#guard_msgs in
+#check (triton { token = dl.wait(signal, 2, "cluster", "acquire") } : DL.Source)
+
+/-- error: random source helper requires an explicit tl.source_helper binding -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  x = dl.allocate_smem(1)
+} : DL.Source)
+
+/-- error: random source helper requires an explicit tl.source_helper binding -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  x = undefined_fn(1)
+} : DL.Source)
+
+/-- error: not implemented: #80 -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  libshmem_device.barrier_all_block()
+} : DL.Source)
+
+/-- error: not implemented: #81 -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  __syncthreads()
+} : DL.Source)
+
+/-- error: not implemented: #82 -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  barrier_on_this_grid(p, use_cooperative=1)
+} : DL.Source)
+
+/-- error: tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, `boundary_check`, `padding_option`, and `eviction_policy` are recognized. -/
+#guard_msgs in
+#check (triton {
+  rank = dl.rank()
+  tl.region p = tl.int32
+  x = tl.load(p + 0, volatile=True)
+} : DL.Source)
 
 end VeriTile.Tests.TritonDistSyntax
