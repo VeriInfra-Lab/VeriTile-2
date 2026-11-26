@@ -259,6 +259,9 @@ example : publishAndWait setNbi Bool.true .u64 .u64 9 8 (.of .nat 8) =
     .ok (none, none, some 9) := rfl
 
 -- An ADD crosses the unsigned wrap boundary on either physical representation.
+-- Crossing INT64_MAX makes the physical result negative while the peer sees bit 63.
+example : publishAndWait addBlock Bool.false .i64 .i64 1 (2^63) (.of .int (2^63-1)) =
+    .ok (some 0x8000000000000000, some (-(2^63)), none) := rfl
 example : publishAndWait addBlock Bool.false .i64 .i64 1 0 (.of .int (-1)) =
     .ok (some 0, some 0, none) := rfl
 example : publishAndWait addNbi Bool.true .u64 .i64 2 1 (.of .int (-1)) =
