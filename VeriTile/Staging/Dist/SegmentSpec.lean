@@ -9,7 +9,9 @@ definitions under it (`documents/dist/FrozenStatements.tsv`,
 taken; the agent recorded the signature on the user's delegation. The stubs of
 part 1 are under signed statements: the ticket that defines one changes its
 recorded fingerprint, and the coordinator reviews and records that change.
-Part 2 is UNSIGNED.
+Part 2 is UNSIGNED, except `AccessValue`, `Emission`, `Next`, `AgentProgram`
+and `AgentProgram.NextLocal`: they lie under the signed `step_comm` (#47) and
+are frozen with it (user ratification of N1, N5, N5' and N6, 2026-11-25).
 
 An agent runs sequential code between synchronization or communication
 points. A segment is one such piece of code, seen as a transformer of the
@@ -28,9 +30,10 @@ declaration of part 2 or an `Event`.
   flat body as one program (`AgentProgram.ofBody`, `slice`) and the statements
   about them.
 
-Each theorem is a statement with `sorry`. The ticket named in a docstring moves
-that declaration to `VeriTile/Dist/` under the same name and type, proves it
-and deletes it here in the same change. `EventControlFlow.md` below is
+Each theorem is a statement with `sorry`, except `slice_noSync` and
+`slice_sync`, which are proved from the definition of `slice`. The ticket named
+in a docstring moves that declaration to `VeriTile/Dist/` under the same name
+and type, proves it and deletes it here in the same change. `EventControlFlow.md` below is
 `documents/dist/EventControlFlow.md`; K1 to K28 are its kernel rows.
 
 Decisions (user decision, 2026-11-13, recorded on #43):
@@ -133,7 +136,8 @@ N8. An event is performed by the agent whose program emits it. A program of a
     thread 0 of K6). The other option is an agent field on `Next.emit`; it
     decides the ordering convention of K3, K4, K23 and K27 and is not taken.
 N9. `AgentProgram.ofBody` is a definition, not a stub: it is five lines and the
-    reader sees which program a flat body is. `slice` stays a stub, as drafted.
+    reader sees which program a flat body is. `slice` is a definition too
+    (user decision, 2026-11-25): `slice_noSync` and `slice_sync` determine it.
 
 The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, signed
 on 2026-11-13; it is no longer a parameter.
@@ -192,9 +196,10 @@ theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
 /-! The 2026-11-24 choices on #47 supersede the historical N8 and singleton
 notes in the header. Every issue names its actor; the scheduling unit is one
 nonempty group. SoundLaunch restricts multi-event groups to a CAS pair.
-The revised interface awaits the second S4.1 signing round. -/
+The declarations marked "Signed (#47, via step_comm)" are frozen under
+`step_comm`; the rest of part 2 is signed with #43 part 2. -/
 
-/-- UNSIGNED. Part 2. The memory operand or discarded result attached to an event. -/
+/-- Signed (#47, via step_comm). Part 2. The memory operand or discarded result attached to an event. -/
 inductive AccessValue where
   | noValue
   /-- A word-add whose old value is discarded before reaching the continuation. -/
@@ -202,19 +207,19 @@ inductive AccessValue where
   | store (value : MemCell)
   | update (apply : MemCell → MemCell)
 
-/-- UNSIGNED. Part 2. An issued event together with its actor and value information. -/
+/-- Signed (#47, via step_comm). Part 2. An issued event together with its actor and value information. -/
 structure Emission where
   actor : Agent
   event : Event
   data : AccessValue := .noValue
 
-/-- UNSIGNED. Part 2. Finish, or issue a nonempty group and continue with the result of each
+/-- Signed (#47, via step_comm). Part 2. Finish, or issue a nonempty group and continue with the result of each
 member in source order. Each member carries its actor and typed payload. -/
 inductive Next (P : Type) where
   | finish
   | emitGroup (head : Emission) (tail : List Emission) (k : List (Option MemCell) → P)
 
-/-- UNSIGNED. Part 2. Owner: S3.3. The program of one agent, cut at its
+/-- Signed (#47, via step_comm). Part 2. Owner: S3.3. The program of one agent, cut at its
 events. `segment p` is the code from program state `p` up to the next event,
 or up to the end. `next p σ` is what follows that segment when it starts in
 `σ`: the event with its evaluated arguments, and the program state after it.
@@ -246,7 +251,7 @@ inductive AgentProgram.Steps {P : Type} (prog : AgentProgram P) :
       (rest : prog.Steps (k vs) l) :
       prog.Steps p (.inl (prog.segment p) :: ((e :: es).map (fun x => .inr x.event) ++ l))
 
-/-- UNSIGNED. Part 2. N6. The event, actor, payload and continuation are determined by the
+/-- Signed (#47, via step_comm). Part 2. N6. The event, actor, payload and continuation are determined by the
 segment's declared reads and its local state. Required of launch programs. -/
 def AgentProgram.NextLocal {P : Type} (p : AgentProgram P) : Prop :=
   ∀ pc σ τ, DistState.AgreesOn ((p.segment pc).reads σ) σ τ →
@@ -312,21 +317,36 @@ theorem AgentProgram.ofBody_step_noSync (a : Agent) (code : List Stmt) (σ σ' :
     (AgentProgram.ofBody a).Step (code.map Sum.inl) σ σ' n ↔
       (stepStmts code (σ.view a)).map (σ.setView a) = some σ' ∧ n = .finish := sorry
 
-/-- UNSIGNED stub (S3.3). Part 2. Slicing of a flat body of agent `a`. The
+/-- UNSIGNED. Part 2. Owner: S3.3. Slicing of a flat body of agent `a`. The
 result lists, in program order, the segments between the events and the
-events. It is fixed before execution. -/
-opaque slice (a : Agent) (body : List (Stmt ⊕ Emission)) : List (Segment ⊕ Event)
+events. It is fixed before execution. `go code` slices a body after the
+statements `code`, which have not yet been closed into a segment. -/
+def slice (a : Agent) (body : List (Stmt ⊕ Emission)) : List (Segment ⊕ Event) :=
+  go [] body
+where
+  go (code : List Stmt) : List (Stmt ⊕ Emission) → List (Segment ⊕ Event)
+    | [] => [.inl (Segment.ofStmts a code)]
+    | .inl stmt :: rest => go (code ++ [stmt]) rest
+    | .inr e :: rest => .inl (Segment.ofStmts a code) :: .inr e.event :: go [] rest
 
-/-- UNSIGNED. Part 2. Proved by S3.3. A body with no event is one segment. -/
+private theorem slice.go_stmts (a : Agent) (code more : List Stmt) (rest : List (Stmt ⊕ Emission)) :
+    slice.go a code (more.map Sum.inl ++ rest) = slice.go a (code ++ more) rest := by
+  induction more generalizing code with
+  | nil => simp
+  | cons stmt more ih => simp [slice.go, ih]
+
+/-- UNSIGNED. Part 2. A body with no event is one segment. -/
 theorem slice_noSync (a : Agent) (code : List Stmt) :
-    slice a (code.map Sum.inl) = [Sum.inl (Segment.ofStmts a code)] := sorry
+    slice a (code.map Sum.inl) = [Sum.inl (Segment.ofStmts a code)] := by
+  simpa [slice.go] using slice.go_stmts a [] code []
 
-/-- UNSIGNED. Part 2. Proved by S3.3. Slicing cuts at the first event: the
+/-- UNSIGNED. Part 2. Slicing cuts at the first event: the
 statements before it are one segment, and the rest of the body is sliced in
 the same way. -/
 theorem slice_sync (a : Agent) (code : List Stmt) (e : Emission) (rest : List (Stmt ⊕ Emission)) :
     slice a (code.map Sum.inl ++ Sum.inr e :: rest) =
-      Sum.inl (Segment.ofStmts a code) :: Sum.inr e.event :: slice a rest := sorry
+      Sum.inl (Segment.ofStmts a code) :: Sum.inr e.event :: slice a rest := by
+  simpa [slice.go] using slice.go_stmts a [] code (Sum.inr e :: rest)
 
 /-- UNSIGNED. Part 2. Proved by S3.3. The derived lemma: for a flat body, a
 program with no loop around an event, the steps the agent takes are exactly

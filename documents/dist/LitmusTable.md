@@ -1,9 +1,9 @@
 # Litmus table from documentation examples
 
-Status: delivered for ticket S8.1 (#71) on 2026-11-12, not yet reviewed by the
-user. Nothing here is a proved result, and nothing was executed: every source
-was read as text. The ticket carries the `sign-off` label; section 9 lists the
-rows whose expected outcome is least certain.
+The coordinator accepted the table on 2026-11-26 under the user's B2 decision of
+2026-11-22, as recorded on [S8.1 (#71)](https://github.com/VeriInfra-Lab/VeriTile-2/issues/71).
+Acceptance covers the documented expectations for all 32 rows. Section 9
+records the limits of their evidence. Model and GPU runs belong to later tickets.
 
 A row is a small program, a few lines per agent, taken from an example or a
 normative sentence of documentation, together with the set of outcomes that
@@ -17,8 +17,9 @@ knowledge of weak memory.
 Vocabulary: [PrimitiveSources.md](PrimitiveSources.md) for the primitives,
 their patterns, the evidence items `E-…`, the rules W1 to W6, the decisions D1
 to D8, the inferences I1 to I11 and the assumptions A1 to A10;
-[`EventSpec.lean`](../../VeriTile/Staging/Dist/EventSpec.lean) for `Event`,
-`Mode`, `Counter` and the pattern lemmas;
+[`Event.lean`](../../VeriTile/Dist/Event.lean) for `Event`, `Mode` and `Counter`,
+with the pattern (a) lemmas in [`Access.lean`](../../VeriTile/Dist/Event/Access.lean)
+and pattern (b) in [`Counter.lean`](../../VeriTile/Dist/Event/Counter.lean);
 [EventControlFlow.md](EventControlFlow.md) for the kernels K1 to K28.
 
 ## 1. Rules
@@ -43,7 +44,7 @@ now compares the frozen 3.6.5 manual with its earlier `latest` (3.8.0) evidence.
 | Mark | Meaning |
 | --- | --- |
 | Q | Decided by the quoted sentences alone |
-| R(x) | Decided only under x, a reading, decision or assumption of `PrimitiveSources.md`. D5 is a reading that the project counts as documented; A1 to A10 are registered assumptions; D1, D3 and D6 are decisions between conflicting or incomplete sources |
+| R(x) | Decided only under x, a reading, decision or assumption of `PrimitiveSources.md`. D5 is a reading that the project counts as documented; A1 to A10 are registered assumptions; D1, D3 and D6 are decisions between conflicting or incomplete sources; D7 limits what the NVSHMEM fence orders, and D8 orders accesses across a participating block barrier |
 | N | Not decided by documentation. The row says what is missing and takes the weakest treatment (W1 to W6) |
 | D2 | The two readings of decision D2 give different outcome sets. Both are given and none is chosen |
 
@@ -70,7 +71,7 @@ object. Where a row says "if P-ATOM", its outcome holds when the attribute is
 1 for the two devices; otherwise the operations are not atomic and the row is
 a data race. A8 registers this platform hypothesis; a GPU run must record the attribute.
 
-**Events.** The last field of a row names the constructors of `EventSpec.lean`
+**Events.** The last field of a row names the constructors of [`Event.lean`](../../VeriTile/Dist/Event.lean)
 that the row exercises. The map from primitives to events is fixed by ticket
 S2.6, not here.
 
@@ -478,8 +479,6 @@ item that holds the quotation.
   `T.sync_threads()`; warp 0 copies `buf` to `out`.
 - **Asked.** Whether `out` equals `src`.
 - **Expected.** At `71e7145`, the instruction guide identifies the whole-block barrier with `__syncthreads`; D8 gives the order among participating lanes. Under A1(c) and A8 the tail release/wait connects the publishing and waiting lanes. With both local barrier legs and that system-scope hand-off, only `out == src` is allowed. S5.2 owes the scoped chain proof. In the DeepEP version 1 port at `9ba8a605`, A5 supplies the order of the block barriers, and A6 and A10 supply the wait defaults and matching call reading.
-  L-TS3: "Synchronize all threads in a
-  block."
 - **Decided by.** D8 applies at the front-end pin `71e7145` (`instructions.md:191` and E-CU7). L-TS3 and E-TS1 ("They do not call NVSHMEM.") bound
   what is stated.
 - **Mark.** R(A1 c, D8, A8) at `71e7145`.
@@ -585,8 +584,6 @@ item that holds the quotation.
 - **Asked.** The value that the consumer reads for an element that a thread
   other than the notifying one stored.
 - **Expected.** D8 orders every participating thread’s earlier stores before the notifying thread’s later actions. With the system-scope wait of this row, A2 and A8 give the signal edge; the tile is required when the CTA-local leg and the system-scope hand-off compose for the payload. S5.2 checks that chain. D7 gives the fence only its caller’s operations. Tutorial 01 itself uses a device-scope wait, whose cross-rank outcome stays LIT-b02.
-  E-TD8: "Block-level synchronization
-  barrier".
 - **Decided by.** L-NV1 decides that the fence alone does not cover the other
   threads. D8 supplies the intra-block ordering. The note E-NV22, which speaks of this
   pattern, is in `latest` and not in the manual of 3.6.5; it concerns a
@@ -595,8 +592,9 @@ item that holds the quotation.
 - **Mark.** R(D8, D7, A2, A8).
 - **Events.** `access store plain` by each thread; `bump` and `wait` on a
   `phase` counter; `fence` in mode `shmem`; `bump` of a `word`, mode `atomic
-  sys release`; `wait`; `access load plain`. This is the hazard that the head
-  of `EventSpec.lean` leaves to ticket S5.2.
+  sys release`; `wait`; `access load plain`. S5.2 checks the scope of the composed
+  chain using the per-edge coverage condition in
+  [`SyncEdge.covers`](../../VeriTile/Dist/Event/Access.lean).
 
 #### LIT-b04. Load after a wait whose token is not consumed
 
@@ -691,13 +689,16 @@ item that holds the quotation.
   done". Weakest treatment (W2): an ordinary store of the signal word with no
   ordering after the copy. It conflicts with the wait of the kernel, a data
   race, undefined behaviour. This is inference I6.
+  The 2026-11-23 decision and its 2026-11-24 Q6b extension record the original
+  as unprovable; the proof targets a repaired variant with matching host and
+  device signal operations ([PrimitiveSources §10](PrimitiveSources.md#10-still-open)).
 - **Decided by.** Nothing. For comparison, the CUDA C++ model restricts
   concurrent access to an atomic object by CPU and GPU threads (L-CU4); which
   thread performs the write of `set_signal` is not documented.
 - **Mark.** N.
 - **Events.** `bump` of a `word` with `set`, mode `plain`, by a rank agent;
-  `wait` on the `word`, mode `atomic gpu acquire`. This is the example at the
-  end of `EventSpec.lean`.
+  `wait` on the `word`, mode `atomic gpu acquire`. Their conflict follows from
+  [`conflict_of_plain`](../../VeriTile/Dist/Event/Access.lean).
 
 #### LIT-b09. Host `set_signal` while a kernel waits with `T.wait_eq`
 
@@ -1026,7 +1027,7 @@ with `dl.wait` on a word that an NVSHMEM signal writes, I2 with E-NV12).
 | `Event.bump` | `word`, `set`: LIT-a05, LIT-b01 to LIT-b04, LIT-b06, LIT-b08 to LIT-b10, LIT-c04 to LIT-c06, LIT-c08; as the completion of a transfer: LIT-b07, LIT-c01 to LIT-c03. `word`, `add`: LIT-b05 | `add` in mode `atomic` (`dl.notify` with `sig_op="add"`) |
 | `Event.wait` | `eq`: LIT-b09, LIT-b10, LIT-c01 to LIT-c06, LIT-c08, LIT-c09. `ge`: LIT-a07, LIT-a08, LIT-b05. `ne`: LIT-b12. `dl.wait` under D6: LIT-b01 to LIT-b04, LIT-b07, LIT-b08 | `le`, `gt`, `lt`: documented for the TileScale waits (E-TS6) and as NVSHMEM constants; no example and no target kernel uses them |
 | `Event.initiate`, `Event.complete` | `nbi = false`: LIT-b06, LIT-b07, LIT-c01 to LIT-c03. `nbi = true`: LIT-c04 to LIT-c06, LIT-c08. Get: LIT-c07. TileScale: LIT-c09 | A transfer under W5 (`putmem_rma*`): undocumented, no example |
-| `Mode.plain` | most rows; as the deciding mode in LIT-a08 to LIT-a10, LIT-b06, LIT-b08, LIT-b09, LIT-b12 | |
+| `Mode.plain` | most rows; as the deciding mode in LIT-a09, LIT-a10, LIT-b06, LIT-b08, LIT-b09, LIT-b12 | |
 | `Mode.atomic` | scope `cta`: LIT-a02. Scope `gpu`: LIT-a01, LIT-a04, LIT-a05, LIT-a10, LIT-b02, LIT-b07, LIT-b08. Scope `sys`: LIT-a03, LIT-a06 to LIT-a08, LIT-b01 to LIT-b04, LIT-b09, LIT-b12, LIT-c09 | |
 | `Mode.shmem` | LIT-b03, LIT-b05 to LIT-b07, LIT-b10, LIT-b13, every row of pattern (c) but LIT-c09 | `access` in mode `shmem`: the front end binds no NVSHMEM atomic memory operation |
 | `MemOrder` | `relaxed`: LIT-a10, LIT-b12. `acquire`, `release`: most rows | `acqRel`: documented as the default of `tl.atomic_add` (E-TR1); no example uses it |
@@ -1109,7 +1110,7 @@ These rows expose the distinction between registered readings, platform precondi
 | LIT-a03, LIT-a06, LIT-a07, LIT-b01 | Stated "if P-ATOM", the platform condition now registered as A8 |
 | LIT-a05 | Marked Q on the docstring of base Triton alone; the scope string of the call is still under A1, clause d |
 | LIT-b10 | Marked Q on a one-line description of `__syncthreads`; only the rendezvous is used |
-| LIT-a09 | Marked Q on a docstring that explains its rule by an instruction; the rule itself is stated at the level of the front end |
+| LIT-a09 | Marked Q because the [pinned `T.ld` docstring](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/comm.py#L78-L85) explicitly forbids using `nc=True` on memory a peer may write during the kernel |
 
 ## 10. Not checked
 
