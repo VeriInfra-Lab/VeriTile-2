@@ -2,8 +2,10 @@
 
 Status: frozen by ticket I0.1 and signed on 2026-11-11; the fingerprints are in
 `documents/dist/FrozenStatements.tsv`. The bridge statement was signed again on
-2026-11-12 with the carrier `WithBot ℝ` in place of `ℝ` (ticket I4.1). The Lean
-side lives in `VeriTile/Staging/Interp/`; nothing here is a proved result yet.
+2026-11-12 with the carrier `WithBot ℝ` in place of `ℝ` (ticket I4.1). Every
+stub has since moved to `VeriTile/Interp/`, and both signed statements are proved
+there: `interp_eq_structural_exec` in `VeriTile/Interp/Adequacy/Exec.lean` and
+`bridge_exec` in `VeriTile/Interp/Bridge/Exec.lean`.
 
 The interpreter line builds one executable definition of kernel execution and
 connects it to the semantics the theorems are about:
@@ -19,10 +21,10 @@ theorems; their statements are frozen by this ticket.
 
 ## 1. Names and signatures
 
-All names are in the namespace `VeriTile.Interp`. A stub is declared `opaque`
-or with a `sorry` body in `VeriTile/Staging/Interp/Interface.lean`; the ticket
-in the last column replaces it by a definition with the same name and type in
-the main target, and deletes the stub in the same change.
+All names are in the namespace `VeriTile.Interp`. Each name started as a stub,
+`opaque` or with a `sorry` body, in `VeriTile/Staging/Interp/Interface.lean`; the
+ticket in the last column replaced it by a definition with the same name and type in
+the main target and deleted the stub in the same change.
 
 | Name | Type | Meaning | Defined by |
 | --- | --- | --- | --- |
