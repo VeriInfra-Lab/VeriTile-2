@@ -1,5 +1,8 @@
+# Source: NVIDIA/cccl@5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5 docs/libcudacxx/extended_api/synchronization_primitives/atomic/atomic_thread_fence.rst:24-51; tile-ai/tilescale@71e71457d40ed6e6a2dad297936bfdbff21d104b tilelang/language/builtin.py:1194-1196
+# Licence: (Apache-2.0 WITH LLVM-exception) AND MIT
+# Changes: rewritten as a minimal example; Message passing through a relaxed flag and two fences
 # LIT-a10. Message passing through a relaxed flag and two fences.
-# Source: libcu++ "cuda::atomic_thread_fence", "Example" (CU-FE); docstring
+# Context: libcu++ "cuda::atomic_thread_fence", "Example" (CU-FE); docstring
 # of fence_gpu, tilelang/language/builtin.py:1194-1196.
 # Table: documents/dist/LitmusTable.md. Front end: TileScale 71e7145.
 # A source for later tickets: not run here, and nothing imports it.

@@ -13,6 +13,7 @@ import VeriTile.Interp.Adequacy.EvalOp
 import VeriTile.Interp.Adequacy.State
 import VeriTile.Interp.Algebra
 import VeriTile.Interp.Array.Exec
+import VeriTile.Interp.Array.Refine
 import VeriTile.Interp.Bridge.EvalOp
 import VeriTile.Interp.Bridge.Exec
 import VeriTile.Interp.Bridge.Invariant
@@ -26,6 +27,9 @@ import VeriTile.Interp.Reflect
 import VeriTile.Interp.State
 import VeriTile.Interp.Step
 import VeriTile.Interp.Run.TensorIO
+import VeriTile.Interp.Run.Grid
+import VeriTile.Interp.Run.GridOrder
+import VeriTile.Interp.Run.Main
 import VeriTile.Interp.Carrier.FPValue
 import VeriTile.Interp.Carrier.Float
 import VeriTile.Interp.Carrier.SymbolicExport

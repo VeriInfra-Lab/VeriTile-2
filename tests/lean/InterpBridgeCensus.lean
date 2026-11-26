@@ -9,12 +9,16 @@ open scoped Tests
 
 private def KernelCode (extra : List RegionName) (bf16 : Option RegionName) (untracked : List RegName) :
     ComputeKernel → Prop
-  | .mk ins _ body => Code { inputs (ins ++ extra) bf16 with finiteReg := fun n => n ∉ untracked } body
+  | .mk ins _ body =>
+    let layout := { inputs (ins ++ extra) bf16 with finiteReg := fun n => n ∉ untracked }
+    Code layout body ∧ (if bf16.isSome then ∃ s, Invariant layout s else True)
 
 local macro "certify" : tactic => `(tactic|
-  (finite_code
-   all_goals first | solve | simp [Writable, inputs, Region.cast] <;> decide | check_sites
-   done))
+  (constructor
+   · finite_code
+     all_goals first | solve | simp [Writable, inputs, Region.cast] <;> decide | check_sites
+     done
+   · first | exact True.intro | exact scratchLayoutSatisfiable _ _ _))
 
 open Lean Elab Command in
 set_option maxHeartbeats 6000000 in
@@ -48,7 +52,8 @@ run_cmd do
       let mut extra ← `(([] : List RegionName))
       let mut bf16 ← `((none : Option RegionName))
       if dir == "FusedSiLU" && name == "unfusedSiLUKernel" then extra ← `(["zReg", "siluReg"])
-      if dir == "FusedSwiglu" && ["mul_step_kernel", "swiglu_unfused"].contains name then
+      let hasScratch := dir == "FusedSwiglu" && ["mul_step_kernel", "swiglu_unfused"].contains name
+      if hasScratch then
         extra ← `(["S"])
         bf16 ← `(some "S")
       let untracked ← if dir == "OnlineSoftmax" && name == "onlineSoftmaxKernel"
@@ -61,7 +66,8 @@ run_cmd do
       else
         elabCommand (← `(command| example $binders:bracketedBinder* : $ty := by certify))
       if (← get).messages.hasErrors then throwError "certificate failed: {info.name}"
-      rows := rows.push s!"{dir}.{name}  certified"
+      let result := if hasScratch then "certified with bf16 scratch witness" else "certified"
+      rows := rows.push s!"{dir}.{name}  {result}"
   unless rows.size == 68 do
     throwError "expected 68 bench kernels, checked {rows.size}"
   logInfo (String.intercalate "\n" (rows.qsort (· < ·)).toList ++ s!"\n{rows.size}/{rows.size} certified")

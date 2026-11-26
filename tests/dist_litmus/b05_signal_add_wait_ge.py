@@ -1,5 +1,8 @@
+# Source: VeriInfra-Lab/VeriTile-2@51419efee8944c00d6d6a8296bf708ad2956b1d7 documents/dist/LitmusTable.md:632-652
+# Licence: MIT
+# Changes: rewritten as a minimal example; Two ranks add to a signal word; the third waits for the sum
 # LIT-b05. Two ranks add to a signal word; the third waits for the sum.
-# Source: NVSHMEM 3.6.5, "Signaling Operations" (atomicity, signal operators,
+# Context: NVSHMEM 3.6.5, "Signaling Operations" (atomicity, signal operators,
 # nvshmemx_signal_op) and "Point-To-Point Synchronization"
 # (nvshmem_signal_wait_until).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

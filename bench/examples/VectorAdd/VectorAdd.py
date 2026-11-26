@@ -1,3 +1,6 @@
+# Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/tutorials/01-vector-add.py:29-53
+# Licence: MIT
+# Changes: rewritten as a minimal example; omit the mask for a full tile and add a commuted variant
 """Unmasked FP32 vector-add tile shown alongside the Lean quotation."""
 import triton
 import triton.language as tl

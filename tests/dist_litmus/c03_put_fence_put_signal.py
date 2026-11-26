@@ -1,5 +1,8 @@
+# Source: VeriInfra-Lab/VeriTile-2@51419efee8944c00d6d6a8296bf708ad2956b1d7 documents/dist/LitmusTable.md:885-904
+# Licence: MIT
+# Changes: rewritten as a minimal example; The same with a fence between the put and the put-with-signal
 # LIT-c03. The same with a fence between the put and the put-with-signal.
-# Source: NVSHMEM 3.6.5, "Memory Ordering" (nvshmem_fence), "Signaling
+# Context: NVSHMEM 3.6.5, "Memory Ordering" (nvshmem_fence), "Signaling
 # Operations" (notes of nvshmem_put_signal) and "Using NVSHMEM", "Data
 # Consistency".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

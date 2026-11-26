@@ -42,9 +42,7 @@ Each claim carries one of three marks:
    environment, built from `main` at `71e71457`, where two names the port
    needs do not exist. The GPU side built the environment `tilescale-deepep`
    from `9ba8a605` on 2026-11-12; it reports `tilelang` version
-   `0.1.7.post1+cuda.git9ba8a605`. The coordinator judged
-   the H800 run of the version 1 port a pass in #457. Section 7
-   says how it meets each need and what only a run can settle.
+   `0.1.7.post1+cuda.git9ba8a605`. The coordinator accepted the version 1 port’s H800 run in [#457](https://github.com/VeriInfra-Lab/VeriTile-2/issues/457). Section 7 says how the request `deepep-v1-intranode-001` meets each need and what only a run can settle.
 5. **Specification.** The frozen MoE declarations hold for version 1 normal
    mode as far as they go, but they leave out or weaken six things that
    version 1 fixes (section 8).
@@ -794,11 +792,11 @@ rows), the FP8 payload and a comparison with `deep_ep`.
 
 ## 8. The frozen MoE specification against version 1 normal mode
 
-The declarations are in `VeriTile/Staging/Dist/SpecLibSpec.lean` (lines
-217-290): `MoERouting`, `MoERows`, `MoERouting.Assigns`, `MoEDispatch`,
-`MoEStoreBack`, `moeCombine`, `moeCombine_of_moeDispatch`. The file header
-(lines 27-30) names the EPv2 port as their source. This ticket does not edit
-the file.
+The `VeriTile.Dist` declarations `MoERouting`, `MoERows`, `MoERouting.Assigns`,
+`MoEDispatch`, `MoEStoreBack`, `moeCombine` and `moeCombine_of_moeDispatch`
+are in [SpecLibSpec.lean](../../VeriTile/Staging/Dist/SpecLibSpec.lean).
+The “MoE source” paragraph in that module names the EPv2 port as their source.
+This ticket does not edit the file.
 
 **What agrees (I, from section 3.2).**
 

@@ -1,5 +1,8 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/03-inter-node-allgather.py:72-95
+# Licence: MIT
+# Changes: rewritten as a minimal example; A put-with-signal; the target waits on the signal and reads
 # LIT-c01. A put-with-signal; the target waits on the signal and reads.
-# Source: NVSHMEM 3.6.5, "Signaling Operations" (nvshmem_put_signal) and
+# Context: NVSHMEM 3.6.5, "Signaling Operations" (nvshmem_put_signal) and
 # "Point-To-Point Synchronization" (nvshmem_signal_wait_until);
 # tutorials/03-inter-node-allgather.py:72-95 (TD-T03).
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

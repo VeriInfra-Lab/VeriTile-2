@@ -487,6 +487,13 @@ globs = [
   "tests.lean.InterpAdequacyNeg",
   "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
+  "tests.lean.dist.AtomicSetRuns",
+  "tests.lean.dist.CountingNegatives",
+  "tests.lean.dist.CountingPattern",
+  "tests.lean.dist.CountingLaunch",
+  "tests.lean.dist.CountingRuns",
+  "tests.lean.dist.CountingWitness",
+  "tests.lean.dist.JudgmentVariants",
   "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtProfiler",
   "tests.lean.InterpReflectBench",
@@ -494,6 +501,14 @@ globs = [
   "tests.lean.dist.TensorDescriptorSource",
   "tests.lean.dist.SourceHelperSyntax",
   "tests.lean.InterpFloatCensus",
+  "tests.lean.dist.TritonDistSyntax",
+  "tests.lean.dist.StateViews",
+  "tests.lean.dist.SourceHelpers",
+  "tests.lean.dist.ProcedureHelpers",
+  "tests.lean.dist.ElementHelper",
+  "tests.lean.dist.PointerCasts",
+  "tests.lean.dist.UnguardedShared",
+  "tests.lean.dist.SegmentFootprint",
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
   "tests.lean.dist.TrustAssumptionDuplicateImports",
@@ -523,3 +538,7 @@ globs = ["VeriTile.Equiv", "VeriTile.Equiv.+"]
 [[lean_lib]]
 name = "VeriTileStaging"
 globs = ["VeriTile.Staging.+"]
+
+[[lean_exe]]
+name = "veritile-run"
+root = "tests.interp.Main"

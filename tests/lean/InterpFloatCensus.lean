@@ -36,8 +36,8 @@ run_cmd do
   let actual := Syntax.mkNumLit (toString count)
   elabCommand (← `(command| #guard $actual = 64))
 
--- InterpInterface §2 specifies a Lean Float approximation. For unordered
--- operands Lean's max keeps the first and min keeps the second.
+-- Both operand orders follow the “With one NaN operand” rule in
+-- documents/InterpInterface.md §2 for binary64 max and min.
 #guard
   let maximum := Binary64.algebra.binary none .real .max
   match Binary64.algebra.minimum none .real with
