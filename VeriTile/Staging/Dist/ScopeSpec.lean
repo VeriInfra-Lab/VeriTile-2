@@ -3,9 +3,11 @@ S5.1 (#56). Signed on 2026-11-25 (user decision S1–S7 of 2026-11-24, recorded
 on #56; the agent recorded the signature on the user's delegation): the scope
 checker `scopeConsistent` with `ScopeReliance`, through its soundness statement
 `scopeConsistent_sound` and the two examples `scopeConsistent_crossRankGpu` and
-`scopeConsistent_crossRankSys`. The trust-assumption interface below is not
-frozen yet: no signed statement mentions it (see #56). The checker uses the signed event interface in
-EventSpec. A reliance names the release and acquire that a proof needs and
+`scopeConsistent_crossRankSys`. The trust-assumption interface
+`TrustAssumption` and `TrustAssumptionClass` was signed on 2026-11-26 under the
+same decision, after the checker freezes constructors, fields and defaults of
+signed types (#594, #621). The examples in `TrustAssumptionExamples` stay
+unsigned. The checker uses the signed event interface in EventSpec. A reliance names the release and acquire that a proof needs and
 the cell whose visibility it needs. S4.1 supplies the trace conditions,
 including the read-from condition that connects such a pair to happens-before.
 -/
@@ -64,13 +66,13 @@ theorem scopeConsistent_crossRankSys :
         (.rank 1, .wait (.word flag) .eq 1 (.atomic .sys .acquire))⟩] = true := by
   decide
 
-/-- UNSIGNED. Owner: S5.3. The two classes of named trust assumptions. -/
+/-- Signed (#56). Owner: S5.3. The two classes of named trust assumptions. -/
 inductive TrustAssumptionClass where
   | semanticSource
   | translationCorrectness
   deriving DecidableEq, Repr
 
-/-- UNSIGNED. Owner: S5.3. Metadata attached to a proposition used as an
+/-- Signed (#56). Owner: S5.3. Metadata attached to a proposition used as an
 explicit trust premise. The statement does not carry a proof. -/
 structure TrustAssumption where
   name : Lean.Name
