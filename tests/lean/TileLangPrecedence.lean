@@ -304,12 +304,72 @@ private def cases : List (String × Option Value) := [
   ("a if b else c if d else e", some (.conditional (.ident `a) (.ident `b) (.conditional (.ident `c) (.ident `d) (.ident `e))))
 ]
 
+private def scaleCases : List (String × Option Value) := [
+  ("a and b and c", some (.binary .and (.binary .and (.ident `a) (.ident `b)) (.ident `c))),
+  ("a and b or c", some (.binary .or (.binary .and (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b and c", some (.binary .or (.ident `a) (.binary .and (.ident `b) (.ident `c)))),
+  ("a and b < c", some (.binary .and (.ident `a) (.binary .lt (.ident `b) (.ident `c)))),
+  ("a < b and c", some (.binary .and (.binary .lt (.ident `a) (.ident `b)) (.ident `c))),
+  ("a and b > c", some (.binary .and (.ident `a) (.binary .gt (.ident `b) (.ident `c)))),
+  ("a > b and c", some (.binary .and (.binary .gt (.ident `a) (.ident `b)) (.ident `c))),
+  ("a and b <= c", some (.binary .and (.ident `a) (.binary .le (.ident `b) (.ident `c)))),
+  ("a <= b and c", some (.binary .and (.binary .le (.ident `a) (.ident `b)) (.ident `c))),
+  ("a and b >= c", some (.binary .and (.ident `a) (.binary .ge (.ident `b) (.ident `c)))),
+  ("a >= b and c", some (.binary .and (.binary .ge (.ident `a) (.ident `b)) (.ident `c))),
+  ("a and b == c", some (.binary .and (.ident `a) (.binary .eq (.ident `b) (.ident `c)))),
+  ("a == b and c", some (.binary .and (.binary .eq (.ident `a) (.ident `b)) (.ident `c))),
+  ("a and b != c", some (.binary .and (.ident `a) (.binary .ne (.ident `b) (.ident `c)))),
+  ("a != b and c", some (.binary .and (.binary .ne (.ident `a) (.ident `b)) (.ident `c))),
+  ("not a and b", some (.binary .and (.not (.ident `a)) (.ident `b))),
+  ("a and not b", some (.binary .and (.ident `a) (.not (.ident `b)))),
+  ("a and b if c else d", some (.conditional (.binary .and (.ident `a) (.ident `b)) (.ident `c) (.ident `d))),
+  ("a if b and c else d", some (.conditional (.ident `a) (.binary .and (.ident `b) (.ident `c)) (.ident `d))),
+  ("a if b else c and d", some (.conditional (.ident `a) (.ident `b) (.binary .and (.ident `c) (.ident `d)))),
+  ("a or b or c", some (.binary .or (.binary .or (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b < c", some (.binary .or (.ident `a) (.binary .lt (.ident `b) (.ident `c)))),
+  ("a < b or c", some (.binary .or (.binary .lt (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b > c", some (.binary .or (.ident `a) (.binary .gt (.ident `b) (.ident `c)))),
+  ("a > b or c", some (.binary .or (.binary .gt (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b <= c", some (.binary .or (.ident `a) (.binary .le (.ident `b) (.ident `c)))),
+  ("a <= b or c", some (.binary .or (.binary .le (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b >= c", some (.binary .or (.ident `a) (.binary .ge (.ident `b) (.ident `c)))),
+  ("a >= b or c", some (.binary .or (.binary .ge (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b == c", some (.binary .or (.ident `a) (.binary .eq (.ident `b) (.ident `c)))),
+  ("a == b or c", some (.binary .or (.binary .eq (.ident `a) (.ident `b)) (.ident `c))),
+  ("a or b != c", some (.binary .or (.ident `a) (.binary .ne (.ident `b) (.ident `c)))),
+  ("a != b or c", some (.binary .or (.binary .ne (.ident `a) (.ident `b)) (.ident `c))),
+  ("not a or b", some (.binary .or (.not (.ident `a)) (.ident `b))),
+  ("a or not b", some (.binary .or (.ident `a) (.not (.ident `b)))),
+  ("a or b if c else d", some (.conditional (.binary .or (.ident `a) (.ident `b)) (.ident `c) (.ident `d))),
+  ("a if b or c else d", some (.conditional (.ident `a) (.binary .or (.ident `b) (.ident `c)) (.ident `d))),
+  ("a if b else c or d", some (.conditional (.ident `a) (.ident `b) (.binary .or (.ident `c) (.ident `d)))),
+  ("not a < b", some (.not (.binary .lt (.ident `a) (.ident `b)))),
+  ("a < (not b)", some (.binary .lt (.ident `a) (.not (.ident `b)))),
+  ("not a > b", some (.not (.binary .gt (.ident `a) (.ident `b)))),
+  ("a > (not b)", some (.binary .gt (.ident `a) (.not (.ident `b)))),
+  ("not a <= b", some (.not (.binary .le (.ident `a) (.ident `b)))),
+  ("a <= (not b)", some (.binary .le (.ident `a) (.not (.ident `b)))),
+  ("not a >= b", some (.not (.binary .ge (.ident `a) (.ident `b)))),
+  ("a >= (not b)", some (.binary .ge (.ident `a) (.not (.ident `b)))),
+  ("not a == b", some (.not (.binary .eq (.ident `a) (.ident `b)))),
+  ("a == (not b)", some (.binary .eq (.ident `a) (.not (.ident `b)))),
+  ("not a != b", some (.not (.binary .ne (.ident `a) (.ident `b)))),
+  ("a != (not b)", some (.binary .ne (.ident `a) (.not (.ident `b)))),
+  ("not not a", some (.not (.not (.ident `a)))),
+  ("not a if b else c", some (.conditional (.not (.ident `a)) (.ident `b) (.ident `c))),
+  ("a if not b else c", some (.conditional (.ident `a) (.not (.ident `b)) (.ident `c))),
+  ("a if b else not c", some (.conditional (.ident `a) (.ident `b) (.not (.ident `c)))),
+  ("not (a if b else c)", some (.not (.conditional (.ident `a) (.ident `b) (.ident `c)))),
+  ("a if b else c if d or e else f", some (.conditional (.ident `a) (.ident `b) (.conditional (.ident `c) (.binary .or (.ident `d) (.ident `e)) (.ident `f))))
+]
+
 set_option maxRecDepth 8192 in
 set_option maxHeartbeats 5000000 in
 run_cmd do
   let env ← getEnv
-  for (source, expected) in cases do
-    let unit := "tilelang { @tilelang.jit def probe(): { with T.Kernel(1) as bx: { x = " ++
+  for (mode, source, expected) in cases.map (fun c => ("tilelang", c)) ++
+      scaleCases.map (fun c => ("tilescale", c)) do
+    let unit := mode ++ " { @tilelang.jit def probe(): { with T.Kernel(1) as bx: { x = " ++
       source ++ " }; return x } }"
     match Parser.runParserCategory env `term unit, expected with
     | .error _, none => pure ()

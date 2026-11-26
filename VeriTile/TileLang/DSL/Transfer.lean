@@ -24,33 +24,54 @@ private def bufferName : Value → Option Name
   | .ident n | .index n _ => some n
   | _ => none
 
-/-- Symbolic barrier indices may read scalar names but never mutable memory.
-Remember the free names so rebinding a slot index cannot discharge an earlier copy. -/
-private def indexInputs : Value → Option (List Name)
-  | .integer _ => some []
-  | .ident n => some [n]
-  | .neg x => indexInputs x
+/-- Only these scalar expressions identify a barrier slot. Storing their parsed
+form gives a structurally recursive comparison when checking pending transfers. -/
+private inductive SlotIndex where
+  | natural (n : Nat)
+  | variable (n : Name)
+  | neg (x : SlotIndex)
+  | binary (op : Binary) (x y : SlotIndex)
+  deriving BEq
+
+private def slotIndex : Value → Option SlotIndex
+  | .integer n => some (.natural n)
+  | .ident n => some (.variable n)
+  | .neg x => (slotIndex x).map .neg
   | .binary op x y => do
     guard ([Binary.add, .sub, .mul, .floorDiv, .mod, .xor].contains op)
-    return (← indexInputs x) ++ (← indexInputs y)
+    return .binary op (← slotIndex x) (← slotIndex y)
   | _ => none
 
-private def slotInputs : Value → Option (List Name)
-  | .ident n => some [n]
-  | .index n [.atIndex i] => (indexInputs i).map (n :: ·)
+private def SlotIndex.inputs : SlotIndex → List Name
+  | .natural _ => []
+  | .variable n => [n]
+  | .neg x => x.inputs
+  | .binary _ x y => x.inputs ++ y.inputs
+
+private structure BarrierSlot where
+  buffer : Name
+  index : Option SlotIndex
+  deriving BEq
+
+private def barrierSlot : Value → Option BarrierSlot
+  | .ident n => some ⟨n, none⟩
+  | .index n [.atIndex i] => (slotIndex i).map fun ix => ⟨n, some ix⟩
   | _ => none
+
+private def BarrierSlot.inputs (s : BarrierSlot) : List Name :=
+  s.buffer :: (s.index.map SlotIndex.inputs).getD []
 
 private structure Transfers where
   env : Bindings
   /-- Barrier slots with at least one outstanding copy and no arrival yet. -/
-  copying : List Value := []
+  copying : List BarrierSlot := []
   /-- Slots on which the producer has arrived and the consumer must wait. -/
-  arrived : List Value := []
+  arrived : List BarrierSlot := []
 
 private def Transfers.clear (s : Transfers) : Bool := s.copying.isEmpty && s.arrived.isEmpty
 
 private def Transfers.bind (s : Transfers) (n : Name) (kind : Option Binding) : Option Transfers := do
-  guard (!(s.copying ++ s.arrived).any (fun slot => (slotInputs slot).any (·.contains n)))
+  guard (!(s.copying ++ s.arrived).any (fun slot => slot.inputs.contains n))
   return {s with env := rebind s.env n kind}
 
 private def Transfers.storage (s : Transfers) (v : Value) (kind : Binding) : Bool :=
@@ -66,14 +87,17 @@ private def invocation (s : Transfers) (op : Name) (args : List Argument) : Opti
   | `T.tma_copy =>
     let [.pos src, .pos dst, .keyword `barrier slot] := args | none
     guard (s.storage src .globalTensor && s.storage dst .sharedBuffer && s.storage slot .barrier)
-    guard ((slotInputs slot).isSome && !s.arrived.contains slot)
+    let slot ← barrierSlot slot
+    guard (!s.arrived.contains slot)
     return {s with copying := slot :: s.copying}
   | `T.mbarrier_arrive =>
-    let slot ← keyword args `mbarrier
+    let value ← keyword args `mbarrier
+    let some slot := barrierSlot value | return s
     if !s.copying.contains slot then return s
     return {s with copying := s.copying.filter (· != slot), arrived := slot :: s.arrived}
   | `T.mbarrier_wait_parity =>
-    let slot ← keyword args `mbarrier
+    let value ← keyword args `mbarrier
+    let some slot := barrierSlot value | return s
     return {s with arrived := s.arrived.filter (· != slot)}
   | _ => return s
 
@@ -108,7 +132,7 @@ private def checkStmt (inKernel : Bool) (s : Transfers) : Statement → Option T
     -- Another warp role cannot use a barrier or index local to this role.
     let localNames := body.flatMap assignedNames
     guard (!(t.copying ++ t.arrived).any fun slot =>
-      (slotInputs slot).any (fun ns => ns.any localNames.contains))
+      slot.inputs.any localNames.contains)
     return {t with env := s.env.filter fun b => !localNames.contains b.1}
   | .branch _ yes no => do
     let a ← checkBlock inKernel s yes

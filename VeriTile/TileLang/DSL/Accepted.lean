@@ -45,7 +45,8 @@ decreasing_by all_goals decreasing_tactic
 /-- A syntactic layout helper can only return a layout of its input's shape,
 whose index mapping is built from numeric literals and the bound coordinates. -/
 def LayoutHelper.valid (h : LayoutHelper) : Bool :=
-  sourceIdentifier h.name && h.name != `range && sourceIdentifier h.param && h.shape == .ident (.str h.param "shape") &&
+  sourceIdentifier h.name && h.name != `range && sourceIdentifier h.param &&
+  (match h.shape with | .ident n => n == .str h.param "shape" | _ => false) &&
   !h.coordinates.isEmpty && h.coordinates.all sourceIdentifier && h.coordinates.Nodup &&
   coordinate h.coordinates h.mapping
 
@@ -97,12 +98,29 @@ private def callAllowed (mode : Mode) (ctx : Context) (helpers : Helpers) (n : N
     | `T.if_then_else => fits args 3
     | _ => helpers.any fun h => h.asValue && n == h.name && fits args h.arity
 
+/-- Unsigned decimal literal: an integer part followed by a fraction, an exponent,
+or both. Signs on the entire expression are represented by a separate AST node. -/
+private def decimalSpelling (s : String) : Bool := Id.run do
+  let chars := s.toList
+  let rest ← match chars with
+    | '0' :: rest => pure rest
+    | c :: rest => if c.isDigit then pure (rest.dropWhile Char.isDigit) else return false
+    | [] => return false
+  let (fraction, rest) ← match rest with
+    | '.' :: c :: rest => if c.isDigit then pure (true, rest.dropWhile Char.isDigit) else return false
+    | rest => pure (false, rest)
+  match rest with
+  | [] => return fraction
+  | 'e' :: digits | 'E' :: digits =>
+    let digits := match digits with | '+' :: ns | '-' :: ns => ns | ns => ns
+    return !digits.isEmpty && digits.all Char.isDigit
+  | _ => return false
+
 mutual
 private def valueOK (m : Mode) (ctx : Context) (hs : Helpers) : Value → Bool
   | .ident n => sourceValueName n
   | .integer _ | .boolean _ | .string _ => true
-  | .decimal s => (s.contains '.' || s.contains 'e' || s.contains 'E') && !s.startsWith "-" &&
-      (match Lean.Json.parse s with | .ok (.num _) => true | _ => false)
+  | .decimal s => decimalSpelling s
   | .list xs | .tuple xs => xs.attach.all fun ⟨x, _⟩ => valueOK m ctx hs x
   | .neg x => valueOK m ctx hs x
   | .not x => m == .tileScale && valueOK m ctx hs x
@@ -158,9 +176,7 @@ private def statementOK (m : Mode) (hs : Helpers) (insideKernel : Bool) : Statem
   | .loop bs iter args body => !body.isEmpty && bs.all sourceIdentifier && bs.Nodup &&
       callAllowed m .iterator [] iter args && bs.length == (if iter == `T.Parallel then args.length else 1) &&
       args.all (argOK m .expression hs) && body.attach.all fun ⟨x, _⟩ => statementOK m hs insideKernel x
-  | .kernel args bs body => !insideKernel && !body.isEmpty && bs.length ≥ 1 && bs.length ≤ 3 &&
-      bs.Nodup && bs.all sourceIdentifier && (fits args bs.length || fits args bs.length [`threads]) &&
-      args.all (argOK m .expression hs) && body.attach.all fun ⟨x, _⟩ => statementOK m hs true x
+  | .kernel .. => false
   | .role n body => !body.isEmpty && valueOK m .expression hs n &&
       body.attach.all fun ⟨x, _⟩ => statementOK m hs insideKernel x
   | .whileLoop c body => m == .tileScale && valueOK m .expression hs c &&
@@ -189,10 +205,16 @@ private def optionsOK (opts : List JitOption) : Bool :=
     | .flag (.symbol key) _ => [`tilelang.PassConfigKey.TL_ENABLE_FAST_MATH,
         `tilelang.PassConfigKey.TL_DISABLE_WARP_SPECIALIZED].contains key
 
+private def launchOK (m : Mode) (hs : Helpers) : Statement → Bool
+  | .kernel args bs body => !body.isEmpty && bs.length ≥ 1 && bs.length ≤ 3 &&
+      bs.Nodup && bs.all sourceIdentifier && (fits args bs.length || fits args bs.length [`threads]) &&
+      args.all (argOK m .expression hs) && body.all (statementOK m hs true)
+  | _ => false
+
 private def directOK (m : Mode) (hs : Helpers) (p : Procedure) : Bool := Id.run do
   let prelude := p.body.takeWhile (staticOK m)
   let [.kernel args bs body, .ret out] := p.body.drop prelude.length | return false
-  return statementOK m hs false (.kernel args bs body) && valueOK m .expression hs out
+  return launchOK m hs (.kernel args bs body) && valueOK m .expression hs out
 
 /-- Admission checks a complete typed source object, including hand-built ones, for the
 selected mode, option, outer shape, helper scope/arity, call signatures and all nested
@@ -216,6 +238,7 @@ def Program.accepted (p : Program) : Bool := Id.run do
           !mac.body.isEmpty && mac.body.all (statementOK p.mode hs false) do return false
       let returns := mac.body.getLast?.any fun | .ret _ => true | _ => false
       hs := ⟨mac.name, mac.params.length, returns, true⟩ :: hs
-    return !primFunc.body.isEmpty && primFunc.body.all (statementOK p.mode hs false)
+    let [launch] := primFunc.body.dropWhile (staticOK p.mode) | return false
+    return launchOK p.mode hs launch
 
 end VeriTile.TileLang

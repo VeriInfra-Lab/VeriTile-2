@@ -17,7 +17,7 @@ private def eager (device : String) (prelude := "") (ret := "; return X") : Stri
 
 private def factory (macros := "") (body := "T.copy(X, X)") : String :=
   "tilelang { def f(n): {" ++ macros ++
-  "@T.prim_func def run(X: T.Tensor([n], T.float32)): {" ++ body ++ "}; return run} }"
+  "@T.prim_func def run(X: T.Tensor([n], T.float32)): {with T.Kernel(1) as b: {" ++ body ++ "}}; return run} }"
 
 private def checkAdmission (txt : String) (expected : Bool) : Elab.Command.CommandElabM Unit := do
   let code := "#guard (" ++ txt ++ ").accepted == " ++ toString expected
@@ -37,6 +37,12 @@ run_cmd
   let pureHelper := "def layout_of(A): {return T.Layout(A.shape, lambda i: [i % 4])}; "
   let pureUse := (eager "L = layout_of(X)").replace "tilelang { " ("tilelang { " ++ pureHelper)
   let cs := [
+    (f, f.replace "T.clear(A)" "with T.Kernel(1) as c: {T.clear(A)}"),
+    (f, f.replace "with T.Kernel(1) as b: {move(X)}" "move(X)"),
+    (f, f.replace "with T.Kernel(1) as b: {move(X)}"
+      "with T.Kernel(1) as b: {move(X)}; with T.Kernel(1) as c: {move(X)}"),
+    (f, f.replace "with T.Kernel(1) as b: {move(X)}"
+      "for i in range(1): {with T.Kernel(1) as b: {move(X)}}"),
     (f, f.replace "return run" "return f"),
     (f, f.replace "move(X)" "move(X, X)"),
     (f, f.replace mac (mac ++ mac)),
@@ -81,6 +87,13 @@ run_cmd
     if before == after then throwError "an ineffective mutation: {before}"
     checkAdmission before true
     checkAdmission after false
+  -- The grammar preserves exported value names and ordinary dotted attributes.
+  for value in ["T.int8", "T.uint8", "T.float64", "T.float8_e4m3fn", "T.GemmWarpPolicy.Square",
+      "X.ndim", "T.exp2"] do
+    checkAdmission (eager ("X = " ++ value)) false
+  for value in ["T.float16", "T.float32", "T.bfloat16", "T.int32", "T.int64", "T.bool",
+      "T.GemmWarpPolicy.FullRow", "X.shape", "X.dtype"] do
+    checkAdmission (eager ("X = " ++ value)) true
   -- A value-returning macro can be used as a value.
   checkAdmission (factory "@T.macro def first(A): {return A}; " "Z = first(X)") true
 
@@ -92,6 +105,8 @@ run_cmd
       "while X: {T.clear(X)}", "break", "continue", "X = X and Y", "X = not Y", "X = X or Y",
       "X, Y += 1", "X = a --b\n", "X = a /- hidden -/"] do
     parseFails (eager body)
+  parseFails (eager "X = T.unregistered_name")
+  parseFails (eager "X = T.ptx_wgmma_ss")
   parseFails (direct.replace "tilelang { " "tilelang { -- before the function\n")
   parseFails (direct.replace "tilelang { " "tilelang { /- before the function -/ ")
   parseFails (direct.replace "} }" "} -- after the function\n }")
@@ -154,5 +169,15 @@ private def literalReadback : Program := tilelang {
 #guard !({ literalReadback with jit := none }).accepted
 #guard ({ literalReadback with jit := some [.flag (.symbol `tilelang.PassConfigKey.TL_ENABLE_FAST_MATH) false] }).fastMath == some false
 #guard ({ literalReadback with jit := none }).fastMath == none
+
+-- The kernel can discharge source admission without compiled evaluation.
+private def decimalProgram (spelling : String) : Program :=
+  { literalReadback with definition := .direct ⟨`f, [],
+    [.kernel [.pos (.integer 1)] [`b] [.assign (.variable `X) (.decimal spelling)], .ret (.ident `X)]⟩ }
+
+example : literalReadback.accepted = true := by decide +kernel
+example : ["0.0", "2.5", "41e3", "1E-2", "0.5e+3"].all (fun s => (decimalProgram s).accepted) := by decide +kernel
+example : ["", "2", "-2.5", "01.0", ".5", "2.", "1e", "1e+", "1e2.5", " 2.5 "].all
+    (fun s => !(decimalProgram s).accepted) := by decide +kernel
 
 end TileLangSyntaxTests

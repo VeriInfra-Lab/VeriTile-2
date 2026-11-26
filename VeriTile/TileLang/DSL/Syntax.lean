@@ -31,8 +31,14 @@ identifiers cannot slip through as unregistered primitives or local macros. -/
 def tlName : Parser := rawIdentNoAntiquot >>
   checkStackTop (fun s => plainSpelling s && sourceIdentifier s.getId) "expected an unqualified TileLang source identifier"
 
+private def valueSpelling (mode : Mode) : Name → Bool
+  | .str .anonymous field => sourceIdentifier (.mkSimple field)
+  | .str `T field => syntacticCall mode (.str `T field)
+  | .str base field => valueSpelling mode base && sourceIdentifier (.mkSimple field)
+  | _ => false
+
 def tlValueName : Parser := rawIdentNoAntiquot >>
-  checkStackTop (fun s => plainSpelling s && sourceValueName s.getId) "unsupported TileLang value or attribute"
+  checkStackTop (fun s => plainSpelling s && valueSpelling .tileScale s.getId) "unsupported TileLang value or attribute"
 
 -- These productions can start at an ordinary identifier without adding a
 -- keyword to Lean's global token table.
@@ -74,11 +80,14 @@ syntax:50 (name := leExpr) tlExpr:51 " <= " tlExpr:51 : tlExpr
 syntax:50 (name := geExpr) tlExpr:51 " >= " tlExpr:51 : tlExpr
 syntax:50 (name := eqExpr) tlExpr:51 " == " tlExpr:51 : tlExpr
 syntax:50 (name := neExpr) tlExpr:51 " != " tlExpr:51 : tlExpr
-syntax:40 (name := conditionalExpr) tlExpr:41 " if " tlExpr:41 " else " tlExpr:40 : tlExpr
+syntax:25 (name := conditionalExpr) tlExpr:30 " if " tlExpr:30 " else " tlExpr:25 : tlExpr
 
 syntax (name := positionalArg) tlExpr : tlArg
 syntax (name := kw) tlName "=" tlExpr : tlArg
-syntax (name := primitive) rawIdentNoAntiquot "(" tlArg,*,? ")" : tlExpr
+-- A Boolean prefix followed by a parenthesized operand is still a prefix, e.g. not (a or b).
+def tlCallee : Parser := atomic (rawIdentNoAntiquot >>
+  checkStackTop (fun s => plainSpelling s && syntacticCall .tileScale s.getId) "expected a callable source name")
+syntax (name := primitive) tlCallee "(" tlArg,*,? ")" : tlExpr
 syntax (name := layout) rawIdentNoAntiquot "(" tlExpr "," &"lambda" tlName,+ ":" tlExpr ")" : tlExpr
 syntax (name := layoutMap) "{" tlName ":" tlExpr (",")? "}" : tlExpr
 
@@ -280,6 +289,8 @@ private def validateUnit (m : Mode) : Parser := {
         [``operation, ``primitive, ``loopCall, ``layout].contains n.getKind &&
           !(plainSpelling n[0] && syntacticCall m n[0].getId) then
       return state.mkUnexpectedError s!"outside the {repr m} call grammar: {bad[0].getId}"
+    if let some bad := u.find? fun n => n.isOfKind ``valueExpr && !valueSpelling m n[0].getId then
+      return state.mkUnexpectedError s!"outside the {repr m} value grammar: {bad[0].getId}"
     if let .error e := readUnit m u then return state.mkUnexpectedError e
     return state
 }
