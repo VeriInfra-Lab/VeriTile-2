@@ -82,35 +82,44 @@ private def classLabel : TrustAssumptionClass → String
   | .semanticSource => "semantic source"
   | .translationCorrectness => "translation correctness"
 
--- The equation compiler can introduce these names into proofs built with `rw`.
--- Keep walking the auxiliary's own dependencies after counting its owner.
-private def isAuxiliarySuffix (suffix : String) : Bool :=
-  suffix == "eq_def" ||
-    ["eq_", "match_", "_proof_", "_sparseCasesOn_"].any (fun stem =>
-      suffix.startsWith stem && (suffix.drop stem.length).toString.toNat?.isSome)
-
-private def registeredAuxiliaryOwner? (registered : NameSet) : Name → Option Name
-  | .str owner suffix =>
-    if isAuxiliarySuffix suffix then
-      if registered.contains owner then some owner else registeredAuxiliaryOwner? registered owner
-    else none
-  | _ => none
+-- Consult Lean's records for the exact declaration. A matcher may be shared by
+-- multiple definitions, so the namespace of its name does not identify a premise.
+private def isGeneratedAuxiliary (env : Environment) (referrer : Name)
+    (info : ConstantInfo) : Bool := Id.run do
+  let name := info.name
+  if isMatcherCore env name || isSparseCasesOn env name then
+    return true
+  let matchEquations := Match.matchEqnsExt.getState
+    (asyncMode := .async .asyncEnv) (asyncDecl := name) env
+  if matchEquations.eqns.contains name ||
+      [name.getPrefix, privateToUserName name.getPrefix].any (fun matcher =>
+        (matchEquations.map.find? matcher).any (·.splitterName == name)) then
+    return true
+  -- The elaborator records equations and proof helpers in the branch that
+  -- requested them, which may be the declaration referencing the helper.
+  let equations := eqnsExt.getState
+    (asyncMode := .async .asyncEnv) (asyncDecl := referrer) env
+  if equations.mapInv.contains name then
+    return true
+  let lemmas := auxLemmasExt.getState
+    (asyncMode := .async .asyncEnv) (asyncDecl := referrer) env
+  return [false, true].any fun isPrivate =>
+    (lemmas.lemmas.find? { type := info.type, isPrivate }).any (·.1 == name)
 
 /-- Follow kernel dependencies as in `Lean.CollectAxioms.collect`. Constructors
 carry the fields of classes and structures that their type constants name. -/
 private partial def visitDependencies (env : Environment) (registered : NameSet)
-    (name : Name) : StateT NameSet CoreM Unit := do
+    (referrer name : Name) : StateT NameSet CoreM Unit := do
   if (← get).contains name then return
   modify (·.insert name)
   let userName := ((privateToUserName? name).getD name).eraseMacroScopes
-  if let some owner := registeredAuxiliaryOwner? registered name then
-    visitDependencies env registered owner
-  else if (`VeriTile.Dist.Assumption).isPrefixOf userName && !registered.contains name then
-    throwError "unregistered trust assumption '{userName}'"
   let some info := env.checked.get.find? name
     | throwError "could not inspect trust dependency '{name}'"
+  if (`VeriTile.Dist.Assumption).isPrefixOf userName && !registered.contains name &&
+      !isGeneratedAuxiliary env referrer info then
+    throwError "unregistered trust assumption '{userName}'"
   if let .quotInfo _ := info then return
-  let visit := visitDependencies env registered
+  let visit := visitDependencies env registered name
   info.type.getUsedConstants.forM visit
   if let some value := info.value? (allowOpaque := Bool.true) then
     value.getUsedConstants.forM visit
@@ -121,7 +130,8 @@ private partial def visitDependencies (env : Environment) (registered : NameSet)
 proof and the declarations they reference transitively. The report can include
 assumptions mentioned in a dependency even when its full interface is unused
 by the proof. A reached declaration in the reserved
-`VeriTile.Dist.Assumption` namespace requires a registry entry. -/
+`VeriTile.Dist.Assumption` namespace must be registered or identified by Lean
+as a generated auxiliary. Auxiliary types and bodies are inspected too. -/
 elab "#print_trust_assumptions " id:ident : command => do
   let name ← liftCoreM <| realizeGlobalConstNoOverload id
   let .thmInfo _ ← getConstInfo name | throwError "'{name}' is not a theorem"
@@ -136,7 +146,7 @@ elab "#print_trust_assumptions " id:ident : command => do
 
   let registered : NameSet := registrations.foldl (fun names entry =>
     names.insert entry.declaration) {}
-  let (_, reached) ← liftCoreM <| (visitDependencies env registered name).run {}
+  let (_, reached) ← liftCoreM <| (visitDependencies env registered name name).run {}
   let entries := (registrations.filter (reached.contains ·.declaration)).qsort
     (·.name.toString < ·.name.toString)
   let lines := if entries.isEmpty then ["  none"] else

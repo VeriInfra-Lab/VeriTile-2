@@ -74,7 +74,7 @@ private def semantic (name : Name) (statement : Prop) (source : String)
   affectedKernels := affected
   assumptionClass := .semanticSource
 
-def A1 : TrustAssumption :=
+def undocumented_scope_order_vocabulary : TrustAssumption :=
   semantic `undocumented_scope_order_vocabulary
     Assumption.undocumented_scope_order_vocabulary
     "PrimitiveSources.md §7 A1"
@@ -84,50 +84,50 @@ def A1 : TrustAssumption :=
       "TileScale example_allgather_gemm_specialized.py", "TileScale example_gemm_ar_specialized.py",
       "TileScale example_gemm_rs_overlapped.py", "K-M D2", "K-M D3", "K-M D4", "K-M D5", "K-M D6"]
 
-def A2 : TrustAssumption :=
+def notify_atomic_release : TrustAssumption :=
   semantic `notify_atomic_release Assumption.notify_atomic_release
     "PrimitiveSources.md §7 A2"
     ["Triton-distributed tutorial 01", "Triton-distributed tutorial 08",
       "Triton-distributed gemm_reduce_scatter.py"]
 
-def A3 : TrustAssumption :=
+def spin_wait_one_blocking_event : TrustAssumption :=
   semantic `spin_wait_one_blocking_event Assumption.spin_wait_one_blocking_event
     "PrimitiveSources.md §7 A3"
     ["K11", "K15", "K16"]
 
-def A4 : TrustAssumption :=
+def sync_threads_group_barrier : TrustAssumption :=
   semantic `sync_threads_group_barrier Assumption.sync_threads_group_barrier
     "PrimitiveSources.md §7 A4"
     ["K25", "K26", "K28"]
 
-def A5 : TrustAssumption :=
+def tilescale_barrier_orders_memory : TrustAssumption :=
   semantic `tilescale_barrier_orders_memory Assumption.tilescale_barrier_orders_memory
     "PrimitiveSources.md §7 A5"
     ["K23", "K25", "K26", "K28"]
 
-def A6 : TrustAssumption :=
+def deepep_v1_wait_scope_order : TrustAssumption :=
   semantic `deepep_v1_wait_scope_order Assumption.deepep_v1_wait_scope_order
     "PrimitiveSources.md §7 A6"
     ["K25", "K26", "K28"]
 
-def A7 : TrustAssumption :=
+def deepep_v1_volatile_load_relaxed : TrustAssumption :=
   semantic `deepep_v1_volatile_load_relaxed Assumption.deepep_v1_volatile_load_relaxed
     "PrimitiveSources.md §7 A7"
     ["K25", "K26"]
 
-def A8 : TrustAssumption :=
+def p2p_native_atomic_supported : TrustAssumption :=
   semantic `p2p_native_atomic_supported Assumption.p2p_native_atomic_supported
-    "PrimitiveSources.md §7 A8"
+    "PrimitiveSources.md §7 A8. cudaDevP2PAttrNativeAtomicSupported is a platform condition, a property of the machine of a run, kept in the semantic-source class."
     ["K1", "K11", "K15", "K16", "K25", "K26", "K28"]
 
-def A9 : TrustAssumption :=
+def grid_barrier_cooperative_sync : TrustAssumption :=
   semantic `grid_barrier_cooperative_sync Assumption.grid_barrier_cooperative_sync
     "PrimitiveSources.md §7 A9"
     ["D2 all_to_all_v_2d_kernel", "D2 all_to_all_v_2d_kernel_v2",
       "D3 all_to_all_v_2d_inter_node_kernel", "D4 reduce_topk_reduce_scatter_a2a_intra_node_kernel",
       "D5 reduce_topk_allreduce_kernel", "D6 _copy_and_reset_and_barrier_all_kernel"]
 
-def A10 : TrustAssumption :=
+def deepep_v1_calls_read_by_main_rows : TrustAssumption :=
   semantic `deepep_v1_calls_read_by_main_rows Assumption.deepep_v1_calls_read_by_main_rows
     "PrimitiveSources.md §7 A10"
     ["K23", "K24", "K25", "K26", "K27", "K28"]
@@ -146,16 +146,16 @@ def documented_atomic_update_lowering : TrustAssumption where
 
 /-- The built-in registry entries, pairing each statement and its metadata. -/
 def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
-  #[(``Assumption.undocumented_scope_order_vocabulary, ``A1),
-      (``Assumption.notify_atomic_release, ``A2),
-      (``Assumption.spin_wait_one_blocking_event, ``A3),
-      (``Assumption.sync_threads_group_barrier, ``A4),
-      (``Assumption.tilescale_barrier_orders_memory, ``A5),
-      (``Assumption.deepep_v1_wait_scope_order, ``A6),
-      (``Assumption.deepep_v1_volatile_load_relaxed, ``A7),
-      (``Assumption.p2p_native_atomic_supported, ``A8),
-      (``Assumption.grid_barrier_cooperative_sync, ``A9),
-      (``Assumption.deepep_v1_calls_read_by_main_rows, ``A10),
+  #[(``Assumption.undocumented_scope_order_vocabulary, ``undocumented_scope_order_vocabulary),
+      (``Assumption.notify_atomic_release, ``notify_atomic_release),
+      (``Assumption.spin_wait_one_blocking_event, ``spin_wait_one_blocking_event),
+      (``Assumption.sync_threads_group_barrier, ``sync_threads_group_barrier),
+      (``Assumption.tilescale_barrier_orders_memory, ``tilescale_barrier_orders_memory),
+      (``Assumption.deepep_v1_wait_scope_order, ``deepep_v1_wait_scope_order),
+      (``Assumption.deepep_v1_volatile_load_relaxed, ``deepep_v1_volatile_load_relaxed),
+      (``Assumption.p2p_native_atomic_supported, ``p2p_native_atomic_supported),
+      (``Assumption.grid_barrier_cooperative_sync, ``grid_barrier_cooperative_sync),
+      (``Assumption.deepep_v1_calls_read_by_main_rows, ``deepep_v1_calls_read_by_main_rows),
       (``Assumption.documented_atomic_update_lowering, ``documented_atomic_update_lowering)]
 
 end TrustAssumptions

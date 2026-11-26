@@ -15,6 +15,11 @@ def translationMetadata (programsAgree : Prop) : TrustAssumption where
 
 attribute [trust_assumption translationMetadata] translationFixture
 
+-- The registered definition below reuses the matcher created here.
+def firstMatcherUser : Nat → Prop
+  | 0 => False
+  | _ + 1 => True
+
 def rewriteFixture : Nat → Prop
   | 0 => True
   | _ + 1 => False
@@ -29,6 +34,23 @@ def rewriteMetadata (n : Nat) : TrustAssumption where
 attribute [trust_assumption rewriteMetadata] rewriteFixture
 
 def rewriteFixture.unregistered : Prop := True
+opaque notify_atomic_release.match_9 : Prop
+def translationFixture.match_9 : Prop := unregisteredFixture
+
+theorem unregisteredProof : True := True.intro
+
+def proofFixture : Prop :=
+  (fun (_ : True) => True) (by
+    as_aux_lemma => exact unregisteredProof)
+
+def proofMetadata : TrustAssumption where
+  name := `proofFixture
+  statement := proofFixture
+  sourceOrRationale := "Regression fixture"
+  affectedKernels := []
+  assumptionClass := .translationCorrectness
+
+attribute [trust_assumption proofMetadata] proofFixture
 
 end VeriTile.Dist.Assumption
 
@@ -146,6 +168,53 @@ info: Trust assumptions used by usingRewrite:
 #guard_msgs in
 #print_trust_assumptions usingRewrite
 
+theorem usingSplit (n : Nat) (h : Assumption.rewriteFixture n) : n = 0 := by
+  unfold Assumption.rewriteFixture at h
+  split at h
+  · rfl
+  · contradiction
+
+/--
+info: Trust assumptions used by usingSplit:
+  rewriteFixture (translation correctness)
+-/
+#guard_msgs in
+#print_trust_assumptions usingSplit
+
+def ordinaryMatch : Nat → Prop
+  | 0 => True
+  | _ + 1 => False
+
+theorem usingOrdinaryMatch (h : ordinaryMatch 0) : True := by
+  rw [ordinaryMatch] at h
+  exact h
+
+/--
+info: Trust assumptions used by usingOrdinaryMatch:
+  none
+-/
+#guard_msgs in
+#print_trust_assumptions usingOrdinaryMatch
+
+theorem usingFakeMatcher (_h : Assumption.notify_atomic_release.match_9) : True := True.intro
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.notify_atomic_release.match_9' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingFakeMatcher
+
+theorem usingFakeMatcherDefinition (h : Assumption.translationFixture.match_9) : True := h
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.translationFixture.match_9' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingFakeMatcherDefinition
+
+theorem usingGeneratedProof (_h : Assumption.proofFixture) : True := True.intro
+
+-- The helper's type is True. The unregistered dependency occurs only in its proof.
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredProof' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingGeneratedProof
+
 theorem usingUnregisteredDescendant (h : Assumption.rewriteFixture.unregistered) : True := h
 
 /-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.rewriteFixture.unregistered' -/
@@ -185,13 +254,13 @@ theorem unregisteredWrapped (h : UnregisteredBundle) : True := h.2
 
 /-- error: trust assumption 'notify_atomic_release' is already registered -/
 #guard_msgs (error) in
-attribute [trust_assumption TrustAssumptions.A2] Assumption.notify_atomic_release
+attribute [trust_assumption TrustAssumptions.notify_atomic_release] Assumption.notify_atomic_release
 
 def naturalFixture : Nat := 0
 
 /-- error: trust assumption 'VeriTile.Tests.TrustAssumptions.naturalFixture' must be Prop-valued -/
 #guard_msgs (error) in
-attribute [trust_assumption TrustAssumptions.A2] naturalFixture
+attribute [trust_assumption TrustAssumptions.notify_atomic_release] naturalFixture
 
 def falseFixture : Prop := False
 
