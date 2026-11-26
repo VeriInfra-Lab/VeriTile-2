@@ -23,9 +23,13 @@ private def get (unit : SourceDType) (bytes sms pid : Nat) :=
     libshmem_device.getmem_block(src_ptr + data_copy_begin, src_ptr + data_copy_begin, data_copy_real_size, src_pe)
   }
 
--- Default public harness: 8192 × 6144 BF16 values and 8 CTAs. Last CTA ends at the allocation boundary.
-example : get .bf16 100663296 8 7 =
-    .ok [.get ⟨⟨.global 0, "src", 44040192⟩, 6291456⟩ ⟨⟨.global 1, "src", 44040192⟩, 6291456⟩] := rfl
+-- Every CTA in the default 8192 × 6144 BF16 launch gets a disjoint 6,291,456-cell range.
+example : ∀ pid ∈ List.range 8, get .bf16 100663296 8 pid =
+    .ok [.get ⟨⟨.global 0, "src", pid * 6291456⟩, 6291456⟩
+              ⟨⟨.global 1, "src", pid * 6291456⟩, 6291456⟩] := by
+  intro pid member
+  have bound := List.mem_range.mp member
+  interval_cases pid <;> rfl
 
 -- Change only the public --num_sms option to 7. CTA 0 ends, CTA 1 begins, inside a BF16 value.
 example : get .bf16 100663296 7 0 =
