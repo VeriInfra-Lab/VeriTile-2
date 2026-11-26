@@ -82,6 +82,20 @@ private def classLabel : TrustAssumptionClass → String
   | .semanticSource => "semantic source"
   | .translationCorrectness => "translation correctness"
 
+-- The equation compiler can introduce these names into proofs built with `rw`.
+-- Keep walking the auxiliary's own dependencies after counting its owner.
+private def isAuxiliarySuffix (suffix : String) : Bool :=
+  suffix == "eq_def" ||
+    ["eq_", "match_", "_proof_", "_sparseCasesOn_"].any (fun stem =>
+      suffix.startsWith stem && (suffix.drop stem.length).toString.toNat?.isSome)
+
+private def registeredAuxiliaryOwner? (registered : NameSet) : Name → Option Name
+  | .str owner suffix =>
+    if isAuxiliarySuffix suffix then
+      if registered.contains owner then some owner else registeredAuxiliaryOwner? registered owner
+    else none
+  | _ => none
+
 /-- Follow kernel dependencies as in `Lean.CollectAxioms.collect`. Constructors
 carry the fields of classes and structures that their type constants name. -/
 private partial def visitDependencies (env : Environment) (registered : NameSet)
@@ -89,7 +103,9 @@ private partial def visitDependencies (env : Environment) (registered : NameSet)
   if (← get).contains name then return
   modify (·.insert name)
   let userName := ((privateToUserName? name).getD name).eraseMacroScopes
-  if (`VeriTile.Dist.Assumption).isPrefixOf userName && !registered.contains name then
+  if let some owner := registeredAuxiliaryOwner? registered name then
+    visitDependencies env registered owner
+  else if (`VeriTile.Dist.Assumption).isPrefixOf userName && !registered.contains name then
     throwError "unregistered trust assumption '{userName}'"
   let some info := env.checked.get.find? name
     | throwError "could not inspect trust dependency '{name}'"

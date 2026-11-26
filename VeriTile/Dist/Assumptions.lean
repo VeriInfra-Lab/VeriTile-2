@@ -58,6 +58,10 @@ opaque grid_barrier_cooperative_sync : Prop
 /-- A10. Opaque pending the call-to-event interpretation of the v1 port. -/
 opaque deepep_v1_calls_read_by_main_rows : Prop
 
+/-- S3.1 N5′. Opaque until a front end produces a documented atomic update
+with an operand function and return value. -/
+opaque documented_atomic_update_lowering : Prop
+
 end Assumption
 
 namespace TrustAssumptions
@@ -128,6 +132,18 @@ def A10 : TrustAssumption :=
     "PrimitiveSources.md §7 A10"
     ["K23", "K24", "K25", "K26", "K27", "K28"]
 
+def documented_atomic_update_lowering : TrustAssumption where
+  name := `documented_atomic_update_lowering
+  statement := Assumption.documented_atomic_update_lowering
+  sourceOrRationale :=
+    "The function carried by `AccessValue.update` is trusted only at the boundary that lowers " ++
+    "a documented source-level atomic to a distributed emission. A producer identifies its " ++
+    "primitive, pinned contract, operand function and return behaviour; a plain load, " ++
+    "computation and store never becomes one atomic event. At main `90f8e34ed` no front end " ++
+    "produces this payload."
+  affectedKernels := []
+  assumptionClass := .translationCorrectness
+
 /-- The built-in registry entries, pairing each statement and its metadata. -/
 def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
   #[(``Assumption.undocumented_scope_order_vocabulary, ``A1),
@@ -139,7 +155,8 @@ def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
       (``Assumption.deepep_v1_volatile_load_relaxed, ``A7),
       (``Assumption.p2p_native_atomic_supported, ``A8),
       (``Assumption.grid_barrier_cooperative_sync, ``A9),
-      (``Assumption.deepep_v1_calls_read_by_main_rows, ``A10)]
+      (``Assumption.deepep_v1_calls_read_by_main_rows, ``A10),
+      (``Assumption.documented_atomic_update_lowering, ``documented_atomic_update_lowering)]
 
 end TrustAssumptions
 end VeriTile.Dist

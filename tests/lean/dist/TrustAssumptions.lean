@@ -15,6 +15,21 @@ def translationMetadata (programsAgree : Prop) : TrustAssumption where
 
 attribute [trust_assumption translationMetadata] translationFixture
 
+def rewriteFixture : Nat → Prop
+  | 0 => True
+  | _ + 1 => False
+
+def rewriteMetadata (n : Nat) : TrustAssumption where
+  name := `rewriteFixture
+  statement := rewriteFixture n
+  sourceOrRationale := "Regression fixture"
+  affectedKernels := []
+  assumptionClass := .translationCorrectness
+
+attribute [trust_assumption rewriteMetadata] rewriteFixture
+
+def rewriteFixture.unregistered : Prop := True
+
 end VeriTile.Dist.Assumption
 
 namespace VeriTile.Tests.TrustAssumptions
@@ -119,6 +134,33 @@ info: Trust assumptions used by usingTranslation:
 -/
 #guard_msgs in
 #print_trust_assumptions usingTranslation
+
+theorem usingRewrite (h : Assumption.rewriteFixture 0) : True := by
+  rw [Assumption.rewriteFixture] at h
+  exact h
+
+/--
+info: Trust assumptions used by usingRewrite:
+  rewriteFixture (translation correctness)
+-/
+#guard_msgs in
+#print_trust_assumptions usingRewrite
+
+theorem usingUnregisteredDescendant (h : Assumption.rewriteFixture.unregistered) : True := h
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.rewriteFixture.unregistered' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingUnregisteredDescendant
+
+theorem usingDocumentedAtomicUpdate (h : Assumption.documented_atomic_update_lowering) :
+    Assumption.documented_atomic_update_lowering := h
+
+/--
+info: Trust assumptions used by usingDocumentedAtomicUpdate:
+  documented_atomic_update_lowering (translation correctness)
+-/
+#guard_msgs in
+#print_trust_assumptions usingDocumentedAtomicUpdate
 
 theorem usingUnregistered (h : Assumption.unregisteredFixture) : True := h
 
