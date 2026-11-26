@@ -29,6 +29,10 @@ profile_python=python3
 python3 -c 'import tomllib' 2>/dev/null || profile_python="uv run --no-project --python 3.11 python"
 commands=("python3 scripts/check_docs.py"
           "python3 scripts/transcribe_tilelang_roots.py --check"
+          "python3 -B -m unittest scripts.test_transcribe_tilelang_roots"
+          "python3 scripts/generate_tilelang_surface.py --check"
+          "python3 -B -m unittest scripts.test_generate_tilelang_surface"
+          "python3 scripts/generate_tilelang_precedence.py --check"
           "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
           "python3 -B -m unittest scripts.test_fork_replay"
@@ -83,7 +87,10 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TrustAssumptions"
              "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
              "lake env lean tests/lean/TileLangSyntax.lean"
-             "lake env lean tests/lean/TileLangPinnedRoots.lean")
+             "lake env lean tests/lean/TileLangPinnedRoots.lean"
+             "lake env lean tests/lean/TileLangPrecedence.lean"
+             "lake env lean tests/lean/TileLangLower.lean"
+             "lake env lean tests/lean/TileLangTransfer.lean")
 fi
 
 log=$(mktemp -d)

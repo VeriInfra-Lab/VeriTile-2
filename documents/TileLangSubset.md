@@ -1,6 +1,6 @@
 # TileLang source syntax
 
-A3.1 (#83) is an unsigned syntax freeze draft. Import `VeriTile.TileLang` to use the public Lean term `tilelang { … }` and its result type `VeriTile.TileLang.Source`. The parser retains production names, identifiers, literal spellings, operands, keywords and child order in a tree. It checks the complete quotation, including nested arguments and macro bodies, before elaboration. #84–#90 supply types, operator contracts, inlining, control flow and segment projection. [Ingestion decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/21) · [Syntax implementation](../VeriTile/TileLang/DSL/Syntax.lean)
+Import `VeriTile.TileLang` to quote a factory or a direct JIT kernel. Both `tilelang { … }` and `tilescale { … }` return a `VeriTile.TileLang.Program`. The grammar is shared. The selected mode is stored on the typed object. This revision implements the user's T1–T10 decisions for A3.1 and is awaiting coordinator review and signature. [Decisions](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7197427447) · [Additional acceptance criteria](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7197942972)
 
 ## Quoting a kernel
 
@@ -8,8 +8,8 @@ A3.1 (#83) is an unsigned syntax freeze draft. Import `VeriTile.TileLang` to use
 import VeriTile.TileLang
 open VeriTile.TileLang
 
-example : Source := tilelang {
-  def copy_when(n, enabled): {
+def copy_when : Program := tilelang {
+  def factory(n, enabled): {
     if enabled: {width = n} else: {width = 1};
     @T.macro def move(src, dst): {T.copy(src, dst)};
     @T.prim_func def run(X: T.Tensor([width], T.float32), Y: T.Tensor([width], T.float32)): {
@@ -18,19 +18,30 @@ example : Source := tilelang {
     return run
   }
 }
+#guard copy_when.accepted
 ```
 
-A quotation contains one outer function. A factory has positional outer parameters, optional expression defaults, static assignments, assertions or branches, then zero or more local `@T.macro` definitions, exactly one `@T.prim_func` and a return naming that function. A helper takes positional names, may call an earlier helper, and must be called at its declared arity. An eager `@tilelang.jit` function instead contains its own kernel suite, with at least one `with T.Kernel`. Four pinned targets use this second form. A factory may also carry the JIT decorator. Source dtypes, fast-math configuration, bounds, guards, input/output order and the stage modulus are retained. An outer branch is a compile-time choice in the source; resolving its condition belongs to #90.
+A factory contains static assignments, assertions or branches, earlier-declared local `@T.macro` procedures, one `@T.prim_func` with distinct tensor parameters, and a return naming that exact function. A factory's primitive function may be a straight-line computation without a launch. A macro can return a value explicitly. A statement-only macro cannot supply an expression. Calls use the declared arity and a macro cannot shadow another declaration or `range`. Parallel and grid binders must be distinct and their count must match the dimensions.
 
-Braces delimit Python suites and semicolons separate statements. Use double quotes for source string literals and Lean comments around transcribed code. The surface accepts decimal/scientific numbers, booleans, names, supported dtype/policy constants, `.shape` and `.dtype`, grouping, lists, tuples, buffer indices, open or bounded two-ended slices, comparisons, scalar arithmetic, XOR, and conditional expressions. A source annotation is `name: T.Tensor(shape, dtype)`. A layout lambda is restricted to `T.Layout(shape, lambda names: expression)`; a one-entry layout map preserves its buffer key and expression. Standalone imports, arbitrary Python execution, generated functions, unrestricted decorators and unknown calls/keywords are parse failures. Host tuning decorators and harness code are outside the enclosing kernel quotation. There is no execution of Python or extraction of lowered IR.
+A direct `@tilelang.jit` form has a fixed sequence. Static name/tuple assignments, tensor declarations, assertions and static branches precede exactly one top-level `with T.Kernel`; the function ends with one return expression. Device operations in the host prelude, a kernel inside a host loop, a second launch, a nested launch and a return from inside the device body fail admission. An in-kernel `if is_causal:` retains the same typed branch form as an index-dependent condition. #90 owns specialization and the decision whether it can remove a branch.
 
-The directly represented JIT options are `out_idx=[…]` and one boolean `pass_configs` entry using `"tl.disable_warp_specialized"`, `tilelang.PassConfigKey.TL_DISABLE_WARP_SPECIALIZED` or `tilelang.PassConfigKey.TL_ENABLE_FAST_MATH`. Duplicate option keys fail. Unqualified variable names can include Lean keywords such as the coordinate `by`.
+Before the outer function a source can declare a one-parameter top-level layout helper. Its entire body must be `return T.Layout(buffer.shape, lambda coordinates: expression)`. The input and coordinates are bound names. The coordinate expression contains only those coordinates, natural literals, lists or tuples, and `+`, `-`, `*`, `//` or `%`. A memory read, arbitrary function call, captured name or extra statement fails the helper grammar. Roots 3 and 4 use precisely the original declaration and call.
+
+## Typed objects and admission
+
+The proposed signable interface is the typed family `Program`, `Definition`, `Procedure`, `Statement`, `Place`, `Parameter`, `Value`, `Index`, `Argument`, `LayoutHelper`, `JitOption`, and their mode and operator tags, together with `Program.accepted` and the public lowering boundary. The source retains symbolic dimensions and dtype expressions. Equality and pattern matching distinguish a tensor annotation from an assignment, a slice from an index, and a statement call from a value. The parser's internal child offsets are not the admission contract. [AST](../VeriTile/TileLang/DSL/Ast.lean) · [Admission](../VeriTile/TileLang/DSL/Accepted.lean) · [Typed readback and negative clients](../tests/lean/TileLangSyntax.lean)
+
+`Program.accepted : Program → Bool` is a total decision procedure over the complete typed object, including hand-constructed objects. It checks mode, options, the outer-function shape, local binding and arity, permitted calls and exact keyword combinations, nested operands, and binders. This is a decision about membership in the admitted source fragment. Symbolic values may still need a dtype, shape, scope or ordering contract before the kernel can execute. Every extension of admission must be reported by the coordinator as a tier-A decision naming the new forms it admits.
+
+Braces delimit suites, semicolons separate statements and double quotes delimit strings. A proof quotation must be produced by the committed transcriber and pass its `--check`; hand-written samples serve as regression tests. The quotation rejects Lean line and block comments. In particular a Python subtraction such as `a --b` cannot silently lose its second operand. The generated precedence suite compares typed operator trees to CPython for 259 expressions and rejects all 36 two-comparison chains. [Precedence generator](../scripts/generate_tilelang_precedence.py) · [Public client](../tests/lean/TileLangPrecedence.lean)
+
+`out_idx` and the spelling and Boolean value of the permitted pass configurations are literal source options. `Program.fastMath` returns `some true`, `some false` or `none`. Every floating-point theorem for a TileLang program must state the selected `TL_ENABLE_FAST_MATH` setting as an explicit premise (including explicit absence where applicable). Roots 1–4 set it to true. This syntax decision supplies no IEEE or fast-math semantics.
 
 ## Name × arguments × status
 
-The [A0.2 TileLang census](census/MinimalSyntax.md#tilelang) assigns nine kernel IDs, counts one use per root (including same-file helpers), and records the union of observed keyword names. In the table a number is the exact count of positional operands. A keyword following a plus is required in that alternative. Keywords in a group can change order, but must be unique and follow all positionals. The table distinguishes separate observed combinations of keywords. An unlisted spelling or argument combination is a parse failure for this draft. The last column cites a complete gated client in [the generated roots](../tests/lean/TileLangPinnedRoots.lean). “Adapted” denotes the copy with an explicit local layout macro. The [public syntax tests](../tests/lean/TileLangSyntax.lean) also exercise the rank-one grid and the declared-macro rule, which do not occur at the pin.
+The generated call matrix inventories all 717 distinct exports of the pinned CUDA `tilelang.language.__all__`, including names re-exported by the pinned TVM gitlink. Its rows identify the basis and admitted shape. The table below gives shorthand for the observed pairs in the nine-root census. Numbers count positional operands; keywords are required in each stated alternative, may change order, and cannot repeat. A cited root witnesses the occurrence even when its outer form independently fails admission. [Complete call matrix](generated/TileLangCallMatrix.md) · [Census](census/MinimalSyntax.md#tilelang) · [Complete public roots](../tests/lean/TileLangPinnedRoots.lean)
 
-| Call | Positional operands and keywords | Roots | Public parse result | Test root |
+| Call | Positional operands and keywords | Roots | Admission of this form | Test root |
 | --- | --- | ---: | --- | --- |
 | `T.Kernel` | 1–3 grid coordinates, optionally + `threads`; the binder count equals grid rank | 9 | accepted | 1 |
 | `T.Tensor` | 2, in tensor annotations | 9 | accepted | 1 |
@@ -47,10 +58,10 @@ The [A0.2 TileLang census](census/MinimalSyntax.md#tilelang) assigns nine kernel
 | `T.if_then_else` | 3 | 3 | accepted | 1 |
 | `T.max` | 2 | 3 | accepted | 1 |
 | `T.reduce_sum` | 3 or 2 + `dim` | 3 | accepted | 1 |
-| `(local function: undecorated)` | 1; `make_dq_layout(dQ)` | 2 | parse failure | 3–4, original |
+| `(local function: undecorated)` | 1; `make_dq_layout(dQ)` | 2 | accepted with the original top-level declaration | 3–4 |
 | `range` | 1 | 2 | accepted | 2 |
-| `T.Layout` | 2; the second operand is a coordinate lambda | 2 | accepted | 3 adapted |
-| `T.annotate_layout` | 1 | 2 | accepted | 3 adapted |
+| `T.Layout` | 2; the second operand is a coordinate lambda | 2 | accepted | 3 |
+| `T.annotate_layout` | 1 | 2 | accepted | 3 |
 | `T.empty` | 2 | 2 | accepted | 8 |
 | `T.fill` | 2 | 2 | accepted | 1 |
 | `T.infinity` | 1 | 2 | accepted | 1 |
@@ -59,8 +70,8 @@ The [A0.2 TileLang census](census/MinimalSyntax.md#tilelang) assigns nine kernel
 | `T.use_swizzle` | 1 | 2 | accepted | 6 |
 | `math.ceil` | 1 | 1 | accepted | 7 |
 | `T.alloc_barrier` | 1 | 1 | accepted | 9 |
-| `T.atomic_add` | 2 | 1 | accepted | 4 adapted |
-| `T.floordiv` | 2 | 1 | accepted | 4 adapted |
+| `T.atomic_add` | 2 | 1 | accepted | 4 |
+| `T.floordiv` | 2 | 1 | accepted | 4 |
 | `T.log2` | 1 | 1 | accepted | 1 |
 | `T.mbarrier_arrive` | 0 + `mbarrier` | 1 | accepted | 9 |
 | `T.mbarrier_wait_parity` | 0 + `mbarrier, parity` | 1 | accepted | 9 |
@@ -78,24 +89,37 @@ The [A0.2 TileLang census](census/MinimalSyntax.md#tilelang) assigns nine kernel
 | `Return` | Expression in a kernel or helper; the declared prim_func in a factory | 4 | `returnStmt`, `factory` |
 | `AugAssign` | Name or subscript with `+=`, `-=`, `*=` or `/=` | 3 | `addAssignStmt`, `subAssignStmt`, `mulAssignStmt`, `divAssignStmt` |
 
-| Explicit exclusions | Public parse result |
+| Explicit exclusions | Admission of this form |
 | --- | --- |
 | Explicit `T.wgmma(...)` and its variants | parse failure |
 | Explicit `T.tcgen05(...)` and its variants | parse failure |
 | Proxy-fence calls such as `T.fence_proxy_async()` | parse failure |
 
-TileScale has a [separate A4 census](census/MinimalSyntax.md#tilescale). Shared names are accepted only at the shapes above. For example, the TileScale-only `scope=` on `T.alloc_shared`, `leader_thread_extent=` on `T.tma_copy` and `dst_pe=` on `T.atomic_add` fail here, as do distributed calls, Python `while`, `break`, and `continue`. A3 follow-ups can extend this draft for specified, currently unobserved forms such as the additional loops in #87 and GEMM options in #88. Those forms require a new grammar row and a parser test.
+An exported call outside these admitted forms can still be represented as a typed call for inspection. TileLang mode excludes explicit WGMMA, TCGen05 and proxy-fence instructions even when nested inside another expression or macro. An unrelated qualified call outside the pinned surface fails the grammar. Unbound local helpers fail admission. In particular, `T.call_extern` has no admitted external symbol. A future external-call whitelist would require a coordinator tier-A decision naming specific admitted symbols and contracts.
+
+TileScale mode shares the grammar and recognizes separate control-flow and operand forms, including `while`, `break`, `continue`, Boolean `and/or/not`, and the registered `scope`, `dst_pe` and `leader_thread_extent` combinations. The TileLang-only negative tests do not impose a TileScale execution contract. #84–#90 own the layout, memory, operator and synchronization contracts recorded in their tickets.
+
+## Lowering and asynchronous transfers
+
+`Program.lower` specializes an admitted scalar/int32 fragment to an explicit launch and an actual `VeriTile.Triton.Kernel` whose body contains dependent `Triton.Op dtype shape` and `Triton.Stmt`. The public result also records the input tensor extents, result buffer, launch count and thread count. The public regression inspects actual core operands and writeback, and exercises nonlowerable inputs. A lowering failure is a distinct result from a source admission failure. Symbolic allocations, GEMM, pipelining, TMA and floating arithmetic still require their corresponding frontend contracts. [Lowering](../VeriTile/TileLang/DSL/Lower.lean) · [Core client](../tests/lean/TileLangLower.lean)
+
+T7 assigns #89 only global-to-shared `T.tma_copy` completed by an mbarrier. The pinned warp-specialized GEMM names the barrier on both copies, arrives on that barrier, and waits on its indexed phase in the consumer role. The source admission check requires a declared global tensor, a previously allocated shared destination, a barrier allocation, and matching indexed arrive and wait in the checked control flow. It follows pending copies across the producer and consumer roles, rejects lost bindings and rejects a completion on a different path or slot. This establishes a source pattern; #89 owns its hardware completion and ordering contract. A shared-to-global TMA would require a different ordering contract. There is no projection of an asynchronous transfer into a synchronous core copy. The arithmetic in the pinned parity expression remains literal. [Source check](../VeriTile/TileLang/DSL/Transfer.lean) · [Public transfer tests](../tests/lean/TileLangTransfer.lean) · [Pinned usage](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/warp_specialize/example_warp_specialize_gemm_barrierpipe_stage2.py#L30-L43)
+
+## Trusted base for ingestion
+
+- The five vendored fixture blobs at the pinned Git revision establish the input. Git blob identities cover the entire files, including comments and surrounding host code. [Inputs and attribution](../THIRD_PARTY_NOTICES.md#tilelang)
+- The committed transcriber, CPython's `ast` and tokenizer, and its canonical Python printing are part of the ingestion trusted base. The forward check regenerates the exact committed Lean client bytes. The independent reverse pass reads the *actual* quoted text back, reconstructs Python, and compares its AST and canonical source to the selected source declarations. Whitespace and comments are normalized. A wrong stage modulus or a synthetic helper decorator changes the reverse comparison. [Transcriber](../scripts/transcribe_tilelang_roots.py) · [Bidirectional mutation checks](../scripts/test_transcribe_tilelang_roots.py)
+- The source boundary omits outer host-autotuning decorators and host harnesses. The JIT decorator and options are retained. An earlier transcriber inserted a local `@T.macro` in roots 3 and 4. This revision removes that rewrite entirely and includes the original undecorated top-level helper. The round trip covers the selected original declarations and JIT options.
+- The full export matrix generator follows the pinned facade, CUDA and common language modules and TVM gitlink. Its offline regeneration check pins the symbol universe used by the parser. [Generator and source reproduction](../scripts/generate_tilelang_surface.py)
 
 ## Pinned root audit
 
-All five distinct files were fetched at TileLang `35850c06875bcc84751417982bf7b4d662bafdbc` and their contents checked against Git blob IDs on 2026-11-25. Run `python3 scripts/transcribe_tilelang_roots.py --check` to recompute all eleven complete clients byte for byte from the five vendored Git blobs, with no network or GPU dependencies. Run `lake env lean tests/lean/TileLangPinnedRoots.lean` to elaborate the nine positive clients and check the two original negative diagnostics through the public term parser. Both steps and the public restriction tests run in the author gate. [AST transcriber](../scripts/transcribe_tilelang_roots.py) · [Pinned inputs and attribution](../THIRD_PARTY_NOTICES.md#tilelang)
-
-Each of the nine roots below was tested through the public quotation with its full parameter list and complete body. The test transcribed the Python AST to braces and semicolons, normalized string quotes and tuples of binders, and retained every kernel call, slice, branch and JIT option. Host code and the outer host autotuner were excluded. Seven roots produced syntax trees. The two refusals call the same undecorated Python helper, declared at line 121 and used at lines 144 and 201. In a second pair of complete clients, declaring the same helper body as a local `@T.macro` (including its six-coordinate index lambda) made both kernels parse and elaborate. Their unchanged source calls then bind to a known name and arity. This is an explicit transcription choice; the original top-level undecorated helper still fails. [Helper and both call sites](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py#L121-L202)
+Run `python3 scripts/transcribe_tilelang_roots.py --check` and `lake env lean tests/lean/TileLangPinnedRoots.lean`. All nine complete sources produce a typed program. Seven pass admission. The two fused-MoE programs each contain two top-level launches, which T1 deliberately excludes. Their declarations remain intact as executable negative tests. [Pinned helper and call sites](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py#L121-L202)
 
 | Census IDs | File and outer/body lines at pin | Factory shape and result | Git blob |
 | --- | --- | --- | --- |
-| 1–4 | [example_mha_bwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py), 15–83 (22–81), 92–118 (99–116), 132–150 (139–148), 158–244 (166–242) | Nested, accepted 1–2; parse failure 3–4 | `34e8fefc51bbcf64dc05d9d6e47f6e3ee3381102` |
+| 1–4 | [example_mha_bwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py), 15–83 (22–81), 92–118 (99–116), 132–150 (139–148), 158–244 (166–242) | Nested, accepted 1–4 (3–4 use the pinned top-level helper) | `34e8fefc51bbcf64dc05d9d6e47f6e3ee3381102` |
 | 5 | [example_mha_fwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_fwd_bhsd.py), 23–102 (34–100) | Nested, accepted | `4007365418b58f7c435244939025cc91a33d1c9f` |
-| 6–7 | [example_fusedmoe_tilelang.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/fusedmoe/example_fusedmoe_tilelang.py), 12–88, 92–225 | Direct, both accepted | `a8c78c7674b78a6589daf1c90b6c99dca4c61792` |
+| 6–7 | [example_fusedmoe_tilelang.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/fusedmoe/example_fusedmoe_tilelang.py), 12–88, 92–225 | Direct, both parsed; admission rejects two top-level kernels | `a8c78c7674b78a6589daf1c90b6c99dca4c61792` |
 | 8 | [example_gemm.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/gemm/example_gemm.py), 6–26 | Direct, accepted | `b432ffd59e4173704ea820c78593a029a71e81ca` |
 | 9 | [example_warp_specialize_gemm_barrierpipe_stage2.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/warp_specialize/example_warp_specialize_gemm_barrierpipe_stage2.py), 6–50 | Direct, accepted, including the source parity modulus | `a8010ca7cd95430d18317aa9b62800e4d5b0e9b6` |

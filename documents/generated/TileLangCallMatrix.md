@@ -40,7 +40,7 @@ The keyword column inventories optional positional-or-keyword parameters, keywor
 | [`T.KernelLaunchFrame`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/kernel.py#L156) | — | unadmitted | Outside the public accepted forms. |
 | [`T.LE`](https://github.com/TileLang/tvm/blob/0215a96cba91eabac903afa4ec1e42c99257e4c3/python/tvm/tirx/expr.py#L951) | `span` | unadmitted | Outside the public accepted forms. |
 | [`T.LT`](https://github.com/TileLang/tvm/blob/0215a96cba91eabac903afa4ec1e42c99257e4c3/python/tvm/tirx/expr.py#L931) | `span` | unadmitted | Outside the public accepted forms. |
-| [`T.Layout`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/layout/layout.py#L12) | — | partial | 2; the second operand is a coordinate lambda. Census client 3 adapted. |
+| [`T.Layout`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/layout/layout.py#L12) | — | partial | 2; the second operand is a coordinate lambda. Census client 3. |
 | [`T.Let`](https://github.com/TileLang/tvm/blob/0215a96cba91eabac903afa4ec1e42c99257e4c3/python/tvm/tirx/script/builder/ir.py#L1020) | — | unadmitted | Outside the public accepted forms. |
 | [`T.LocalBuffer`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/proxy.py#L95) | `dtype`, `data`, `strides`, `elem_offset`, `scope`, `align`, `offset_factor`, `buffer_type`, `axis_separators` | unadmitted | Outside the public accepted forms. |
 | [`T.Max`](https://github.com/TileLang/tvm/blob/0215a96cba91eabac903afa4ec1e42c99257e4c3/python/tvm/tirx/expr.py#L871) | `span` | unadmitted | Outside the public accepted forms. |
@@ -141,7 +141,7 @@ The keyword column inventories optional positional-or-keyword parameters, keywor
 | [`T.annotate_consumer_reg_alloc`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/builtin.py#L426) | `reg_count` | unadmitted | Outside the public accepted forms. |
 | [`T.annotate_host_mapped_buffers`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/annotations.py#L113) | — | unadmitted | Outside the public accepted forms. |
 | [`T.annotate_l2_hit_ratio`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/annotations.py#L82) | — | unadmitted | Outside the public accepted forms. |
-| [`T.annotate_layout`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/annotations.py#L69) | — | partial | 1. Census client 3 adapted. |
+| [`T.annotate_layout`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/annotations.py#L69) | — | partial | 1. Census client 3. |
 | [`T.annotate_min_blocks_per_sm`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/annotations.py#L91) | — | unadmitted | Outside the public accepted forms. |
 | [`T.annotate_pass_configs`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/eager/builder.py#L1243) | — | unadmitted | Outside the public accepted forms. |
 | [`T.annotate_producer_reg_dealloc`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/builtin.py#L417) | `reg_count` | unadmitted | Outside the public accepted forms. |
@@ -163,7 +163,7 @@ The keyword column inventories optional positional-or-keyword parameters, keywor
 | [`T.atan`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L198) | `dtype`, `**kwargs` | unadmitted | Outside the public accepted forms. |
 | [`T.atan2`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L199) | `dtype`, `**kwargs` | unadmitted | Outside the public accepted forms. |
 | [`T.atanh`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L200) | `dtype`, `**kwargs` | unadmitted | Outside the public accepted forms. |
-| [`T.atomic_add`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/cuda/language/atomic.py#L12) | `memory_order`, `return_prev`, `use_tma`, `annotations` | partial | 2. Census client 4 adapted. |
+| [`T.atomic_add`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/cuda/language/atomic.py#L12) | `memory_order`, `return_prev`, `use_tma`, `annotations` | partial | 2. Census client 4. |
 | [`T.atomic_addx2`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/atomic.py#L319) | `return_prev` | unadmitted | Outside the public accepted forms. |
 | [`T.atomic_addx4`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/atomic.py#L357) | `return_prev` | unadmitted | Outside the public accepted forms. |
 | [`T.atomic_load`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/atomic.py#L395) | `memory_order` | unadmitted | Outside the public accepted forms. |
@@ -366,7 +366,7 @@ The keyword column inventories optional positional-or-keyword parameters, keywor
 | [`T.float8_e8m0fnux64`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/dtypes.py#L681) | `is_size_var` | unadmitted | Outside the public accepted forms. |
 | [`T.float8_e8m0fnux8`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/dtypes.py#L678) | `is_size_var` | unadmitted | Outside the public accepted forms. |
 | [`T.floor`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L215) | `dtype`, `span`, `**kwargs` | unadmitted | Outside the public accepted forms. |
-| [`T.floordiv`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L224) | `dtype`, `span`, `**kwargs` | partial | 2. Census client 4 adapted. |
+| [`T.floordiv`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L224) | `dtype`, `span`, `**kwargs` | partial | 2. Census client 4. |
 | [`T.floormod`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/tir/ir.py#L225) | `dtype`, `span`, `**kwargs` | unadmitted | Outside the public accepted forms. |
 | [`T.fma`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/cuda/language/math.py#L30) | — | unadmitted | Outside the public accepted forms. |
 | [`T.fma2`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/math_intrinsics.py#L398) | — | unadmitted | Outside the public accepted forms. |
