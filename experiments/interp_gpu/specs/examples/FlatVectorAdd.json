@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FlatVectorAdd",
+    "lean": "VeriTile.Bench.Examples.FlatVectorAdd.Kernels.addMaskedKernel",
+    "source": "bench/examples/FlatVectorAdd/FlatVectorAdd.py::flat_vector_add"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "fp32-basic"
+  },
+  "constexpr": {
+    "blockSize": 4,
+    "nElements": 5
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "x"
+    },
+    {
+      "parameter": "yReg",
+      "buffer": "y"
+    },
+    {
+      "parameter": "outReg",
+      "buffer": "out"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "boundary",
+      "inputs": {
+        "x": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/flat-add-x.tensor"
+        },
+        "y": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/flat-add-y.tensor"
+        }
+      },
+      "expected": {
+        "out": "tests/interp/fixtures/flat-add-sum.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "out",
+      "dtype": "fp32",
+      "shape": [
+        5
+      ]
+    }
+  ]
+}

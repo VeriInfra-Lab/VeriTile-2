@@ -51,6 +51,8 @@ if [ "$lean" = 1 ]; then
              # Fork-owned regression modules that no target gate builds.
              "bash tests/interp/run_regression.sh"
              "lake env lean --run tests/interp/ReshapeOrder.lean"
+             "python3 tests/interp/fixtures/vector_add_cases.py --check"
+             "uv run --no-project --python 3.11 --with jsonschema --script experiments/interp_gpu/specs/examples/run.py experiments/interp_gpu/specs/examples/FlatVectorAdd.json experiments/interp_gpu/specs/examples/FloatDTypeAdd.json"
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpReflectBench"
              "lake build tests.lean.InterpEvalSmoke"
