@@ -11,6 +11,9 @@
 # Prints one line per command with its exit code; exits 0 only if all are 0.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# The gate checks the frozen tables without any override; a sign-off runs
+# check_frozen_base.py with it separately (VeriTile/Staging/README.md).
+unset VERITILE_FROZEN_OVERRIDE
 
 lean=1 status=0
 for argument in "$@"; do
@@ -28,7 +31,9 @@ commands=("python3 scripts/check_docs.py"
           "python3 scripts/transcribe_tilelang_roots.py --check"
           "python3 -B -m unittest discover -s scripts -p test_check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
-          "python3 -B -m unittest scripts.test_fork_replay")
+          "python3 -B -m unittest scripts.test_fork_replay"
+          "python3 scripts/check_frozen_base.py"
+          "python3 scripts/check_test_sorry.py --sources")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done
@@ -72,7 +77,11 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.ElementHelper"
              "lake build tests.lean.dist.PointerCasts"
              "lake build tests.lean.dist.UnguardedShared"
+             "lake build tests.lean.dist.Location"
+             "lake build tests.lean.dist.TritonDistShmem"
              "lake build tests.lean.dist.SegmentFootprint"
+             "lake build tests.lean.dist.TrustAssumptions"
+             "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
              "lake env lean tests/lean/TileLangSyntax.lean"
              "lake env lean tests/lean/TileLangPinnedRoots.lean")
 fi
@@ -91,6 +100,8 @@ for index in "${!commands[@]}"; do
     ${commands[$index]} >"$log/$index.log" 2>&1
   fi
   code=$?
+  # A `sorry` in a tests/lean file fails the command that built or ran it.
+  python3 scripts/check_test_sorry.py "$log/$index.log" >>"$log/$index.log" 2>&1 || [ "$code" != 0 ] || code=1
   echo "exit $code  ${commands[$index]}"
   if [ "$code" != 0 ]; then
     failed=$((failed + 1))

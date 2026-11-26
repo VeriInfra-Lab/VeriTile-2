@@ -59,6 +59,36 @@ class NumPyCarrier(unittest.TestCase):
                 self.assertEqual(output.dtype, dtype)
                 self.assertEqual(float(output[0]), 1.0)
 
+    def test_fp8_overflow_in_literals_arithmetic_and_casts(self):
+        formats = [('f8e4', 448, 464, 465), ('f8e5', 57344, 61439, 61440)]
+        for name, largest, last_rounding_to_finite, first_overflow in formats:
+            dtype = pyexec.DTYPES[name]
+            for sign in (-1, 1):
+                edge = lit(sign * largest, name)
+                half = lit(sign * (largest // 2), name)
+                finite = {
+                    'largest literal': edge,
+                    'last finite rounding': lit(sign * last_rounding_to_finite, name),
+                    'finite sum': node('add', name, [], half, half),
+                }
+                overflow = {
+                    'first overflowing literal': lit(sign * first_overflow, name),
+                    'far overflowing literal': lit(sign * 4 * largest, name),
+                    'overflowing sum': node('add', name, [], edge, edge),
+                    'overflowing fp32 cast': node('cast', name, [], lit(sign * first_overflow, 'fp32')),
+                }
+                for case, expr in finite.items():
+                    with self.subTest(dtype=name, sign=sign, case=case):
+                        result = run_store(expr, np.zeros(1, dtype=dtype))
+                        self.assertEqual(float(result[0]), sign * largest)
+                for case, expr in overflow.items():
+                    with self.subTest(dtype=name, sign=sign, case=case), np.errstate(over='ignore'):
+                        result = run_store(expr, np.zeros(1, dtype=dtype))
+                        if name == 'f8e4':
+                            self.assertTrue(np.isnan(result[0]))
+                        else:
+                            self.assertEqual(float(result[0]), sign * float('inf'))
+
     def test_exact_literal_avoids_double_rounding(self):
         for name, bits in [('fp32', 23), ('fp16', 10), ('bf16', 7), ('fp64', 52)]:
             with self.subTest(dtype=name):
