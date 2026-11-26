@@ -1,4 +1,4 @@
--- Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/all_to_all_single_2d.py:35-66,91-101
+-- Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a python/triton_dist/kernels/nvidia/all_to_all_single_2d.py:35-66,91-112
 -- Licence: MIT
 -- Changes: rewritten as a minimal example; retain both signed split-count call sequences and independently check their results
 import VeriTile.Triton.DSL.RegisterShapeBroadcast
@@ -241,6 +241,113 @@ example (split fp : RegionName) (N : Nat) : ComputeKernel :=
         y = tl.sum(x)
         x, g = tl.broadcast(f, f)
   }
+
+-- Receive tail at cp_from_recv_buf lines 98–112; the scan establishes the signed row base.
+private def copyProfile : CallSignature where
+  pointers := [("output_split_ptr", .i32), ("recv_buf_ptr", .bf16), ("output_ptr", .bf16)]
+  constexpr := ["WORLD_SIZE", "MAX_M", "HIDDEN_DIM", "BLOCK_SIZE_M", "BLOCK_SIZE"]
+
+def receivedCopy (output_split_ptr recv_buf_ptr output_ptr : RegionName)
+    (WORLD_SIZE MAX_M HIDDEN_DIM BLOCK_SIZE_M BLOCK_SIZE : Nat) : ComputeKernel :=
+  with_local_jit_helpers in with_triton_call copyProfile call_args [] in triton {
+    pid = tl.program_id(0)
+    offset_pos = tl.arange(0, WORLD_SIZE)
+    output_splits = tl.load(output_split_ptr + offset_pos)
+    output_splits_cumsum = tl.cumsum(output_splits, axis=0)
+    n_row = tl.load(output_split_ptr + pid)
+    output_row_offset = 0
+    if pid > 0:
+        output_row_offset = get_element_at(output_splits_cumsum, pid - 1)
+    mask = tl.arange(0, BLOCK_SIZE) < HIDDEN_DIM
+    offset_m = tl.arange(0, BLOCK_SIZE_M)
+    offset = tl.arange(0, BLOCK_SIZE)
+
+    for bid in range(0, tl.cdiv(n_row, BLOCK_SIZE_M)):
+        data = tl.load(
+            recv_buf_ptr + pid * MAX_M * HIDDEN_DIM + bid * BLOCK_SIZE_M * HIDDEN_DIM + offset_m[:, None] * HIDDEN_DIM +
+            offset[None, :], mask=mask[None, :] & (bid * BLOCK_SIZE_M + offset_m[:, None] < n_row))
+        tl.store(
+            output_ptr + (output_row_offset + bid * BLOCK_SIZE_M + offset_m[:, None]) * HIDDEN_DIM + offset[None, :],
+            data, mask=mask[None, :] & (bid * BLOCK_SIZE_M + offset_m[:, None] < n_row))
+  }
+
+def widenedCopy (output_split_ptr recv_buf_ptr output_ptr : RegionName)
+    (WORLD_SIZE MAX_M HIDDEN_DIM BLOCK_SIZE_M BLOCK_SIZE : Nat) : ComputeKernel :=
+  with_local_jit_helpers in with_triton_call copyProfile call_args [] in triton {
+    pid = tl.program_id(0)
+    offset_pos = tl.arange(0, WORLD_SIZE)
+    output_splits = tl.load(output_split_ptr + offset_pos)
+    output_splits_cumsum = tl.cumsum(output_splits, axis=0)
+    n_row = tl.load(output_split_ptr + pid)
+    output_row_offset = 0
+    if pid > 0:
+        output_row_offset = get_element_at(output_splits_cumsum, pid - 1)
+    mask = tl.arange(0, BLOCK_SIZE) < HIDDEN_DIM
+    offset_m = tl.arange(0, BLOCK_SIZE_M)
+    offset = tl.arange(0, BLOCK_SIZE)
+
+    for bid in range(0, (tl.cast(tl.cast(n_row + (BLOCK_SIZE_M - 1), tl.int32), tl.int64) // BLOCK_SIZE_M)):
+        data = tl.load(
+            recv_buf_ptr + tl.cast(pid * MAX_M * HIDDEN_DIM, tl.int32) + tl.cast(bid * BLOCK_SIZE_M * HIDDEN_DIM, tl.int32) + tl.cast(offset_m[:, None] * HIDDEN_DIM, tl.int32) +
+            offset[None, :], mask=mask[None, :] & (tl.cast(bid * BLOCK_SIZE_M + offset_m[:, None], tl.int32) < n_row))
+        tl.store(
+            output_ptr + tl.cast((output_row_offset + bid * BLOCK_SIZE_M + offset_m[:, None]) * HIDDEN_DIM, tl.int32) + offset[None, :],
+            data, mask=mask[None, :] & (tl.cast(bid * BLOCK_SIZE_M + offset_m[:, None], tl.int32) < n_row))
+  }
+
+example (split src dst : RegionName) (ranks capacity cols rows block : Nat) :
+    receivedCopy split src dst ranks capacity cols rows block =
+    widenedCopy split src dst ranks capacity cols rows block := rfl
+
+reflect_kernel receivedCopy
+
+private def receivedState (splits : List Int) (pid : Nat) : State Float where
+  init := fun region i =>
+    if region == "splits" then .mk .int (splits.getD i 0) else
+    if region == "src" then .mk .bf16 (Float.ofNat (100 + i)) else .mk .bf16 (-1)
+  pids := fun _ => pid
+  numPids := fun _ => splits.length
+  undef := fun d _ _ => FP.Structural.defaultValue d
+
+-- HIDDEN_DIM=3, BLOCK_SIZE=4 distinguishes column masking from the row tail.
+private def copied (splits : List Int) (pid : Nat) (cols : Nat := 3) : Option (List Float) := do
+  let k := receivedCopy.mirror "splits" "src" "dst" splits.length 4 cols 2 4
+  let st ← interp Binary64.algebra k (receivedState splits pid)
+  return (List.range 18).map fun i => (st.read "dst" i).read .bf16
+
+#guard copied [2, 0] 1 == some (List.replicate 18 (-1))
+#guard copied [2, 3] 1 == some (List.replicate 6 (-1) ++ [112,113,114,115,116,117,118,119,120] ++ List.replicate 3 (-1))
+#guard copied [2, -6] 1 == some (List.replicate 18 (-1))
+
+-- A signed prefix times the two-column stride wraps to row displacement 2.
+-- Every active destination is nonnegative; clipping the prefix first would write cell 0.
+#guard copied [-(2^31) + 1, 1] 1 2 ==
+  some ([-1,-1,108,109] ++ List.replicate 14 (-1))
+
+-- Observe the source loop's stop before iteration. A negative bound and zero
+-- both skip a positive-step loop; the stop itself distinguishes signed and Nat.
+private def receivedStop (n : Int) : Option Int := do
+  let .mk _ _ body := receivedCopy.mirror "splits" "src" "dst" 2 4 3 2 4
+  let some (.forRangeInt _ _ stop _ _) := body.getLast? | none
+  let st := (receivedState [1,n] 1).setReg "n_row" .int [] (fun _ => n)
+  return (← evalOp Binary64.algebra none stop st) ()
+
+#guard receivedStop 0 == some 0
+#guard receivedStop 3 == some 2
+#guard receivedStop (-6) == some (-2)
+#guard receivedStop 2147483647 == some (-1073741824)
+
+-- The standalone public range also accepts a signed load and a symbolic tile width.
+example (split : RegionName) (N : Nat) :
+    (with_triton_call numericProfile call_args [] in triton {
+      n = tl.load(split)
+      for i in range(0, tl.cdiv(n, N)):
+          value = i
+    } : ComputeKernel) = (with_triton_call numericProfile call_args [] in triton {
+      n = tl.load(split)
+      for i in range(0, (tl.cast(tl.cast(n + (N - 1), tl.int32), tl.int64) // N)):
+          value = i
+    } : ComputeKernel) := rfl
 
 private def wide : CallSignature where
   pointers := [("split", .i64)]
