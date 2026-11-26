@@ -8,27 +8,34 @@ derived from it, so that no kernel proof is built on a false statement.
 Remove this check when C3 is restated under the E2 decision (#53/#54) and
 re-signed.
 
-The check scans every .lean file under VeriTile/ and tests/ except that one
-file. Comments (`--`, nested `/- -/`, docstrings) and string contents are
-blanked first (check_test_sorry.views). A name matches as a whole Lean
-identifier: also qualified (`VeriTile.Dist.NAME`), in `open ... (NAME)`, as
-`«NAME»` or a name literal, and followed by `.field`; not with an extra
-prefix or suffix (`my_NAME`, `NAME'`, `NAME₁`). A declaration of the same
-name in another namespace is flagged on purpose.
+The check scans every tracked .lean file of the repository (`git ls-files`,
+which leaves out .lake/ and untracked files) except that one file. Comments
+(`--`, nested `/- -/`, docstrings) and string contents are blanked first
+(check_test_sorry.views). A name matches as a whole Lean identifier: also
+qualified (`VeriTile.Dist.NAME`), in `open ... (NAME)`, as `«NAME»` or a name
+literal, and followed by `.field`; not with an extra prefix or suffix
+(`my_NAME`, `NAME'`, `NAME₁`). A declaration of the same name in another
+namespace is flagged on purpose.
 
-The check is textual. It does not see a use through an alias declared inside
-JudgmentSpec.lean, a use by automation that does not name the theorem, or a
-name inside `s!"{...}"` interpolation (string contents are blanked).
+The check is textual. Known blind spots:
+- a raw string `r#"..."#` (or `r"\"`): views does not know raw strings, so a
+  `"` or `\` inside one puts it out of step and code after it is blanked;
+- a `«»` name containing `--`, `/-` or `"`, which views reads as a comment or
+  a string opening;
+- a name inside `s!"{...}"` interpolation (string contents are blanked);
+- a name built from strings, e.g. with `mkConst` in an `elab`;
+- a use by automation that does not name the theorem;
+- an alias declared inside the exempt JudgmentSpec.lean.
 """
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 from check_test_sorry import views
 
 ROOT = Path(__file__).resolve().parents[1]
 EXEMPT = 'VeriTile/Staging/Dist/JudgmentSpec.lean'
-DIRECTORIES = ('VeriTile', 'tests')
 NAMES = ('detRaceFree_scopeConsistent_complete_eq_canonical',  # C3 on main
          'detRaceFree_complete_eq_canonical',  # C3 as PR #615 renames it
          'implementsAll_of_canonical')  # derived from C3
@@ -38,15 +45,17 @@ REMOVAL = 'Remove this check when C3 is restated under the E2 decision (#53/#54)
 
 
 def check(root):
+    listed = subprocess.run(['git', 'ls-files', '-z', '--', '*.lean'], cwd=root,
+                            capture_output=True, text=True, check=True).stdout
     hits = []
-    for directory in DIRECTORIES:
-        for path in sorted((root / directory).rglob('*.lean')):
-            relative = path.relative_to(root).as_posix()
-            if relative == EXEMPT:
-                continue
-            code, _ = views(path.read_text())
-            for match in PATTERN.finditer(code):
-                hits.append(f'{relative}:{code.count(chr(10), 0, match.start()) + 1}: {match[1]}')
+    for relative in sorted(filter(None, listed.split('\0'))):
+        path = root / relative
+        # A tracked file deleted in the working tree has nothing left to reference.
+        if relative == EXEMPT or not path.is_file():
+            continue
+        code, _ = views(path.read_text())
+        for match in PATTERN.finditer(code):
+            hits.append(f'{relative}:{code.count(chr(10), 0, match.start()) + 1}: {match[1]}')
     return hits
 
 

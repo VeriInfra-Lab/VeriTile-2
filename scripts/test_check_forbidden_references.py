@@ -2,6 +2,7 @@
 import contextlib
 import io
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
@@ -9,13 +10,17 @@ from check_forbidden_references import EXEMPT, REMOVAL, check, main
 
 
 class ForbiddenReferences(unittest.TestCase):
-    def tree(self, files):
+    def tree(self, files, untracked=None):
+        """A Git repository with `files` in its index and `untracked` only written."""
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
-        for relative, text in files.items():
+        subprocess.run(['git', 'init', '-q'], cwd=root, check=True)
+        for relative, text in {**files, **(untracked or {})}.items():
             (root / relative).parent.mkdir(parents=True, exist_ok=True)
             (root / relative).write_text(text)
+        if files:
+            subprocess.run(['git', 'add', '--', *files], cwd=root, check=True)
         return root
 
     def test_reference_under_veritile_fails_with_file_line(self):
@@ -69,13 +74,20 @@ class ForbiddenReferences(unittest.TestCase):
         ]) + '\n'})
         self.assertEqual(check(root), [])
 
-    def test_other_directories_are_not_scanned(self):
-        root = self.tree({'bench/Probe.lean': 'example := implementsAll_of_canonical\n'})
+    def test_bench_and_scripts_are_scanned(self):
+        root = self.tree({'bench/examples/Probe/Proofs/C3.lean': 'example := implementsAll_of_canonical\n',
+                          'scripts/fixtures/Probe.lean': 'example := detRaceFree_complete_eq_canonical\n'})
+        self.assertEqual(check(root), ['bench/examples/Probe/Proofs/C3.lean:1: implementsAll_of_canonical',
+                                       'scripts/fixtures/Probe.lean:1: detRaceFree_complete_eq_canonical'])
+
+    def test_untracked_files_are_not_scanned(self):
+        text = 'example := implementsAll_of_canonical\n'
+        root = self.tree({'tests/lean/Clean.lean': 'def x := 1\n'},
+                         untracked={'.lake/packages/dep/Dep.lean': text, 'tests/lean/Scratch.lean': text})
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(main(root), 0)
         self.assertIn(REMOVAL, out.getvalue())
-
 
 if __name__ == '__main__':
     unittest.main()
