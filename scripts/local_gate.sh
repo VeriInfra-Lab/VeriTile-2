@@ -86,7 +86,14 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.SegmentFootprint"
              "python3 scripts/check_trust_kernel_labels.py"
              "lake build tests.lean.dist.TrustAssumptions"
-             "lake build tests.lean.dist.TrustAssumptionDuplicateImports")
+             "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
+             "lake build tests.lean.dist.CountMonotoneVacuous"
+             "lake build tests.lean.dist.NonWordObservation"
+             "lake build tests.lean.dist.FetchAddObservation"
+             "lake build tests.lean.dist.WordCounterCheck"
+             "lake build tests.lean.dist.DeepEPChannel"
+             "lake build tests.lean.dist.Tutorial01"
+             "lake build tests.lean.dist.StorePublication")
 fi
 
 log=$(mktemp -d)
