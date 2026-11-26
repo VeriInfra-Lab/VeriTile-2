@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Check the elaborated trust registry against §7 and the source census."""
+"""Check the elaborated registrations imported from the fork target directories.
+
+Labels from §7 and the census are pooled across entries. Membership does not
+establish that a label belongs to a particular assumption's §7 row.
+"""
 import csv
 import json
 from pathlib import Path
@@ -87,12 +91,9 @@ def documented_labels():
     return labels
 
 
-def main():
+def check_registry(source):
     known = documented_labels()
-    # Lake's fork libraries include submodules independently of root imports.
-    paths = [p for directory in TARGETS.values() for p in sources(directory)]
-    imports = ["import " + ".".join(p.relative_to(ROOT).with_suffix("").parts) for p in paths]
-    process = subprocess.run(["lake", "env", "lean", "--stdin"], input="\n".join(imports) + REGISTRY,
+    process = subprocess.run(["lake", "env", "lean", "--stdin"], input=source + "\n" + REGISTRY,
                              cwd=ROOT, capture_output=True, text=True)
     if process.returncode:
         sys.stderr.write(process.stdout + process.stderr)
@@ -108,6 +109,13 @@ def main():
         return 1
     print(f"Checked {sum(len(labels) for _, labels in entries)} kernel labels in {len(entries)} trust registrations.")
     return 0
+
+
+def main():
+    # Lake's fork libraries include submodules independently of root imports.
+    paths = [p for directory in TARGETS.values() for p in sources(directory)]
+    imports = ["import " + ".".join(p.relative_to(ROOT).with_suffix("").parts) for p in paths]
+    return check_registry("\n".join(imports))
 
 
 if __name__ == "__main__":
