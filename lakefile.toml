@@ -536,6 +536,7 @@ globs = [
   "tests.lean.dist.ElementHelper",
   "tests.lean.dist.PointerCasts",
   "tests.lean.dist.UnguardedShared",
+  "tests.lean.dist.Location",
   "tests.lean.dist.SegmentFootprint",
 ]
 
