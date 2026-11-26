@@ -39,6 +39,7 @@ commands=("python3 scripts/check_docs.py"
           "python3 -B -m unittest scripts.test_benchmark_assignment"
           "python3 scripts/check_frozen_base.py"
           "python3 scripts/check_test_sorry.py --sources"
+          "python3 scripts/test_trust_kernel_labels.py DocumentedLabels"
           "python3 scripts/check_forbidden_references.py"
           "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
@@ -100,6 +101,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TritonDistShmem"
              "lake build tests.lean.dist.SegmentFootprint"
              "python3 scripts/check_trust_kernel_labels.py"
+             "python3 scripts/test_trust_kernel_labels.py ElaboratedLabels"
              "lake build tests.lean.dist.TrustAssumptions"
              "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
              "lake env lean tests/lean/TileLangSyntax.lean"
