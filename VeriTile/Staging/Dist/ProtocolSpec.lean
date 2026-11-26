@@ -74,11 +74,160 @@ theorem launch_realizes (env : Launch P) (body : Agent → Option (List Instr)) 
   intro a
   cases h : body a <;> simp [launch, h]
 
+private theorem withinSelf (a : Agent) : a.within a := by
+  cases a <;> simp [Agent.within, Agent.cta?, Agent.rankOf]
+
+private theorem idle_sound (a : Agent) : (idleSegment a).FootprintSound := by
+  constructor
+  · intro s s' h p _
+    cases h
+    rfl
+  · intro s s' h
+    cases h
+    exact ⟨⟨s.view a, (s.setView_view a).symm⟩, fun _ _ _ => rfl⟩
+  · intro s t _ localEq
+    refine ⟨rfl, rfl, ?_⟩
+    intro u h
+    cases h
+    exact ⟨t, rfl, fun _ hp => False.elim hp, localEq⟩
+
+private def LocalCursors (s : Config (List Instr)) : Prop :=
+  ∀ a h t k, s.pc a = some (.waiting h t k) → h.actor = a ∧ t = []
+
+private def LocalHistory (s : Machine) : Prop :=
+  ∀ x ∈ s.history, ∀ a, x.program? = some a → x.owner = a
+
+private theorem next_singleton (a : Agent) (pc : List Instr) (h : Emission) (t : List Emission)
+    (k : List (Option MemCell) → List Instr)
+    (eq : nextAction a id pc = .emitGroup h t k) : h.actor = a ∧ t = [] := by
+  cases pc with
+  | nil => cases eq
+  | cons i rest => cases i <;> cases eq <;> exact ⟨rfl, rfl⟩
+
+private theorem step_local {env : Launch P} {body} {s t : Config (List Instr)}
+    (progress : step (launch env body) s choice t)
+    (pcs : LocalCursors s) (hist : LocalHistory s.toMachine) :
+    LocalCursors t ∧ LocalHistory t.toMachine := by
+  cases progress with
+  | @segment a pc seg mem atPC code owner access success =>
+    constructor
+    · intro b h es k cursor
+      by_cases eq : b = a
+      · subst b
+        simp only [Function.update_self] at cursor
+        change (nextAction a id pc).cursor = some (.waiting h es k) at cursor
+        cases hn : nextAction a id pc with
+        | finish => simp [hn, Next.cursor] at cursor
+        | emitGroup head tail cont =>
+          simp [hn, Next.cursor] at cursor
+          obtain ⟨rfl, rfl, rfl⟩ := cursor
+          exact next_singleton _ _ _ _ _ hn
+      · exact pcs b h es k (by simpa [Function.update, eq] using cursor)
+    · intro x hx b hb
+      simp only [List.mem_append, List.mem_singleton] at hx
+      rcases hx with hx | rfl
+      · exact hist x hx b hb
+      · exact Option.some.inj hb
+  | @fire a h es k final vs atPC owned events =>
+    obtain ⟨actor, rfl⟩ := pcs _ _ _ _ atPC
+    cases events with
+    | cons access free ordered fire rest =>
+      cases rest
+      constructor
+      · intro b head tail cont cursor
+        by_cases eq : b = a
+        · subst b
+          simp [Function.update] at cursor
+        · exact pcs b head tail cont (by simpa [Function.update, eq] using cursor)
+      · intro x hx b hb
+        simp only [List.mem_append, List.mem_singleton] at hx
+        rcases hx with hx | rfl
+        · exact hist x hx b hb
+        · exact actor.trans (Option.some.inj hb)
+  | deliver =>
+    refine ⟨pcs, ?_⟩
+    intro x hx b hb
+    simp only [List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact hist x hx b hb
+    · cases hb
+
+/-- The compiler emits singleton groups owned by their program. Its only
+environmental geometry requirement is the dimension of an active CTA's pid. -/
+theorem launch_sound (env : Launch P) (body : Agent → Option (List Instr))
+    (dims : ∀ a c, (body a).isSome → a.cta? = some c → c.pid.length = env.gridRank c.rank) :
+    SoundLaunch (launch env body) := by
+  have owns : ∀ {s cs f}, Run (launch env body) ((launch env body).initial s) cs f →
+      LocalHistory f.toMachine := by
+    intro s cs f run
+    have preserve : ∀ {x cs z}, Run (launch env body) x cs z →
+        LocalCursors x → LocalHistory x.toMachine → LocalHistory z.toMachine := by
+      intro x cs z h
+      induction h with
+      | nil => exact fun _ h => h
+      | cons step _ ih =>
+        intro pcs hist
+        obtain ⟨pcs', hist'⟩ := step_local step pcs hist
+        exact ih pcs' hist'
+    apply preserve run
+    · intro a h t k eq
+      change (body a).map Cursor.ready = some (.waiting h t k) at eq
+      cases hbody : body a <;> simp [hbody] at eq
+    · intro _ hx
+      cases hx
+  constructor
+  · exact fun _ _ _ _ _ _ => rfl
+  · exact fun a _ => idle_sound a
+  · exact dims
+  · intro a pc _ h es k hn
+    obtain ⟨actor, rfl⟩ := next_singleton _ _ _ _ _ hn
+    exact ⟨Or.inl rfl, by simpa [actor] using withinSelf a⟩
+  · intro _ _ _ run x hx y hy a h₁ h₂
+    rw [owns run x hx a h₁, owns run y hy a h₂]
+    exact Or.inl (withinSelf a)
+  · intro _ _ _ run x hx y hy c g t tx ty a b px py
+    exact (owns run x hx a px).symm.trans (tx.trans (ty.symm.trans (owns run y hy b py)))
+
+/-- A source step may be silent or expand to several protocol steps. The
+relation tracks control and memory; completion must agree on the observation
+claimed by the client. A client must also show that each visible word
+operation keeps its physical address (see the tutorial check below). -/
+structure Projection (source : Launch P) (target : Launch Q) where
+  related : Config P → Config Q → Prop
+  entry : ∀ s, related (source.initial s) (target.initial s)
+  simulate : ∀ {s t u choice}, related s t → step source s choice u →
+    ∃ choices v, Run target t choices v ∧ related u v
+  observe : ∀ {s t}, related s t → Complete s → Complete t ∧ s.mem = t.mem
+
+private theorem appendRun {l : Launch P} (h : Run l s xs t) (k : Run l t ys u) :
+    Run l s (xs ++ ys) u := by
+  induction h with
+  | nil => exact k
+  | cons first _ ih => exact .cons first (ih k)
+
+/-- Transport a completed execution's memory observation across a projection.
+Progress and fault freedom require separate reflection obligations. -/
+theorem Projection.completed {source : Launch P} {target : Launch Q}
+    (p : Projection source target) (run : Run source (source.initial s) choices f)
+    (done : Complete f) :
+    ∃ schedule g, Run target (target.initial s) schedule g ∧ Complete g ∧ f.mem = g.mem := by
+  suffices lift : ∀ {x y cs z}, Run source x cs z → p.related x y →
+      ∃ ds w, Run target y ds w ∧ p.related z w by
+    obtain ⟨ds, w, hw, rel⟩ := lift run (p.entry s)
+    exact ⟨ds, w, hw, p.observe rel done⟩
+  intro x y cs z h
+  induction h generalizing y with
+  | nil => exact fun rel => ⟨[], y, .nil _, rel⟩
+  | cons first _ ih =>
+    intro rel
+    obtain ⟨as, mid, ha, hm⟩ := p.simulate rel first
+    obtain ⟨bs, dest, hb, hd⟩ := ih hm
+    exact ⟨as ++ bs, dest, appendRun ha hb, hd⟩
+
 /-- Race freedom on all prefixes, existence of a completing schedule, and the
 specified memory observation for every completing schedule. -/
 def Outcome (l : Launch P) (s : DistState) (post : DistState → Prop) : Prop :=
-  DRF l s ∧ Completes l s ∧
-    ∀ sched final, Run l (l.initial s) sched final → Complete final → post final.mem
+  ImplementsAll l s (fun final => post final.mem) ∧ Completes l s
 
 namespace Examples
 
@@ -108,12 +257,15 @@ def exampleEnv (w : CellWrites) : Launch Unit where
 end Examples
 open Examples
 
-/-- Slots, synchronization words and permanent outputs are separately allocated. -/
-inductive RingCell (stages items : Nat) where
-  | slot (j : Fin stages)
+/-- S6.2/#61 covers rings with two physical memory words per slot. TileLang
+mbarrier / T.ws rings have a separate proof obligation. The head/tail index
+queues K25, K26 and K28 belong to the DeepEP route (#179).
+Slots, synchronization words and permanent outputs are separately allocated. -/
+inductive RingCell (stages items width : Nat) where
+  | slot (j : Fin stages) (cell : Fin width)
   | full (j : Fin stages)
   | empty (j : Fin stages)
-  | output (i : Fin items)
+  | output (i : Fin items) (cell : Fin width)
   deriving DecidableEq
 
 /-- An item occupies slot `i % stages` during epoch `i / stages`. The two
@@ -123,14 +275,15 @@ structure RingQueue where
   stages : Nat
   stages_pos : 0 < stages
   items : Nat
+  width : Nat
   producer : Agent
   consumer : Agent
   different : producer ≠ consumer
   scope : Scope
   covers : scope.covers producer consumer
-  address : RingCell stages items → Addr
+  address : RingCell stages items width → Addr
   disjoint : Function.Injective address
-  value : Fin items → MemCell
+  value : Fin items → Fin width → MemCell
   phase : Nat → Nat
   waitEmpty : Fin items → Bool
 
@@ -155,15 +308,51 @@ def produce (q : RingQueue) (i : Fin q.items) : List Instr :=
   (if q.waitEmpty i then
     [wait (.word (q.address (.empty j))) .eq ((bit + 1) % 2) (.atomic q.scope .acquire)]
    else []) ++
-    [store (q.address (.slot j)) (q.value i),
-     signal (.word (q.address (.full j))) .set bit (.atomic q.scope .release)]
+    (List.finRange q.width).map (fun k => store (q.address (.slot j k)) (q.value i k)) ++
+    [signal (.word (q.address (.full j))) .set bit (.atomic q.scope .release)]
 
 def consume (q : RingQueue) (i : Fin q.items) : List Instr :=
   let j := q.slot i
   let bit := q.phase (q.epoch i)
-  [wait (.word (q.address (.full j))) .eq bit (.atomic q.scope .acquire),
-   .copy (q.address (.slot j)) (q.address (.output i)),
-   signal (.word (q.address (.empty j))) .set bit (.atomic q.scope .release)]
+  [wait (.word (q.address (.full j))) .eq bit (.atomic q.scope .acquire)] ++
+    (List.finRange q.width).map (fun k => .copy (q.address (.slot j k)) (q.address (.output i k))) ++
+    [signal (.word (q.address (.empty j))) .set bit (.atomic q.scope .release)]
+
+/-- Synchronization addresses visible to a direct projection. Payload reads
+and writes may be hidden without changing the aliasing of the signal words. -/
+def wordAddress : Instr → Option Addr
+  | .emit (.wait (.word p) ..) _ | .emit (.bump ⟨.word p, _, _, _⟩) _ => some p
+  | _ => none
+
+/-- Consumer at T01:124–146 of the pinned 01-distributed-notify-wait.py.
+The wait and notify name the same local signal pointer plus queue_offset.
+This records the synchronization slice; the payload copy and fence are silent
+for this observation. The wait may use gpu or sys; the intra-node SET is a
+system-scope release under the registered A2 reading of `dl.notify`
+(PrimitiveSources.md §7). Only addresses are used in the negative theorem. -/
+def tutorialConsumerWords (word : Addr) (generation : Nat) (scope : Scope) : List Instr :=
+  [wait (.word word) .eq (2 * generation + 1) (.atomic scope .acquire),
+   signal (.word word) .set (2 * generation + 2) (.atomic .sys .release)]
+
+theorem consumer_word_addresses (q : RingQueue) (i : Fin q.items) :
+    (q.consume i).filterMap wordAddress =
+      [q.address (.full (q.slot i)), q.address (.empty (q.slot i))] := by
+  simp [consume, wait, signal, wordAddress, List.filterMap_map]
+
+/-- No single-valued renaming of tutorial 01's physical word can match the
+two-word consumer, even if all non-word operations and both numeric payloads
+are erased. This also applies to the sys-scope variant. A value-dependent
+encoding into two bits would need its own simulation. -/
+theorem tutorial01_no_direct_word_projection (q : RingQueue) (i : Fin q.items)
+    (word : Addr) (generation : Nat) (scope : Scope) (rename : Addr → Addr) :
+    ((tutorialConsumerWords word generation scope).filterMap wordAddress).map rename ≠
+      (q.consume i).filterMap wordAddress := by
+  rw [consumer_word_addresses]
+  intro h
+  change [rename word, rename word] = [_, _] at h
+  obtain ⟨h₁, h₂⟩ := List.cons.inj h
+  have eq := h₁.symm.trans (List.cons.inj h₂).1
+  cases q.disjoint eq
 
 def body (q : RingQueue) (a : Agent) : Option (List Instr) :=
   if a = q.producer then some ((List.finRange q.items).flatMap q.produce)
@@ -176,11 +365,11 @@ program, its candidate guards, or any interleaving. All flag writes are visible.
 def sequential (q : RingQueue) (w : CellWrites) (s : DistState) : DistState :=
   (List.finRange q.items).foldl (fun mem i =>
     let j := q.slot i
-    let v := q.value i
+    let cells := List.finRange q.width
     let bit := MemCell.of .nat (q.epoch i % 2)
-    let m₁ := w.put mem (q.address (.slot j)) v
+    let m₁ := cells.foldl (fun m k => w.put m (q.address (.slot j k)) (q.value i k)) mem
     let m₂ := w.put m₁ (q.address (.full j)) bit
-    let m₃ := w.put m₂ (q.address (.output i)) v
+    let m₃ := cells.foldl (fun m k => w.put m (q.address (.output i k)) (q.value i k)) m₂
     w.put m₃ (q.address (.empty j)) bit) s
 
 /-- Both parties can access the slot and both words. Only the consumer
@@ -188,7 +377,7 @@ touches an output, which may be private to it. -/
 def AccessibleIn (q : RingQueue) (symm : VeriTile.Triton.RegionName → Bool) : Prop :=
   ∀ c, AccessibleAt symm q.consumer (q.address c) ∧
     match c with
-    | .output _ => True
+    | .output _ _ => True
     | _ => AccessibleAt symm q.producer (q.address c)
 
 /-- Before epoch zero the full bit is unready and the empty bit is ready. -/
@@ -199,7 +388,7 @@ def Initialized (q : RingQueue) (s : DistState) : Prop :=
 /-- UNSIGNED. S6.2/#61. The producer releases full after writing the slot;
 the consumer releases empty after copying it. The second handshake orders the
 previous read before the next overwrite, including across a parity wrap. -/
-theorem ringQueue_correct (q : RingQueue) (l : Launch P) (s : DistState)
+theorem ringQueue_correct (q : RingQueue) (l : Launch P) (s : DistState) (sound : SoundLaunch l)
     (code : Realizes l q.body) (accessible : q.AccessibleIn l.symm)
     (init : q.Initialized s) (reuse : q.WaitsOnReuse) (bits : q.UsesEpochBit) :
     Outcome l s (fun final => final = q.sequential l.cells s) := by
@@ -207,37 +396,47 @@ theorem ringQueue_correct (q : RingQueue) (l : Launch P) (s : DistState)
 
 /-- Three slots and ten items reach the fourth use of slot zero.
 Physical regions differ by role and each offset identifies its index. -/
-def threeStage : RingQueue where
+def tiledThreeStage (width : Nat) : RingQueue where
   stages := 3
   stages_pos := by decide
   items := 10
+  width := width
   producer := .thread ⟨0, [0]⟩ 0 0
   consumer := .thread ⟨0, [0]⟩ 0 1
   different := by decide
   scope := .cta
   covers := by decide
   address
-    | .slot j => ⟨.shared ⟨0, [0]⟩, ⟨"slot"⟩, j.val⟩
+    | .slot j k => ⟨.shared ⟨0, [0]⟩, ⟨"slot"⟩, k.val * 3 + j.val⟩
     | .full j => ⟨.shared ⟨0, [0]⟩, ⟨"full"⟩, j.val⟩
     | .empty j => ⟨.shared ⟨0, [0]⟩, ⟨"empty"⟩, j.val⟩
-    | .output i => ⟨.global 0, ⟨"out"⟩, i.val⟩
+    | .output i k => ⟨.global 0, ⟨"out"⟩, k.val * 10 + i.val⟩
   disjoint := by
     intro x y h
-    cases x <;> cases y <;> simp_all [Fin.ext_iff]
-  value i := .of .nat (i.val + 10)
+    cases x <;> cases y <;> simp_all [Fin.ext_iff] <;> omega
+  value i k := .of .nat (i.val + 10 + 100*k.val)
   phase e := e % 2
   waitEmpty i := decide (3 ≤ i.val)
 
+abbrev threeStage := tiledThreeStage 1
+
+example :
+    let q := tiledThreeStage 2
+    let final := q.sequential writes exampleState
+    (final.cell (q.address (.output ⟨9, by decide⟩ ⟨0, by decide⟩))).readAs .nat = some 19 ∧
+    (final.cell (q.address (.output ⟨9, by decide⟩ ⟨1, by decide⟩))).readAs .nat = some 119 ∧
+    (q.produce ⟨3, by decide⟩).length = 4 ∧ (q.consume ⟨3, by decide⟩).length = 4 := ⟨rfl, rfl, rfl, rfl⟩
+
 theorem threeStage_reuse : threeStage.WaitsOnReuse := by
   intro i hi
-  simpa [threeStage] using hi
+  simpa [threeStage, tiledThreeStage] using hi
 
 theorem threeStage_bits : threeStage.UsesEpochBit := fun _ => rfl
 
 theorem threeStage_accessible (symm : VeriTile.Triton.RegionName → Bool) :
     threeStage.AccessibleIn symm := by
   intro c
-  cases c <;> simp [threeStage, AccessibleAt, Accessible, Agent.within, Agent.cta?, Agent.rankOf]
+  cases c <;> simp [threeStage, tiledThreeStage, AccessibleAt, Accessible, Agent.within, Agent.cta?, Agent.rankOf]
 
 /-- Initialize only the two flag regions to one. Payload and output cells
 start at zero. The client exercises three reuses of slot zero. -/
@@ -248,7 +447,14 @@ def threeStageInitial : DistState :=
 example :
     let l := launch (exampleEnv writes) threeStage.body
     Outcome l threeStageInitial (fun final => final = threeStage.sequential l.cells threeStageInitial) :=
-  threeStage.ringQueue_correct _ _ (launch_realizes _ _) (threeStage_accessible _)
+  threeStage.ringQueue_correct _ _ (launch_sound _ _ (by
+    intro a c active hc
+    simp only [RingQueue.body] at active
+    split at active <;> rename_i h
+    · subst a; cases hc; rfl
+    · split at active
+      · rename_i he; subst a; cases hc; rfl
+      · cases active)) (launch_realizes _ _) (threeStage_accessible _)
     (fun _ => ⟨rfl, rfl⟩) threeStage_reuse threeStage_bits
 
 example :
@@ -257,9 +463,9 @@ example :
 
 example :
     let final := threeStage.sequential writes threeStageInitial
-    (final.cell (threeStage.address (.output ⟨0, by decide⟩))).readAs .nat = some 10 ∧
-    (final.cell (threeStage.address (.output ⟨9, by decide⟩))).readAs .nat = some 19 ∧
-    (final.cell (threeStage.address (.slot ⟨0, by decide⟩))).readAs .nat = some 19 := by
+    (final.cell (threeStage.address (.output ⟨0, by decide⟩ ⟨0, by decide⟩))).readAs .nat = some 10 ∧
+    (final.cell (threeStage.address (.output ⟨9, by decide⟩ ⟨0, by decide⟩))).readAs .nat = some 19 ∧
+    (final.cell (threeStage.address (.slot ⟨0, by decide⟩ ⟨0, by decide⟩))).readAs .nat = some 19 := by
   exact ⟨rfl, rfl, rfl⟩
 
 /-- Change only the producer's wait policy. Item three returns to slot zero,
@@ -277,7 +483,7 @@ def stageModulus : RingQueue := { threeStage with phase := fun e => e % threeSta
 theorem stageModulus_rejected : ¬ stageModulus.UsesEpochBit := by
   intro h
   have bad := h (⟨6, by decide⟩ : Fin 10)
-  norm_num [stageModulus, threeStage, epoch] at bad
+  norm_num [stageModulus, threeStage, tiledThreeStage, epoch] at bad
 
 example : (threeStage.produce ⟨3, by decide⟩).length = 3 ∧
     (missingEmpty.produce ⟨3, by decide⟩).length = 2 := by decide
@@ -386,7 +592,7 @@ private def replay (s : Prefix) : (agents : List Agent) →
 
 private abbrev producer := stageModulus.producer
 private abbrev consumer := stageModulus.consumer
-private abbrev slot0 := stageModulus.address (.slot ⟨0, by decide⟩)
+private abbrev slot0 := stageModulus.address (.slot ⟨0, by decide⟩ ⟨0, by decide⟩)
 private abbrev overwrite : Occurrence :=
   .issued producer ⟨producer, .access .store slot0 .plain, .store (.of .nat 19)⟩
 private abbrev readSlot : Occurrence :=
@@ -459,8 +665,8 @@ set_option maxRecDepth 10000 in
 set_option maxHeartbeats 4000000 in
 example :
     ((replay start (choices ++ [consumer, consumer])).bind fun result =>
-      (result.1.cfg.mem.cell (stageModulus.address (.output ⟨6, by decide⟩))).readAs .nat) =
-      some 19 ∧ (stageModulus.value ⟨6, by decide⟩).readAs .nat = some 16 := ⟨rfl, rfl⟩
+      (result.1.cfg.mem.cell (stageModulus.address (.output ⟨6, by decide⟩ ⟨0, by decide⟩))).readAs .nat) =
+      some 19 ∧ (stageModulus.value ⟨6, by decide⟩ ⟨0, by decide⟩).readAs .nat = some 16 := ⟨rfl, rfl⟩
 
 end ParityRace
 
@@ -522,7 +728,7 @@ structure Valid (f : OneShotFlag) (l : Launch P) (s : DistState) : Prop where
 
 /-- UNSIGNED. S6.3/#62. Each reader observes the published chunk. The single flag
 write or completion separates its producer's stores from the reader's copies. -/
-theorem oneShotFlag_correct (f : OneShotFlag) (l : Launch P) (s : DistState)
+theorem oneShotFlag_correct (f : OneShotFlag) (l : Launch P) (s : DistState) (sound : SoundLaunch l)
     (valid : f.Valid l s) (program : Realizes l f.body) :
     Outcome l s (fun final => final =
       f.sequentialWrites.foldl (fun mem pv => l.cells.put mem pv.1 pv.2) s) := by
@@ -530,28 +736,28 @@ theorem oneShotFlag_correct (f : OneShotFlag) (l : Launch P) (s : DistState)
 
 end OneShotFlag
 
-/-- In each generation, each participant publishes one owned cell, arrives,
-waits for all participants, then copies a peer's cell to an owned result. Each
+/-- In each generation, each participant publishes its owned tile, arrives,
+waits for all participants, then copies each cell of a peer's tile to an owned result. Each
 generation uses separate payload and result cells, so faster participants may
 start the next generation before every reader finishes the previous one. -/
 structure PhaseBarrier where
+  width : Nat
   members : List Agent
   phases : Nat
   counter : Counter
   peer : Agent → Agent
-  payload : Nat → Agent → Addr
-  receipt : Nat → Agent → Addr
-  value : Nat → Agent → MemCell
+  payload : Nat → Agent → Fin width → Addr
+  receipt : Nat → Agent → Fin width → Addr
+  value : Nat → Agent → Fin width → MemCell
   release : Mode
   acquire : Mode
 
 namespace PhaseBarrier
 
 def round (b : PhaseBarrier) (n : Nat) (a : Agent) : List Instr :=
-  [store (b.payload n a) (b.value n a),
-   signal b.counter .add 1 b.release,
-   wait b.counter .ge ((n+1)*b.members.length) b.acquire,
-   .copy (b.payload n (b.peer a)) (b.receipt n a)]
+  (List.finRange b.width).map (fun k => store (b.payload n a k) (b.value n a k)) ++
+    [signal b.counter .add 1 b.release, wait b.counter .ge ((n+1)*b.members.length) b.acquire] ++
+    (List.finRange b.width).map (fun k => .copy (b.payload n (b.peer a) k) (b.receipt n a k))
 
 def body (b : PhaseBarrier) (a : Agent) : Option (List Instr) :=
   if a ∈ b.members then some ((List.range b.phases).flatMap (fun n => b.round n a)) else none
@@ -560,8 +766,8 @@ def body (b : PhaseBarrier) (a : Agent) : Option (List Instr) :=
 reference depends only on the inputs and peer map, independent of a schedule. -/
 def sequentialWrites (b : PhaseBarrier) : List (Addr × MemCell) :=
   (List.range b.phases).flatMap fun n =>
-    b.members.map (fun a => (b.payload n a, b.value n a)) ++
-    b.members.map (fun a => (b.receipt n a, b.value n (b.peer a)))
+    b.members.flatMap (fun a => (List.finRange b.width).map fun k => (b.payload n a k, b.value n a k)) ++
+    b.members.flatMap (fun a => (List.finRange b.width).map fun k => (b.receipt n a k, b.value n (b.peer a) k))
 
 structure Valid (b : PhaseBarrier) (l : Launch P) : Prop where
   hasMembers : b.members ≠ []
@@ -575,15 +781,15 @@ structure Valid (b : PhaseBarrier) (l : Launch P) : Prop where
   initiallyZero : l.initialCount b.counter = 0
   participatingPeer : ∀ a ∈ b.members, b.peer a ∈ b.members
   separate : (b.sequentialWrites.map Prod.fst).Nodup
-  storage : ∀ n < b.phases, ∀ a ∈ b.members,
-    AccessibleAt l.symm a (b.payload n a) ∧ AccessibleAt l.symm a (b.payload n (b.peer a)) ∧
-      AccessibleAt l.symm a (b.receipt n a)
-  visible : ∀ n < b.phases, ∀ a ∈ b.members,
-    Mode.Pairs l.reach (b.payload n (b.peer a)) (b.peer a) a b.release b.acquire
+  storage : ∀ n < b.phases, ∀ a ∈ b.members, ∀ k,
+    AccessibleAt l.symm a (b.payload n a k) ∧ AccessibleAt l.symm a (b.payload n (b.peer a) k) ∧
+      AccessibleAt l.symm a (b.receipt n a k)
+  visible : ∀ n < b.phases, ∀ a ∈ b.members, ∀ k,
+    Mode.Pairs l.reach (b.payload n (b.peer a) k) (b.peer a) a b.release b.acquire
 
 /-- UNSIGNED. S6.4/#63. With the exact roster, the kth arrival of each member
 precedes each kth successful wait. No post-barrier copy reads a future phase. -/
-theorem phaseBarrier_correct (b : PhaseBarrier) (l : Launch P) (s : DistState)
+theorem phaseBarrier_correct (b : PhaseBarrier) (l : Launch P) (s : DistState) (sound : SoundLaunch l)
     (valid : b.Valid l) (program : Realizes l b.body) :
     Outcome l s (fun final => final =
       b.sequentialWrites.foldl (fun mem pv => l.cells.put mem pv.1 pv.2) s) := by
@@ -626,7 +832,14 @@ private theorem flagValid (viaPut : Bool) : (flagExample viaPut).Valid (flagLaun
 
 example (viaPut : Bool) : Outcome (flagLaunch viaPut) exampleState (fun final => final =
     (flagExample viaPut).sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2) exampleState) :=
-  (flagExample viaPut).oneShotFlag_correct _ _ (flagValid viaPut) (launch_realizes _ _)
+  (flagExample viaPut).oneShotFlag_correct _ _ (launch_sound _ _ (by
+    intro a c active hc
+    simp only [OneShotFlag.body] at active
+    split at active
+    · rename_i he; subst a; cases hc
+    · split at active
+      · rename_i hm; simp [flagExample] at hm; subst a; cases hc
+      · cases active)) (flagValid viaPut) (launch_realizes _ _)
 
 example (viaPut : Bool) : (((flagExample viaPut).sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2)
     exampleState).cell (syncCell 4)).readAs .nat = some 47 := by cases viaPut <;> rfl
@@ -651,13 +864,14 @@ example : ¬ Mode.Pairs .global (syncCell 1) (flagExample false).writer (.rank 1
 
 /-- Two ranks exchange values across two generations of the same rendezvous. -/
 def phaseExample : PhaseBarrier where
+  width := 2
   members := [.rank 0, .rank 1]
   phases := 2
   counter := .rendezvous 7
   peer a := if a = .rank 0 then .rank 1 else .rank 0
-  payload n a := syncCell (4*n + a.rankOf)
-  receipt n a := syncCell (4*n + 2 + a.rankOf)
-  value n a := .of .nat (10*n + a.rankOf + 1)
+  payload n a k := syncCell (8*n + 2*a.rankOf + k.val)
+  receipt n a k := syncCell (8*n + 4 + 2*a.rankOf + k.val)
+  value n a k := .of .nat (10*n + a.rankOf + 1 + 100*k.val)
   release := .atomic .sys .release
   acquire := .atomic .sys .acquire
 
@@ -675,16 +889,23 @@ private theorem phaseValid : phaseExample.Valid phaseLaunch := by
   · rfl
   · decide
   · decide
-  · intro n _ a _
+  · intro n _ a _ k
     exact ⟨⟨trivial, Or.inr rfl⟩, ⟨trivial, Or.inr rfl⟩, ⟨trivial, Or.inr rfl⟩⟩
-  · intro _ _ _ _; exact ⟨rfl, rfl, trivial, trivial⟩
+  · intro _ _ _ _ _; exact ⟨rfl, rfl, trivial, trivial⟩
 
 example : Outcome phaseLaunch exampleState (fun final => final =
     phaseExample.sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2) exampleState) :=
-  phaseExample.phaseBarrier_correct _ _ phaseValid (launch_realizes _ _)
+  phaseExample.phaseBarrier_correct _ _ (launch_sound _ _ (by
+    intro a c active hc
+    simp only [PhaseBarrier.body] at active
+    split at active
+    · rename_i hm; simp [phaseExample] at hm; rcases hm with rfl | rfl <;> cases hc
+    · cases active)) phaseValid (launch_realizes _ _)
 
-example : ((phaseExample.sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2)
-    exampleState).cell (syncCell 6)).readAs .nat = some 12 := rfl
+example :
+    let final := phaseExample.sequentialWrites.foldl (fun s pv => writes.put s pv.1 pv.2) exampleState
+    (final.cell (syncCell 12)).readAs .nat = some 12 ∧
+    (final.cell (syncCell 13)).readAs .nat = some 112 := ⟨rfl, rfl⟩
 
 private def phaseWait? : Instr → Option (Counter × Cmp × Nat × Mode)
   | .emit (.wait c cmp n m) _ => some (c,cmp,n,m)
@@ -701,7 +922,7 @@ private def skipsLast (a : Agent) : Option (List Instr) :=
 
 example : phaseExample.body (.rank 1) ≠ skipsLast (.rank 1) := by
   intro h
-  have impossible : (some 8 : Option Nat) = some 4 := congrArg (Option.map List.length) h
+  have impossible : (some 12 : Option Nat) = some 6 := congrArg (Option.map List.length) h
   contradiction
 
 example : ¬ Cmp.ge.holds
@@ -758,7 +979,7 @@ theorem add_swap (initial x y : ℝ) :
 
 /-- UNSIGNED. S6.5. Every complete schedule leaves the canonical sequential
 sum in the target and preserves all other memory, local contexts and geometry. -/
-theorem atomicAccumulation_correct {P : Type} (q : AtomicAccumulation) (l : Launch P) (s : DistState)
+theorem atomicAccumulation_correct {P : Type} (q : AtomicAccumulation) (l : Launch P) (s : DistState) (sound : SoundLaunch l)
     (initial : ℝ) (typed : s.cell q.target = .real initial)
     (access : ∀ a ∈ q.agents, AccessibleAt l.symm a q.target)
     (writes : l.cells.put = DistState.putCell) (programs : Realizes l q.body) :
@@ -799,7 +1020,12 @@ example :
     Outcome l s (fun final => final = s.putCell twoCTAs.target (.real 5)) := by
   dsimp only
   rw [← twoCTAs_total]
-  exact twoCTAs.atomicAccumulation_correct _ _ 0 (DistState.cell_putCell ..)
+  exact twoCTAs.atomicAccumulation_correct _ _ (launch_sound _ _ (by
+    intro a c active hc
+    simp only [AtomicAccumulation.body] at active
+    split at active
+    · rename_i hm; simp [twoCTAs] at hm; rcases hm with rfl | rfl <;> cases hc <;> rfl
+    · cases active)) 0 (DistState.cell_putCell ..)
     (twoCTAs_access _) rfl (launch_realizes ..)
 
 /-- The lost-update interleaving reads the same initial cell twice, then writes
