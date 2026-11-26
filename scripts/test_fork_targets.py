@@ -404,13 +404,15 @@ class ForkTargetGates(unittest.TestCase):
     def test_signed_inductive_freezes_parameter_index_and_binder_info(self):
         name = 'VeriTileGateIndices.T'
         source = ('namespace VeriTileGateIndices\n'
-                  'inductive T (n : Nat) : Type where\n  | mk (value : Nat) : T n\n'
+                  'inductive T : Nat → Type where\n  | mk {n : Nat} (value : Nat) : T n\n'
                   'end VeriTileGateIndices\n')
         _, check = self.signed_declaration_probe('FrozenIndicesProbe', name, source)
         cases = [
-            ('index', source.replace('T (n : Nat) : Type', 'T : Nat → Type')
-             .replace('| mk (value : Nat) : T n', '| mk (n : Nat) (value : Nat) : T n')),
-            ('binder', source.replace('mk (value : Nat)', 'mk {value : Nat}')),
+            # The constructor uses the same implicit binder in both versions.
+            # Disable automatic promotion so only the parameter/index counts differ.
+            ('index', source.replace('inductive T',
+                                     'set_option inductive.autoPromoteIndices false in\ninductive T')),
+            ('binder', source.replace('(value : Nat)', '{value : Nat}')),
         ]
         for label, edited in cases:
             with self.subTest(label=label):
@@ -488,6 +490,41 @@ class ForkTargetGates(unittest.TestCase):
                     self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
                     self.assertIn(f'{name}: unsupported signed declaration', rejected.stderr)
                     self.assertEqual((tsv.read_bytes(), definitions.read_bytes()), before)
+
+
+    def test_signed_structure_class_marker(self):
+        name = 'VeriTileGateClassStructure.Record'
+        ordinary = ('namespace VeriTileGateClassStructure\n'
+                    'structure Record where\n  field : Nat\n'
+                    'end VeriTileGateClassStructure\n')
+        is_class = ordinary.replace('structure Record', 'class Record')
+        cases = [('toClass', ordinary, is_class), ('fromClass', is_class, ordinary)]
+        for label, source, edited in cases:
+            with self.subTest(direction=label):
+                _, check = self.signed_declaration_probe(f'FrozenClassStructure_{label}', name, source)
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+                self.assertNotIn('definition changed', rejected.stderr)
+                restored = check(source)
+                self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_inductive_class_marker(self):
+        name = 'VeriTileGateClassInductive.Choice'
+        ordinary = ('namespace VeriTileGateClassInductive\n'
+                    'inductive Choice where\n  | left\n  | right (value : Nat)\n'
+                    'end VeriTileGateClassInductive\n')
+        is_class = ordinary.replace('inductive Choice', 'class inductive Choice')
+        cases = [('toClass', ordinary, is_class), ('fromClass', is_class, ordinary)]
+        for label, source, edited in cases:
+            with self.subTest(direction=label):
+                _, check = self.signed_declaration_probe(f'FrozenClassInductive_{label}', name, source)
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+                self.assertNotIn('definition changed', rejected.stderr)
+                restored = check(source)
+                self.assertEqual(restored.returncode, 0, restored.stderr)
 
 
 class FrozenTablesAgainstBase(unittest.TestCase):
