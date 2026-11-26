@@ -1,10 +1,11 @@
-# Accepted `sorry` warnings in tests/lean files that scripts/local_gate.sh builds or runs.
-# Checked by scripts/check_test_sorry.py on the output of every gate command.
+# Approved sorry warnings and source axiom declarations in tests/lean.
+# Used by scripts/check_test_sorry.py for source checks and gate logs.
 #
 # Format (tab-separated):
 #   tests/lean/File.lean	declaration	one-line reason
 #
-# The declaration is the word at the reported position: a theorem or
-# definition name, or `example`. A line of that file that uses `sorry` passes
+# Use the source spelling for an axiom, the word at the warning position
+# (or `example`) for a sorry warning, and the printed fully qualified name to
+# permit sorryAx in a dependency report. A line of that file that uses `sorry` passes
 # check_test_sorry.py --sources only if it names the declaration. Keep this
 # list short; a certificate that uses `sorry` certifies nothing.
