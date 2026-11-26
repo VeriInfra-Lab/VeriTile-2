@@ -37,6 +37,7 @@ python3 scripts/check_fork_target.py VeriTileDist            # build; no sorry, 
 python3 scripts/check_fork_target.py VeriTileDist --replay   # also comparator and trust gates (Linux judge host)
 python3 scripts/check_fork_target.py VeriTileStaging         # build only
 python3 scripts/check_frozen_statements.py                   # signed statements and the definitions under them are unchanged
+python3 scripts/check_frozen_base.py                         # no row recorded on main was deleted or changed
 python3 scripts/test_fork_targets.py                         # the gates reject deliberate violations
 ```
 
@@ -72,3 +73,35 @@ never replaces a fingerprint that is already recorded:
 - **A statement is signed again together with a definition it rests on.** Mark
   its fingerprint `-` and run the check with `--fill --accept-definitions` in
   one run; each flag alone refuses while the other table still differs.
+
+## Rows recorded on main
+
+`--fill` and `--accept-definitions` rewrite the tables of the branch they run
+on, so `check_frozen_statements.py` alone cannot tell a reviewed sign-off from
+an author accepting their own change. `scripts/check_frozen_base.py` reads
+both tables at their fixed paths under `documents/dist/`, at
+`git merge-base HEAD <main>` and in the working tree. `<main>` is `--main`,
+else `fork/main`, else `origin/main`; without one, or without a merge base,
+the check fails. It also fails when a table or a directory on its path is a
+symbolic link, and when a row recorded at the merge base was deleted or its
+fingerprint or `signed` text changed.
+
+A statement whose fingerprint and `signed` text are unchanged may change only
+its module, to one outside `VeriTile.Staging`, as when a proved statement
+moves to its main target. The check prints it as `[moved]`, and the
+fingerprint check above verifies that the new module declares it. A move back
+into staging fails. New rows pass; the fingerprint check above accepts them
+only with `-` or with the computed fingerprint.
+
+`scripts/local_gate.sh` unsets `VERITILE_FROZEN_OVERRIDE`, so its base-check
+line fails on a branch that deletes or changes a recorded row. For a sign-off
+or re-sign batch the coordinator names the rows it changes, and only those,
+in a separate run:
+
+```sh
+VERITILE_FROZEN_OVERRIDE=VeriTile.Dist.foo,VeriTile.Dist.Bar python3 scripts/check_frozen_base.py
+```
+
+Names are first-column entries of either table; every named row must actually
+differ. Whenever the variable is set, the check prints `[override]` with its
+value and with each overridden row.

@@ -29,6 +29,7 @@ other than `int32` or `uint32` to `fp32`; `QExpr.opaque` and `llrint`.
 import VeriTile.Interp.Enum
 import VeriTile.Interp.Mirror
 import VeriTile.Interp.Numeric
+import VeriTile.Interp.Reshape
 import VeriTile.Interp.State
 
 namespace VeriTile.Interp
