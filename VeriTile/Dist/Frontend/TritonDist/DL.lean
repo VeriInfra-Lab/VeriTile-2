@@ -260,4 +260,3 @@ def elaborateDL : TermElab := fun stx expected => do
   elabTerm (← `(DL.Source.mk $block [$sites,*])) expected
 
 end VeriTile.Dist.Frontend.TritonDist
-
