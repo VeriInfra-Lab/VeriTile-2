@@ -9,9 +9,20 @@ definitions under it (`documents/dist/FrozenStatements.tsv`,
 taken; the agent recorded the signature on the user's delegation. The stubs of
 part 1 are under signed statements: the ticket that defines one changes its
 recorded fingerprint, and the coordinator reviews and records that change.
-Part 2 is UNSIGNED, except `AccessValue`, `Emission`, `Next`, `AgentProgram`
-and `AgentProgram.NextLocal`: they lie under the signed `step_comm` (#47) and
-are frozen with it (user ratification of N1, N5, N5' and N6, 2026-11-25).
+Part 2 is signed on 2026-11-27 (user decision 三 of 2026-11-25, recorded on
+#43): the six statements `AgentProgram.Step.deterministic`,
+`AgentProgram.ofBody_step_noSync`, `slice_noSync`, `slice_sync`,
+`AgentProgram.ofBody_steps` and `exec_noSync_eq_exec`, with the definitions
+under them (`AgentProgram.Step`, `AgentProgram.Steps`, `AgentProgram.ofBody`,
+`slice`). The same decision ratifies N1, N5, N5' and N6 as already frozen:
+`AccessValue`, `Emission`, `Next`, `AgentProgram` and `AgentProgram.NextLocal`
+lie under the signed `step_comm` (#47) and are frozen with it. It takes N7
+(both `ofBody` and `ofCuts`) and N9 (`ofBody` a definition) as written, and
+makes `slice` a definition. `EventCut` and `AgentProgram.ofCuts` are decided
+by N7 but not frozen: no signed statement mentions them. The notes on N1 to
+N9 below are the record of the choices as first drafted; where they differ
+from the declarations, the 2026-11-24 choices on #47 (part 2 below) and
+decision 三 govern.
 
 An agent runs sequential code between synchronization or communication
 points. A segment is one such piece of code, seen as a transformer of the
@@ -71,12 +82,15 @@ part 2:
 - 2026-11-21: a wait followed by a swap in one step is a `wait` and a `set`
   write that the step relation fires together; there is no new event
   constructor. `Next.emit` carries one event, so the file does not express
-  this yet: two `emit`s in a row are two steps. Recorded only; part 2 has to
-  settle it before it is signed.
+  this yet: two `emit`s in a row are two steps. Settled by the 2026-11-24
+  choices on #47: `Next.emitGroup` issues the wait and the `set` as one
+  group, the CAS group that `SoundLaunch` admits.
 
 New choices. Each was needed to make the file elaborate; the file takes the
 option marked "taken". N2, N3 and N4 bear on part 1 and are decided as taken
-(user decision, 2026-11-23). The others bear on part 2 and are not decided.
+(user decision, 2026-11-23). The others bear on part 2 and are decided by
+decision 三 of 2026-11-25 (above); N8 is superseded by the 2026-11-24 choices
+on #47.
 The pull request of the revision (#474) gives the evidence.
 
 N1. The program state of an agent.
@@ -197,7 +211,8 @@ theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
 notes in the header. Every issue names its actor; the scheduling unit is one
 nonempty group. SoundLaunch restricts multi-event groups to a CAS pair.
 The declarations marked "Signed (#47, via step_comm)" are frozen under
-`step_comm`; the rest of part 2 is signed with #43 part 2. -/
+`step_comm`; those marked "Signed (#43, part 2)" are signed with #43 part 2.
+`EventCut` and `AgentProgram.ofCuts` are decided (N7) but not frozen. -/
 
 /-- Signed (#47, via step_comm). Part 2. The memory operand or discarded result attached to an event. -/
 inductive AccessValue where
@@ -229,7 +244,7 @@ structure AgentProgram (P : Type) where
   segment : P → Segment
   next : P → DistState → Next P
 
-/-- UNSIGNED. Part 2. Owner: S3.3. One step of an agent: from program state
+/-- Signed (#43, part 2). Owner: S3.3. One step of an agent: from program state
 `p` and state `σ` it runs the segment up to its next event, reaches `σ'`, and
 then finishes or emits that event and continues, as `n` says. The effect of
 the event and the interleaving with other agents belong to S4. -/
@@ -237,7 +252,7 @@ def AgentProgram.Step {P : Type} (prog : AgentProgram P) (p : P) (σ σ' : DistS
     (n : Next P) : Prop :=
   (prog.segment p).run σ = some σ' ∧ prog.next p σ = n
 
-/-- UNSIGNED. Part 2. Owner: S3.3. `prog.Steps p l`: started in program state
+/-- Signed (#43, part 2). Owner: S3.3. `prog.Steps p l`: started in program state
 `p`, the agent can take the steps `l` for some states and some values read at
 its events: the segments it runs and the events it emits, in order, down to
 the end of the program. The runs are not required to succeed. -/
@@ -257,20 +272,22 @@ def AgentProgram.NextLocal {P : Type} (p : AgentProgram P) : Prop :=
   ∀ pc σ τ, DistState.AgreesOn ((p.segment pc).reads σ) σ τ →
     DistState.SameLocal (p.segment pc).agent σ τ → p.next pc σ = p.next pc τ
 
-/-- UNSIGNED. Part 2. N7. A cut can compute its events from the state in which the preceding
+/-- UNSIGNED. Part 2. N7, decided as written (2026-11-25); not frozen. A cut
+can compute its events from the state in which the preceding
 segment starts. This includes K6's loaded lengths; ofBody retains fixed events. -/
 structure EventCut where
   code : Segment
   issue : DistState → Emission × List Emission
 
-/-- UNSIGNED. Part 2. Run the segments and issue their event groups in list order. -/
+/-- UNSIGNED. Part 2. N7, decided as written (2026-11-25); not frozen. Run
+the segments and issue their event groups in list order. -/
 def AgentProgram.ofCuts (owner : Agent) : AgentProgram (List EventCut) where
   segment cuts := cuts.head?.map EventCut.code |>.getD (Segment.ofStmts owner [])
   next cuts σ := match cuts with
     | [] => .finish
     | c :: rest => let (e, es) := c.issue σ; .emitGroup e es fun _ => rest
 
-/-- UNSIGNED. Part 2. Proved by S3.3. The segment part of a step is
+/-- Signed (#43, part 2). Proved by S3.3. The segment part of a step is
 deterministic: a program state and a state fix the state reached, the event
 and the continuation. -/
 theorem AgentProgram.Step.deterministic {P : Type} {prog : AgentProgram P} {p : P}
@@ -297,7 +314,7 @@ by
 
 /-! ## The flat body as a program (S3.3) -/
 
-/-- UNSIGNED. Part 2. Owner: S3.3. The program of agent `a` whose program
+/-- Signed (#43, part 2). Owner: S3.3. The program of agent `a` whose program
 state is what is left of a flat body: upstream statements and, at each
 synchronization or communication point, the event performed there. A step
 runs the statements before the first event, emits that event and continues
@@ -309,7 +326,7 @@ def AgentProgram.ofBody (a : Agent) : AgentProgram (List (Stmt ⊕ Emission)) wh
     | Sum.inr e :: rest => .emitGroup e [] fun _ => rest
     | _ => .finish
 
-/-- UNSIGNED. Part 2. Proved by S3.3. A step with no event left is the
+/-- Signed (#43, part 2). Proved by S3.3. A step with no event left is the
 upstream execution of the rest on the projection of the agent, written back;
 then the agent has finished. -/
 theorem AgentProgram.ofBody_step_noSync (a : Agent) (code : List Stmt) (σ σ' : DistState)
@@ -317,7 +334,7 @@ theorem AgentProgram.ofBody_step_noSync (a : Agent) (code : List Stmt) (σ σ' :
     (AgentProgram.ofBody a).Step (code.map Sum.inl) σ σ' n ↔
       (stepStmts code (σ.view a)).map (σ.setView a) = some σ' ∧ n = .finish := sorry
 
-/-- UNSIGNED. Part 2. Owner: S3.3. Slicing of a flat body of agent `a`. The
+/-- Signed (#43, part 2). Owner: S3.3. Slicing of a flat body of agent `a`. The
 result lists, in program order, the segments between the events and the
 events. It is fixed before execution. `go code` slices a body after the
 statements `code`, which have not yet been closed into a segment. -/
@@ -335,12 +352,12 @@ private theorem slice.go_stmts (a : Agent) (code more : List Stmt) (rest : List 
   | nil => simp
   | cons stmt more ih => simp [slice.go, ih]
 
-/-- UNSIGNED. Part 2. A body with no event is one segment. -/
+/-- Signed (#43, part 2). A body with no event is one segment. -/
 theorem slice_noSync (a : Agent) (code : List Stmt) :
     slice a (code.map Sum.inl) = [Sum.inl (Segment.ofStmts a code)] := by
   simpa [slice.go] using slice.go_stmts a [] code []
 
-/-- UNSIGNED. Part 2. Slicing cuts at the first event: the
+/-- Signed (#43, part 2). Slicing cuts at the first event: the
 statements before it are one segment, and the rest of the body is sliced in
 the same way. -/
 theorem slice_sync (a : Agent) (code : List Stmt) (e : Emission) (rest : List (Stmt ⊕ Emission)) :
@@ -348,17 +365,17 @@ theorem slice_sync (a : Agent) (code : List Stmt) (e : Emission) (rest : List (S
       Sum.inl (Segment.ofStmts a code) :: Sum.inr e.event :: slice a rest := by
   simpa [slice.go] using slice.go_stmts a [] code (Sum.inr e :: rest)
 
-/-- UNSIGNED. Part 2. Proved by S3.3. The derived lemma: for a flat body, a
+/-- Signed (#43, part 2). Proved by S3.3. The derived lemma: for a flat body, a
 program with no loop around an event, the steps the agent takes are exactly
 the segments and events of the flat list, whatever the states are. The proof
-needs one state to exist; `DistState` is opaque until S1.5 defines it. -/
+needs one state to exist; `DistState` (S1.5) has one. -/
 theorem AgentProgram.ofBody_steps (a : Agent) (body : List (Stmt ⊕ Emission))
     (l : List (Segment ⊕ Event)) :
     (AgentProgram.ofBody a).Steps body l ↔ l = slice a body := sorry
 
 /-! ## Bridge to the upstream execution (S3.4) -/
 
-/-- UNSIGNED. Part 2. Proved by S3.4. A kernel with no synchronization point
+/-- Signed (#43, part 2). Proved by S3.4. A kernel with no synchronization point
 takes one step: it runs the upstream `exec` on the block state of the CTA,
 writes the result back and finishes. `body` is the body of the instance that
 CTA `c` runs; `hbody` says that its statements are those of the upstream
