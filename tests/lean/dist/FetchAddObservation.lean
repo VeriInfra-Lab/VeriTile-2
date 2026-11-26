@@ -13,7 +13,7 @@ judgment orders the pair in whichever direction the schedule ran it.
 
 The proofs follow the advisor's rendezvous counterexample of 2026-11-25.
 `fetchAdd_c3_fails_concrete` instantiates it with the store's own `putCell`.
-This file does not use the staged (sorry) theorem. -/
+This file does not use the staged, unproved theorem. -/
 import VeriTile.Staging.Dist.JudgmentSpec
 
 namespace VeriTile.Tests.FetchAddObservation
