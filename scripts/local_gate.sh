@@ -66,6 +66,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.IndexQueueCells"
              "lake build tests.lean.dist.IndexQueueCellValues"
              "lake build tests.lean.dist.IndexQueueDispatchLoad"
+             "lake build tests.lean.dist.IndexQueueSlotRace"
              "lake build tests.lean.dist.IndexQueueCellsClient"
              "lake build tests.lean.dist.IndexQueueWarpOrder"
              "lake build tests.lean.dist.IndexQueueSenderElection"
