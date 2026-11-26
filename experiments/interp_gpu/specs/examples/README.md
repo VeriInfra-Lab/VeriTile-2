@@ -11,6 +11,19 @@ Pass specific JSON paths to select examples. The driver validates each [spec](..
 
 [VectorAdd](VectorAdd.json) runs two programs over aligned FP32 vectors of length four. [OnlineSoftmax](OnlineSoftmax.json) runs one program per row on equal, increasing and decreasing pairs. Two rows produce underflow at one lane. The expected buffers are the checked-in file-runner fixtures.
 
+## Benchmark task families
+
+The [assignment table](../ASSIGNMENT.tsv) gives each of the 183 tritonbench tasks one family and marks the ten I9.3 smoke entry points.
+
+| Code | Task family |
+| --- | --- |
+| [A1](https://github.com/VeriInfra-Lab/VeriTile-2/issues/131) | Elementwise operations, activations and sampling |
+| [A2](https://github.com/VeriInfra-Lab/VeriTile-2/issues/132) | Normalization, softmax, reductions and losses |
+| [B1](https://github.com/VeriInfra-Lab/VeriTile-2/issues/133) | Matrix multiplication and quantization |
+| [B2](https://github.com/VeriInfra-Lab/VeriTile-2/issues/134) | Copy, indexing, cumulative sums and caches |
+| [C1](https://github.com/VeriInfra-Lab/VeriTile-2/issues/135) | Attention |
+| [C2](https://github.com/VeriInfra-Lab/VeriTile-2/issues/136) | Recurrent and chunked sequences, rotary operations and concurrent tasks |
+
 ## Source and binding coverage
 
 There are 18 local worked-example directories. The [source inventory](../../../../documents/InterpReflectCoverage.md) identifies all 68 Lean definitions, 62 of which have checked mirrors. The registry binds two of those mirrors. The [file interface](../../../../VeriTile/Interp/Run/Main.lean) accepts inputs of a common shape and returns one tensor of that shape. Its [FP32 carrier and bindings](../../../../tests/interp/Main.lean) implement only the arithmetic needed by those two programs. The additional historic TritonBenchVectorAddition group listed in the [worked-example catalogue](../../../../bench/examples/README.md) is hosted in VeriTileBench.
