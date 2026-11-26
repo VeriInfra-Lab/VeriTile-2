@@ -6,9 +6,9 @@ checker `scopeConsistent` with `ScopeReliance`, through its soundness statement
 `scopeConsistent_crossRankSys`. The trust-assumption interface
 `TrustAssumption` and `TrustAssumptionClass` was signed on 2026-11-26 under the
 same decision, after the checker freezes constructors, fields and defaults of
-signed types (#594, #621). The examples in `TrustAssumptionExamples` stay
-unsigned. The checker uses the signed event interface in EventSpec. A reliance names the release and acquire that a proof needs and
-the cell whose visibility it needs. S4.1 supplies the trace conditions,
+signed types (#594, #621), and moved to `VeriTile.Dist.Assumptions` for #58.
+The checker uses the signed event interface in EventSpec. A reliance names the
+release and acquire that a proof needs and the cell whose visibility it needs. S4.1 supplies the trace conditions,
 including the read-from condition that connects such a pair to happens-before.
 -/
 import VeriTile.Staging.Dist.EventSpec
@@ -65,20 +65,5 @@ theorem scopeConsistent_crossRankSys :
       [⟨flag, (.rank 0, .bump ⟨.word flag, .set, 1, .atomic .sys .release⟩),
         (.rank 1, .wait (.word flag) .eq 1 (.atomic .sys .acquire))⟩] = true := by
   decide
-
-/-- Signed (#56). Owner: S5.3. The two classes of named trust assumptions. -/
-inductive TrustAssumptionClass where
-  | semanticSource
-  | translationCorrectness
-  deriving DecidableEq, Repr
-
-/-- Signed (#56). Owner: S5.3. Metadata attached to a proposition used as an
-explicit trust premise. The statement does not carry a proof. -/
-structure TrustAssumption where
-  name : Lean.Name
-  statement : Prop
-  sourceOrRationale : String
-  affectedKernels : List String
-  assumptionClass : TrustAssumptionClass
 
 end VeriTile.Dist

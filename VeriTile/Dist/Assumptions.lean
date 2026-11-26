@@ -2,17 +2,14 @@ import Lean
 
 namespace VeriTile.Dist
 
-/- Provisional interface from S5.1 (#56), PR #524 at
-24de0412fc3f8e7e1d4f177a14bc4c99bbf6792b. -/
-
-/-- The two classes of named trust assumptions. -/
+/-- Signed (#56). Owner: S5.3. The two classes of named trust assumptions. -/
 inductive TrustAssumptionClass where
   | semanticSource
   | translationCorrectness
   deriving DecidableEq, Repr
 
-/-- Metadata attached to a proposition used as an explicit trust premise.
-The statement does not carry a proof. -/
+/-- Signed (#56). Owner: S5.3. Metadata attached to a proposition used as an
+explicit trust premise. The statement does not carry a proof. -/
 structure TrustAssumption where
   name : Lean.Name
   statement : Prop
