@@ -97,12 +97,12 @@ for index in "${!commands[@]}"; do
     ${commands[$index]} >"$log/$index.log" 2>&1
   fi
   code=$?
-  # Direct Lean output lacks the file prefix Lake adds to #print axioms.
+  # Direct runs such as InterpSymbolic and InterpBridgeCensus need a file for bare #print axioms.
   test_args=()
   if [[ ${commands[$index]} == "lake env lean tests/lean/"*.lean ]]; then
     test_args=(--test-file "${commands[$index]#lake env lean }")
   fi
-  python3 scripts/check_test_sorry.py "${test_args[@]}" "$log/$index.log" >>"$log/$index.log" 2>&1 || [ "$code" != 0 ] || code=1
+  python3 scripts/check_test_sorry.py ${test_args[@]+"${test_args[@]}"} "$log/$index.log" >>"$log/$index.log" 2>&1 || [ "$code" != 0 ] || code=1
   echo "exit $code  ${commands[$index]}"
   if [ "$code" != 0 ]; then
     failed=$((failed + 1))

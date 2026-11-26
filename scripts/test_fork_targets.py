@@ -90,22 +90,40 @@ class ForkTargetGates(unittest.TestCase):
             root = Path(temp)
             probe, allow = root / relative, root / 'allowed'
             probe.parent.mkdir(parents=True)
+            args = ['--sources', '--root', str(root), '--allowlist', str(allow)]
             for label, code in (
                 ('plain', 'axiom plain : True'),
                 ('hidden', 'private axiom hidden : True'),
                 ('nested', 'namespace N\naxiom nested : True\nend N'),
-                ('scoped', 'section\naxiom /- binder -/\n scoped : True\nend'),
+                ('inSection', 'section\naxiom /- binder -/\n inSection : True\nend'),
+                ('«a»', 'axiom«a» : True'),
+                ('℘', 'axiom ℘ : True'),
+                ('«a axiom b»', 'axiom «a axiom b» : True'),
+                ('N.a', 'axiom N.a.{u} : Type u'),
             ):
                 with self.subTest(label=label):
                     probe.write_text(code + '\n-- axiom ignored : False\n')
+                    subprocess.run(['lake', 'env', 'lean', str(probe)], cwd=ROOT, check=True,
+                                   text=True, capture_output=True)
                     allow.write_text('')
-                    args = ['--sources', '--root', str(root), '--allowlist', str(allow)]
                     result = run('check_test_sorry.py', *args)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(f'axiom {label}', result.stderr)
                     allow.write_text(f'{relative}\t{label}\ttest fixture\n')
                     result = run('check_test_sorry.py', *args)
                     self.assertEqual(result.returncode, 0, result.stderr)
+
+            probe.write_text('def axiom℘ := 0\ndef ℘axiom := 1\n')
+            allow.write_text('')
+            subprocess.run(['lake', 'env', 'lean', str(probe)], cwd=ROOT, check=True,
+                           text=True, capture_output=True)
+            result = run('check_test_sorry.py', *args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            probe.write_text('axiom : True\n')
+            result = run('check_test_sorry.py', *args)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('axiom ?', result.stderr)
 
     def test_test_axiom_output(self):
         relative = 'tests/lean/GateAxiomPrint.lean'

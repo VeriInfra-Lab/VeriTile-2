@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail on `declaration uses 'sorry'` in a tests/lean file, unless allowlisted.
+"""Reject unapproved sorry warnings, axiom declarations and printed dependencies in tests/lean.
 
 A `sorry` in a test certificate is only a warning to Lean and Lake, and the
 environment audit of check_fork_target.py cannot see it in an `example`,
@@ -12,9 +12,11 @@ Source checks also reject a test's own axiom declarations. Log checks audit
 the dependencies reported by `#print axioms` at test sites. Lake supplies
 the site in its log; direct Lean runs supply the test file on the command line.
 
-scripts/test-sorry-allowlist.txt lists the accepted cases, one per line:
-`file<TAB>declaration<TAB>reason`. The declaration is the word at the reported
-position: the name of a theorem or definition, or `example`.
+scripts/test-sorry-allowlist.txt uses `file<TAB>declaration<TAB>reason`.
+For a source axiom use the name as written, including any quoting or namespace
+prefix. For a sorry warning use the word at the reported position (or `example`).
+To permit sorryAx in printed dependencies use the fully qualified name printed
+for the audited declaration. An allowed source axiom still fails as a dependency.
 
 The scan only sees warnings that Lean prints, and options and `#guard_msgs`
 can hide them. `--sources` (one gate command) therefore matches what is being
@@ -62,9 +64,11 @@ WARNING = re.compile(r'^(?:warning: )?(?:\./|' + re.escape(str(ROOT)) + r'/)?(te
                      r'(?:warning: )?declaration uses .sorry.', re.MULTILINE)
 
 
-# Match the command token, including after a visibility modifier or local command.
-LEAN_NAME = r"(?:«[^»\n]+»|[^\W\d][\w'!?]*)(?:\.(?:«[^»\n]+»|[^\W\d][\w'!?]*))*"
-AXIOM_DECL = re.compile(r"(?<![\w.'!?«])axiom(?![\w'!?»])\s+(" + LEAN_NAME + ")")
+# Lean's identifier continuations include non-word Unicode letter-like characters
+# (Init/Meta/Defs.lean). The declaration command itself is sufficient for a hit.
+IDENT_REST = r"\w'!?\u03ca-\u03fb\u1f00-\u1ffe\u2100-\u214f\U0001d49c-\U0001d59f"
+NAME_PART = r"(?:«[^»\n]+»|[^\s.:«»(){}\[\]]+)"
+AXIOM_DECL = re.compile(rf"(?<![{IDENT_REST}.«])axiom(?![{IDENT_REST}»])(?:\s*({NAME_PART}(?:\.{NAME_PART})*))?")
 AXIOM_REPORT = re.compile(
     r"^(?:(?:info: )?(?:\./|" + re.escape(str(ROOT)) + r"/)?"
     r"(?P<file>tests/lean/[^:\n]+\.lean):\d+:\d+: (?:info: )?)?"
@@ -210,8 +214,9 @@ def tripwires(root, accepted, metaprograms=frozenset()):
                 hits += [f'{file}:{number}: {match.group(0).strip()}' for match in
                          [*TEST_WORDS.finditer(line), *TACTICS.finditer(code_lines[number - 1])]]
         for match in AXIOM_DECL.finditer(code):
-            if (file, match[1]) not in accepted:
-                hits.append(f'{file}:{text.count(chr(10), 0, match.start()) + 1}: axiom {match[1]}')
+            name = match[1] or '?'
+            if match[1] is None or (file, name) not in accepted:
+                hits.append(f'{file}:{text.count(chr(10), 0, match.start()) + 1}: axiom {name}')
         for match in META.finditer(code):
             found = META_NAME.match(text, match.end())
             name = match.group(1) if match.group(1) == 'macro_rules' else \
