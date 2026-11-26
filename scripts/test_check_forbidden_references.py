@@ -2,10 +2,15 @@
 import contextlib
 import io
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
 
+from unittest import mock
+
+import check_forbidden_references
+import check_test_sorry
 from check_forbidden_references import EXEMPT, REMOVAL, check, main
 
 
@@ -22,6 +27,48 @@ class ForbiddenReferences(unittest.TestCase):
         if files:
             subprocess.run(['git', 'add', '--', *files], cwd=root, check=True)
         return root
+
+    def test_lexical_boundaries_in_both_scanners(self):
+        # These are inert tokenizer fragments. Exercise the two real scan loops
+        # with a harmless sentinel independent of either production policy.
+        marker = 'LexicalMarker'
+        sentinel = re.compile(r'(LexicalMarker)')
+        path = 'tests/lean/Lex.lean'
+        probes = (
+            'r#"a"b"#', 'r"\\"', '«a--b»', '«/-»', '«a"b»',
+            'r###"LexicalMarker "# and ""## stay inside"###',
+        )
+        for token in probes:
+            with self.subTest(token=token):
+                root = self.tree({path: f'\n) {token} {marker}\n'})
+                expected = [f'{path}:2: {marker}']
+                with self.subTest(scanner='test sources'), mock.patch.object(check_test_sorry, 'TACTICS', sentinel):
+                    self.assertEqual(check_test_sorry.tripwires(root, set()), expected)
+                with self.subTest(scanner='forbidden references'), mock.patch.object(check_forbidden_references, 'PATTERN', sentinel):
+                    self.assertEqual(check(root), expected)
+
+    def test_views_preserve_offsets_and_identifier_spelling(self):
+        for token, visible in (
+            ('r#"a"b"#', 'r#"   "#'),
+            ('r"\\"', 'r" "'),
+            ('r##"a"#\nb"##', 'r##"   \n "##'),
+            ('«a--b»', '«a--b»'), ('«/-»', '«/-»'), ('«a"b»', '«a"b»'),
+            ('«a--b».«/-».r', '«a--b».«/-».r'),
+            ("'«'", "'«'"),
+            ('other"c\\"d"', 'other"    "'),
+            ('outer.r"c\\"d"', 'outer.r"    "'),
+            ('r###"open', 'r###"    '),
+        ):
+            with self.subTest(token=token):
+                source = token + (' More' if token != 'r###"open' else '')
+                expected = visible + (' More' if token != 'r###"open' else '')
+                self.assertEqual(check_test_sorry.views(source), (expected, expected))
+
+    def test_unchanged_source_diagnostics(self):
+        path = 'tests/lean/Lex.lean'
+        root = self.tree({path: 'sorry\nimplementsAll_of_canonical\n'})
+        self.assertEqual(check_test_sorry.tripwires(root, set()), [f'{path}:1: sorry'])
+        self.assertEqual(check(root), [f'{path}:2: implementsAll_of_canonical'])
 
     def test_reference_under_veritile_fails_with_file_line(self):
         root = self.tree({'VeriTile/Dist/Probe.lean': 'import X\n\nexample := implementsAll_of_canonical\n'})

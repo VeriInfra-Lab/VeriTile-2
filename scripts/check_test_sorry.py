@@ -124,10 +124,24 @@ META_NAME = re.compile(r'\s*(?:\(\s*name\s*:=\s*([^\s)]+)\s*\)\s*)?(?:\(\s*prior
                        r'(?:"([^"]*)"|([^\s(:"]+))?')
 
 
+# Read names as whole tokens, including qualified components. A final letter r
+# in a name does not start a raw string. These are the identifier ranges from
+# Lean 4.29's Init/Meta/Defs.lean (isIdFirst, isIdRest).
+ID_FIRST = (r'A-Za-z_\u03b1-\u03ba\u03bc-\u03c9\u0391-\u039f\u03a1-\u03a2\u03a4-\u03a9'
+            r'\u03ca-\u03fb\u1f00-\u1ffe\u2100-\u214f\U0001d49c-\U0001d59f'
+            r'\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u017f')
+ID_SUFFIX = r"0-9'!?\u2080-\u2089\u2090-\u209c\u1d62-\u1d6a\u2c7c"
+LEX_NAME = rf'[{ID_FIRST}][{ID_FIRST}{ID_SUFFIX}]*'
+LEX_PART = rf'(?:{LEX_NAME}|«[^»]*(?:»|\Z))'
+LEX_IDENT = re.compile(rf'`?{LEX_PART}(?:\.{LEX_PART})*')
+RAW_OPEN = re.compile(r'r(#*)"')
+
+
 def views(text):
     """The text with comments and string contents blanked (code), and the same keeping docstrings (guards).
 
-    Both keep every offset and newline. Lean block comments nest.
+    Both keep offsets and newlines. Lean block comments nest. Raw string
+    contents are opaque, and quoted identifier components stay visible.
     """
     code, guard = list(text), list(text)
 
@@ -156,15 +170,27 @@ def views(text):
             if not text.startswith('/--', i):
                 blank(guard, i, end)
             i = end
+        elif text[i] == 'r' and (raw := RAW_OPEN.match(text, i)):
+            delimiter = '"' + raw[1]
+            closing = text.find(delimiter, raw.end())
+            end = n if closing < 0 else closing
+            blank(code, raw.end(), end)
+            blank(guard, raw.end(), end)
+            i = n if closing < 0 else end + len(delimiter)
+        elif name := LEX_IDENT.match(text, i):
+            i = name.end()
         elif text[i] == '"':
             end = i + 1
             while end < n and text[end] != '"':
                 end += 2 if text[end] == '\\' else 1
+            end = min(n, end)
             blank(code, i + 1, end)
             blank(guard, i + 1, end)
             i = end + 1
-        elif text.startswith(("'\"'", "'\\\"'"), i):  # the character literals '"' and '\"'
-            i += 3 if text.startswith("'\"'", i) else 4
+        elif text.startswith(('\'"\'', "'«'"), i):  # Character literal, outside an identifier.
+            i += 3
+        elif text.startswith('\'\\"\'', i):
+            i += 4
         else:
             i += 1
     return ''.join(code), ''.join(guard)
