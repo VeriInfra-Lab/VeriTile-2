@@ -57,7 +57,7 @@ Results (each `#print axioms` shows only propext, Classical.choice, Quot.sound):
   (`signal_unordered`: not even atomic for each other). Whether a variant with
   `sys`-scope waits (#148/#149, not written yet) is `DetRaceFree` is not
   proved here. -/
-import VeriTile.Staging.Dist.JudgmentSpec
+import VeriTile.Staging.Dist.ProtocolSpec
 
 namespace VeriTile.Tests.Tutorial01
 open VeriTile.Dist
@@ -747,5 +747,96 @@ theorem not_detRaceFree (hcmp : cmp = .eq ∨ cmp = .ge) (σ₀ : DistState)
 #print axioms signal_unordered
 #print axioms not_drf
 #print axioms not_detRaceFree
+
+open VeriTile.Dist.Protocol
+
+private def noPhaseBump : Instr → Bool
+  | .emit (.bump ⟨.phase .., _, _, _⟩) _ => false
+  | _ => true
+
+private theorem ringInstructions (q : RingQueue) (a : Agent) (entry : List Instr)
+    (h : q.body a = some entry) : entry.all noPhaseBump = true := by
+  unfold RingQueue.body at h
+  split at h
+  · cases h
+    apply List.all_eq_true.mpr
+    intro ins member
+    obtain ⟨i, _, hi⟩ := List.mem_flatMap.mp member
+    cases hw : q.waitEmpty i <;> simp [RingQueue.produce, hw] at hi
+    · rcases hi with ⟨k, rfl⟩ | rfl <;> rfl
+    · rcases hi with rfl | ⟨k, rfl⟩ | rfl <;> rfl
+  · split at h
+    · cases h
+      simp [List.all_flatMap, RingQueue.consume, Protocol.signal, Protocol.wait, noPhaseBump,
+        List.all_append, List.all_map]
+    · contradiction
+
+private theorem suffixPermitted {entry code : List Instr} (h : Suffix entry code)
+    (permitted : entry.all noPhaseBump = true) : code.all noPhaseBump = true := by
+  induction h with
+  | start => exact permitted
+  | emit _ ih => simp only [List.all_cons, Bool.and_eq_true] at ih; exact ih.2
+  | copy _ _ ih => simpa [List.all_cons, noPhaseBump, store] using ih
+
+/-- The actual tutorial producer's third emission increments a CTA phase counter.
+Neither ring participant emits such an event, under any encoding of its code. -/
+theorem tutorial01_not_realizes_ring (q : RingQueue) (cmp : Cmp) (input : Nat → MemCell)
+    (w : CellWrites) : ¬ Realizes (launch cmp input w) q.body := by
+  rintro ⟨encode, starts, agrees⟩
+  have start := starts producer
+  change some 0 = (q.body producer).map (encode producer) at start
+  cases bodyEq : q.body producer with
+  | none => simp [bodyEq] at start
+  | some entry =>
+    simp only [bodyEq, Option.map_some, Option.some.injEq] at start
+    let At (pc : Nat) := ∃ code, Suffix entry code ∧ encode producer code = pc
+    have first : At 0 := ⟨entry, .start, start.symm⟩
+    let machine := Protocol.Examples.exampleState
+    have nextAt {pc : Nat} {x : Emission} (atPC : At pc)
+        (source : ((launch cmp input w).program producer).next pc machine =
+          .emitGroup x [] (fun _ => pc + 1)) : At (pc + 1) := by
+      obtain ⟨code, suffix, eq⟩ := atPC
+      have next := (agrees _ _ bodyEq _ suffix).2 machine
+      rw [eq, source] at next
+      cases code with
+      | nil => contradiction
+      | cons hd rest =>
+        cases hd with
+        | emit ev d =>
+          exact ⟨rest, .emit suffix, (congrFun (Next.emitGroup.inj next).2.2 []).symm⟩
+        | copy src dst =>
+          exact ⟨store dst (.of .nat 0) :: rest, .copy (.of .nat 0) suffix,
+            (congrFun (Next.emitGroup.inj next).2.2 [some (.of .nat 0)]).symm⟩
+    have one : At 1 := nextAt first (x := waitSignal producer cmp 0) rfl
+    have two : At 2 := nextAt one (x := storeQueue (input 0)) rfl
+    obtain ⟨code, suffix, eq⟩ := two
+    have ok := suffixPermitted suffix (ringInstructions q _ _ bodyEq)
+    have next := (agrees _ _ bodyEq _ suffix).2 machine
+    rw [eq] at next
+    change Next.emitGroup (arrive producer prodCta) [] (fun _ => 3) = _ at next
+    cases code with
+    | nil => contradiction
+    | cons hd rest =>
+      cases hd with
+      | copy => cases (Next.emitGroup.inj next).1
+      | emit e d =>
+        have same := (Next.emitGroup.inj next).1
+        cases same
+        simp [noPhaseBump] at ok
+
+example (l : Launch P) (s : DistState) :
+    Safe l s ↔ SoundLaunch l ∧ DRF l s ∧
+      ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final := Iff.rfl
+
+example (l : Launch P) : Projection l l where
+  related := Eq
+  entry _ := rfl
+  simulate := by
+    rintro s _ u c rfl step
+    exact ⟨[c], u, .cons step (.nil _), rfl⟩
+  observe := by rintro _ _ rfl done; exact ⟨done, rfl⟩
+
+#print axioms tutorial01_not_realizes_ring
+#print axioms RingQueue.ParityRace.threeStage_complete_replay
 
 end VeriTile.Tests.Tutorial01

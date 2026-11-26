@@ -206,9 +206,9 @@ theorem launch_sound (env : Launch P) (body : Agent → Option (List Instr))
     exact (owns run x hx a px).symm.trans (tx.trans (ty.symm.trans (owns run y hy b py)))
 
 /-- A source step may be silent or expand to several protocol steps. The
-relation tracks control and memory; completion must agree on the observation
-claimed by the client. A client must also show that each visible word
-operation keeps its physical address (see the tutorial check below). -/
+relation and completed memory are the only observations required here.
+This statement does not require preservation of individual events, physical
+word addresses, enabled steps or faults. -/
 structure Projection (source : Launch P) (target : Launch Q) where
   related : Config P → Config Q → Prop
   entry : ∀ s, related (source.initial s) (target.initial s)
@@ -363,8 +363,8 @@ theorem consumer_word_addresses (q : RingQueue) (i : Fin q.items) :
 
 /-- No single-valued renaming of tutorial 01's physical word can match the
 two-word consumer, even if all non-word operations and both numeric payloads
-are erased. This also applies to the sys-scope variant. A value-dependent
-encoding into two bits would need its own simulation. -/
+are erased. This also applies to the sys-scope variant. The theorem
+concerns only direct renaming; it makes no claim about other simulations. -/
 theorem tutorial01_no_direct_word_projection (q : RingQueue) (i : Fin q.items)
     (word : Addr) (generation : Nat) (scope : Scope) (rename : Addr → Addr) :
     ((tutorialConsumerWords word generation scope).filterMap wordAddress).map rename ≠
@@ -522,8 +522,9 @@ concrete prefix with S4.1 steps. This checker covers just the singleton load,
 store, SET and equality wait used by this ring. -/
 namespace ParityRace
 open Examples
-private abbrev lch := launch (exampleEnv writes) stageModulus.body
-private abbrev initial := lch.initial threeStageInitial
+private abbrev ringLaunch (q : RingQueue) := launch (exampleEnv writes) q.body
+private abbrev lch := ringLaunch stageModulus
+private abbrev initial (q : RingQueue) := (ringLaunch q).initial threeStageInitial
 
 private structure Prefix where
   cfg : Config (List Instr)
@@ -538,13 +539,13 @@ private theorem Prefix.free (s : Prefix) (p : Addr) : ¬ InFlight s.cfg.trace p 
     simp [s.clean x hx t]
   simp [Transfer.pending, hz] at pos
 
-private def start : Prefix := ⟨initial, rfl, by simp [Machine.trace, initial, Launch.initial]⟩
+private def start (q : RingQueue) : Prefix := ⟨initial q, rfl, by simp [Machine.trace, initial, Launch.initial]⟩
 
-private abbrev advance (s : Prefix) (a : Agent) :=
-  Σ' t : Prefix, step lch s.cfg (.agent a) t.cfg
+private abbrev advance (q : RingQueue) (s : Prefix) (a : Agent) :=
+  Σ' t : Prefix, step (ringLaunch q) s.cfg (.agent a) t.cfg
 
-private def enter (s : Prefix) (a : Agent) (pc : List Instr)
-    (h : s.cfg.pc a = some (.ready pc)) : advance s a := by
+private def enter (q : RingQueue) (s : Prefix) (a : Agent) (pc : List Instr)
+    (h : s.cfg.pc a = some (.ready pc)) : advance q s a := by
   let t : Config (List Instr) := { s.cfg with
     history := s.cfg.history ++ [.segment a ∅ ∅]
     pc := Function.update s.cfg.pc a ((nextAction a id pc).cursor) }
@@ -552,12 +553,12 @@ private def enter (s : Prefix) (a : Agent) (pc : List Instr)
   · simpa [t, Machine.trace, Occurrence.event?, List.filterMap_append] using s.clean
   · exact step.segment (seg := idleSegment a) h rfl rfl (by simp [idleSegment]) rfl
 
-private def issue (s : Prefix) (a : Agent) (e : Event) (d : AccessValue)
+private def issue (q : RingQueue) (s : Prefix) (a : Agent) (e : Event) (d : AccessValue)
     (k : List (Option MemCell) → List Instr) (mem : DistState) (v : Option MemCell)
     (cursor : s.cfg.pc a = some (.waiting ⟨a,e,d⟩ [] k))
-    (owned : a.within a) (accessible : e.AccessibleBy lch.symm a)
-    (plain : ∀ t, e ≠ .initiate t) (fire : Fire lch s.cfg.toMachine ⟨a,e,d⟩ mem s.cfg.pending v) :
-    advance s a := by
+    (owned : a.within a) (accessible : e.AccessibleBy (ringLaunch q).symm a)
+    (plain : ∀ t, e ≠ .initiate t) (fire : Fire (ringLaunch q) s.cfg.toMachine ⟨a,e,d⟩ mem s.cfg.pending v) :
+    advance q s a := by
   let m : Machine := ⟨mem, s.cfg.history ++ [.issued a ⟨a,e,d⟩], s.cfg.pending⟩
   let t : Config (List Instr) := { m with pc := Function.update s.cfg.pc a (some (.ready (k [v]))) }
   refine ⟨⟨t, s.pending, ?_⟩, ?_⟩
@@ -574,28 +575,28 @@ private def issue (s : Prefix) (a : Agent) (e : Event) (d : AccessValue)
 
 /-- Consume the actual program cursor, including the real load continuation.
 A bad guard, an inaccessible address, or an unexpected event rejects the replay. -/
-private def tick (s : Prefix) (a : Agent) : Option (advance s a) := do
+private def tick (q : RingQueue) (s : Prefix) (a : Agent) : Option (advance q s a) := do
   match h : s.cfg.pc a with
-  | some (.ready pc) => return enter s a pc h
+  | some (.ready pc) => return enter q s a pc h
   | some (.waiting ⟨actor,e,d⟩ [] k) =>
     if ha : actor = a then
       if ho : a.within a then
-        if accessible : e.accesses.all (fun (_,p,_) => decide (AccessibleAt lch.symm a p)) then
-          have access : e.AccessibleBy lch.symm a := fun k p m member =>
+        if accessible : e.accesses.all (fun (_,p,_) => decide (AccessibleAt (ringLaunch q).symm a p)) then
+          have access : e.AccessibleBy (ringLaunch q).symm a := fun k p m member =>
             of_decide_eq_true (List.all_eq_true.mp accessible (k,p,m) member)
           match e, d, h, access with
           | .access .store p .plain, .store v, h, acc =>
-            return issue s a _ _ k _ _ (ha ▸ h) ho acc
+            return issue q s a _ _ k _ _ (ha ▸ h) ho acc
               (by intro t bad; cases bad) (.store a p _ v)
           | .access .load p .plain, .noValue, h, acc =>
-            return issue s a _ _ k _ _ (ha ▸ h) ho acc
+            return issue q s a _ _ k _ _ (ha ▸ h) ho acc
               (by intro t bad; cases bad) (.load a p _)
           | .bump ⟨.word p,.set,n,m⟩, .noValue, h, acc =>
-            return issue s a _ _ k _ _ (ha ▸ h) ho acc
+            return issue q s a _ _ k _ _ (ha ▸ h) ho acc
               (by intro t bad; cases bad) (.bump a _ 0 (by intro bad; cases bad))
           | .wait (.word p) .eq n m, .noValue, h, acc =>
             if hn : (s.cfg.mem.cell p).readAs .nat = some n then
-              return issue s a _ _ k _ _ (ha ▸ h) ho acc
+              return issue q s a _ _ k _ _ (ha ▸ h) ho acc
                 (by intro t bad; cases bad) (.wait a (.word p) .eq n m n hn rfl)
             else none
           | _, _, _, _ => none
@@ -604,12 +605,12 @@ private def tick (s : Prefix) (a : Agent) : Option (advance s a) := do
     else none
   | _ => none
 
-private def replay (s : Prefix) : (agents : List Agent) →
-    Option (Σ' t : Prefix, Run lch s.cfg (agents.map Choice.agent) t.cfg)
+private def replay (q : RingQueue) (s : Prefix) : (agents : List Agent) →
+    Option (Σ' t : Prefix, Run (ringLaunch q) s.cfg (agents.map Choice.agent) t.cfg)
   | [] => some ⟨s, .nil _⟩
   | a :: as => do
-    let ⟨next, h⟩ ← tick s a
-    let ⟨final, rest⟩ ← replay next as
+    let ⟨next, h⟩ ← tick q s a
+    let ⟨final, rest⟩ ← replay q next as
     return ⟨final, .cons h rest⟩
 
 private abbrev producer := stageModulus.producer
@@ -676,7 +677,7 @@ theorem stageModulus_races :
     let l := launch (exampleEnv writes) stageModulus.body
     ∃ sched final, Run l (l.initial threeStageInitial) sched final ∧ DataRace l final.history := by
   dsimp only
-  let result := replay start choices
+  let result := replay stageModulus (start stageModulus) choices
   have ok : result.isSome := by decide +revert
   let witness := result.get ok
   refine ⟨_, witness.1.cfg, witness.2, adjacentRace _ 102 ?_ ?_⟩ <;> rfl
@@ -686,9 +687,57 @@ receives item 9's payload (19), whereas its sequential value is 16. -/
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 4000000 in
 example :
-    ((replay start (choices ++ [consumer, consumer])).bind fun result =>
+    ((replay stageModulus (start stageModulus) (choices ++ [consumer, consumer])).bind fun result =>
       (result.1.cfg.mem.cell (stageModulus.address (.output ⟨6, by decide⟩ ⟨0, by decide⟩))).readAs .nat) =
       some 19 ∧ (stageModulus.value ⟨6, by decide⟩ ⟨0, by decide⟩).readAs .nat = some 16 := ⟨rfl, rfl⟩
+
+private theorem inactivePC {l : Launch P} {s t : Config P} (r : Run l s sched t)
+    (a : Agent) (off : s.pc a = none) : t.pc a = none := by
+  induction r with
+  | nil => exact off
+  | cons step _ ih =>
+    apply ih
+    cases step with
+    | @segment b pc seg mem atPC _ _ _ _ =>
+      have ne : a ≠ b := by rintro rfl; rw [off] at atPC; contradiction
+      simpa [Function.update_of_ne ne] using off
+    | @fire b h t k final values atPC _ _ =>
+      have ne : a ≠ b := by rintro rfl; rw [off] at atPC; contradiction
+      simpa [Function.update_of_ne ne] using off
+    | deliver => exact off
+
+private def orderedChoices : List Agent :=
+  let p := fun n => List.replicate n threeStage.producer
+  let c := fun n => List.replicate n threeStage.consumer
+  (List.replicate 3 (p 4 ++ c 8)).flatten ++
+    (List.replicate 7 (p 6 ++ c 8)).flatten ++ [threeStage.producer, threeStage.consumer]
+
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 6000000 in
+/-- Replay ten items on three slots, including both parity wraps and both
+participants' return steps. The entire final memory equals the independent
+sequential fold, including every full/empty word and all untouched cells. -/
+theorem threeStage_complete_replay :
+    let l := launch (exampleEnv writes) threeStage.body
+    ∃ sched final, Run l (l.initial threeStageInitial) sched final ∧
+      Complete final ∧ final.mem = threeStage.sequential writes threeStageInitial := by
+  dsimp only
+  let result := replay threeStage (start threeStage) orderedChoices
+  have ok : result.isSome := by decide +revert
+  let w := result.get ok
+  refine ⟨_, w.1.cfg, w.2, ⟨?_, ?_⟩, ?_⟩
+  · intro a
+    by_cases hp : a = threeStage.producer
+    · subst a; rfl
+    by_cases hc : a = threeStage.consumer
+    · subst a; rfl
+    apply inactivePC w.2
+    change (threeStage.body a).map Cursor.ready = none
+    simp [body, hp, hc]
+  · intro o member
+    rw [w.1.pending] at member
+    cases member
+  · rfl
 
 end ParityRace
 
