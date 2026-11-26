@@ -519,6 +519,13 @@ globs = [
   "tests.lean.dist.FetchAddObservation",
   "tests.lean.dist.WordCounterCheck",
   "tests.lean.dist.DeepEPChannel",
+  "tests.lean.dist.IndexQueueSingleSlotModel",
+  "tests.lean.dist.IndexQueueSingleSlotRuns",
+  "tests.lean.dist.IndexQueueSingleSlotShape",
+  "tests.lean.dist.IndexQueueSingleSlotRefines",
+  "tests.lean.dist.IndexQueueSingleSlotNegative",
+  "tests.lean.dist.IndexQueueSingleSlotWitness",
+  "tests.lean.dist.IndexQueueSingleSlot",
   "tests.lean.dist.Tutorial01",
   "tests.lean.dist.StorePublication",
 ]
