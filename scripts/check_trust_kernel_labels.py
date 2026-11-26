@@ -7,7 +7,6 @@ import re
 import subprocess
 import sys
 
-
 from check_fork_target import ROOT, TARGETS, sources
 
 
@@ -30,8 +29,15 @@ run_cmd do
           unless list.isAppOfArity ``List.cons 3 do
             throwError "{entry.name}: cannot enumerate affectedKernels: {list}"
           let fields := list.getAppArgs
-          let some label := getStringValue? (← whnf fields[1]!)
-            | throwError "{entry.name}: affected kernel label is not a fixed string"
+          let value ← whnf fields[1]!
+          let label ← match getStringValue? value with
+            | some literal => pure literal
+            | none => do
+              if value.hasFVar then throwError "{entry.name}: parameter-dependent kernel label"
+              let label ← evalExpr String (mkConst ``String) value
+              unless ← isDefEq value (toExpr label) do
+                throwError "{entry.name}: could not confirm computed kernel label"
+              pure label
           labels := labels.push label
           xs := fields[2]!
         return labels
