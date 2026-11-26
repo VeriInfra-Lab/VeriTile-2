@@ -32,7 +32,9 @@ commands=("python3 scripts/check_docs.py"
           "$profile_python -B -m unittest scripts.test_library_dependency_profile"
           "python3 -B -m unittest scripts.test_fork_replay"
           "python3 scripts/check_frozen_base.py"
-          "python3 scripts/check_test_sorry.py --sources")
+          "python3 scripts/check_test_sorry.py --sources"
+          "python3 scripts/check_forbidden_references.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done
