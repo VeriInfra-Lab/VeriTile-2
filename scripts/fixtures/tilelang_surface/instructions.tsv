@@ -1,0 +1,32 @@
+export	intrinsics	device_functions	instructions	status	basis
+alloc_tmem	tl.ptx_init_tensor_memory	tmem_allocate	tcgen05.alloc	excluded	TMEM allocation lowered by LowerSharedTmem (user decision P2)
+clc_get_first_ctaid_x	tl.clc_get_first_ctaid_x	clc_get_first_ctaid_x	fence.proxy.async	kept	composite: decodes a CLC response, then a proxy fence
+clc_get_first_ctaid_y	tl.clc_get_first_ctaid_y	clc_get_first_ctaid_y	fence.proxy.async	kept	composite: decodes a CLC response, then a proxy fence
+clc_get_first_ctaid_z	tl.clc_get_first_ctaid_z	clc_get_first_ctaid_z	fence.proxy.async	kept	composite: decodes a CLC response, then a proxy fence
+clc_is_canceled	tl.clc_is_canceled	clc_is_canceled	fence.proxy.async	kept	composite: decodes a CLC response, then a proxy fence
+deallocate_tmem	tl.deallocate_tmem,tl.ptx_deallocate_tensor_memory	tmem_deallocate	tcgen05.dealloc	excluded	TMEM deallocation lowered by LowerSharedTmem (user decision P2)
+fence_proxy_async	tl.fence_proxy_async	fence_proxy_async	fence.proxy.async	excluded	opcode prefix
+ptx_tcgen05_mma_blockscaled_ss	tl.ptx_tcgen05_mma_blockscaled_ss	-	-	excluded	opcode prefix
+ptx_tcgen05_mma_ss	tl.ptx_tcgen05_mma_ss	-	-	excluded	opcode prefix
+ptx_tcgen05_mma_ts	tl.ptx_tcgen05_mma_ts	tcgen05mma_ts	-	excluded	opcode prefix
+ptx_wgmma_rs	tl.ptx_wgmma_rs	wgmma_rs	cute::SM90::GMMA::ImplName,cute::SM90::GMMA::Major,cute::SM90::GMMA::ScaleIn,cute::SM90::GMMA::ScaleOut	excluded	opcode prefix
+ptx_wgmma_sp_rs	tl.ptx_wgmma_sp_rs	DataType,wgmma_sp_rs	cute::SM90::GMMA::SPARSE,cute::SM90::GMMA::ScaleOut	excluded	opcode prefix
+ptx_wgmma_sp_ss	tl.ptx_wgmma_sp_ss	DataType,wgmma_sp_ss	cute::SM90::GMMA::SPARSE,cute::SM90::GMMA::ScaleOut	excluded	opcode prefix
+ptx_wgmma_ss	tl.ptx_wgmma_ss	wgmma_ss	cute::SM90::GMMA::ImplName,cute::SM90::GMMA::Major,cute::SM90::GMMA::ScaleIn,cute::SM90::GMMA::ScaleOut	excluded	opcode prefix
+tcgen05_after_thread_sync	tl.tcgen05_after_thread_sync	tcgen05_after_thread_sync	tcgen05.fence	excluded	opcode prefix
+tcgen05_before_thread_sync	tl.tcgen05_before_thread_sync	tcgen05_before_thread_sync	tcgen05.fence	excluded	opcode prefix
+tcgen05_cp_warpx4	tl.ptx_tcgen05_cp_warpx4	make_sf_smem_desc,tcgen05_cp	tcgen05.cp	excluded	opcode prefix
+tcgen05_gemm	-	-	-	excluded	opcode prefix
+tcgen05_gemm_blockscaled	-	-	-	excluded	opcode prefix
+tcgen05_gemm_sp	-	-	-	excluded	opcode prefix
+tcgen05_mma	-	-	-	excluded	opcode prefix
+tcgen05_mma_arrive	tl.tcgen05_mma_arrive	tcgen05_mma_arrive	tcgen05.commit	excluded	opcode prefix
+tcgen05_mma_blockscaled	-	-	-	excluded	opcode prefix
+tcgen05_sf_warp_transpose	tl.ptx_tcgen05_sf_warp_transpose	tcgen05_sf_warp_transpose	-	excluded	opcode prefix
+wait_wgmma	tl.wait_wgmma	wait_wgmma	cute::warpgroup_wait	excluded	device function is the instruction
+warpgroup_arrive	tl.warpgroup_arrive	warpgroup_arrive	cute::warpgroup_arrive	excluded	device function is the instruction
+warpgroup_commit_batch	tl.warpgroup_commit_batch	warpgroup_commit_batch	cute::warpgroup_commit_batch	excluded	device function is the instruction
+warpgroup_wait	tl.warpgroup_wait	warpgroup_wait	cute::warpgroup_wait	excluded	device function is the instruction
+wgmma_gemm	-	-	-	excluded	opcode prefix
+wgmma_gemm_sp	-	-	-	excluded	opcode prefix
+wgmma_mma	-	-	-	excluded	opcode prefix

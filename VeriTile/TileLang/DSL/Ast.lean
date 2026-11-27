@@ -1,7 +1,11 @@
 import Lean
 
 /-! Typed source categories of the TileLang quotation. Source expressions retain the
-symbolic extents and dtype names which are resolved by operator contracts. -/
+symbolic extents and dtype names which are resolved by operator contracts.
+
+Signed (#83, A3.1, coordinator decision D1 (a) of 2026-11-26): every type in this
+file is a row of `documents/dist/FrozenStatements.tsv`. `Program.fastMath` and the
+derived instances are not signed. -/
 namespace VeriTile.TileLang
 open Lean
 

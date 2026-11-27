@@ -2,8 +2,9 @@ import VeriTile.Interp.Run.Main
 import VeriTile.Interp.Carrier.Float
 import VeriTile.Triton.Float.BitValue
 
-/-! Typed file storage for host binary64 execution. FP32 and FP64 inputs
-decode exactly into binary64. Results are rounded once at the file boundary. -/
+/-! Typed file storage for host Float execution. FP32 and FP64 inputs
+decode exactly into binary64; encoding checks the declared output dtype and
+shape independently of the selected arithmetic algebra. -/
 namespace VeriTile.Interp.Run
 open VeriTile.Triton
 
@@ -48,15 +49,10 @@ private def decode (t : Tensor) (i : Nat) : Float :=
   | .fp64 => Float.ofBits bits.toUInt64
   | _ => Float.nan
 
-private def bf16Bits (x : Float) : Nat :=
-  if x.isNaN then (FP.Value.qNaN .bf16).raw
-  else if x.isInf then (FP.Value.infinity .bf16 (x < 0)).raw
-  else (FP.round .bf16 .ieeeValue x.toRat0 (x.toBits == 0x8000000000000000)).raw
-
 -- Direct conversion lands above the BF16 midpoint. A detour through FP32
 -- would hit the midpoint itself and round down to 0x3f80.
-#guard bf16Bits (1.00390625 + 1 / 1073741824) == 0x3f81
-#guard bf16Bits (Float.ofBits 0x8000000000000000) == 0x8000
+#guard Binary64.bf16Bits (1.00390625 + 1 / 1073741824) == 0x3f81
+#guard Binary64.bf16Bits (Float.ofBits 0x8000000000000000) == 0x8000
 
 private def resultTensor (s : State Float) (port : Port) : Except String Tensor := do
   let mut bytes := ByteArray.empty
@@ -65,12 +61,12 @@ private def resultTensor (s : State Float) (port : Port) : Except String Tensor 
     let bits ← match cell, port.dtype with
       | .mk .real x, .fp32 => pure x.toFloat32.toBits.toNat
       | .mk .real x, .fp64 => pure x.toBits.toNat
-      | .mk .bf16 x, .bf16 => pure (bf16Bits x)
+      | .mk .bf16 x, .bf16 => pure (Binary64.bf16Bits x)
       | _, _ => throw s!"unexpected store dtype at {port.name.name}[{i}]"
     for j in [:port.dtype.width] do bytes := bytes.push (bits >>> (8*j)).toUInt8
   return ⟨port.dtype, port.shape, bytes⟩
 
-def runBinary64Files (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
+def runFloatFiles (algebra : CAlgebra Float) (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
     (outputs : List Port) : Except String (List Tensor) := do
   unless inputs.all (fun (_,t) => t.dtype == .fp32 || t.dtype == .fp64) do
     throw "binary64 input storage must be FP32 or FP64"
@@ -81,10 +77,14 @@ def runBinary64Files (dims : List Nat) (k : QKernel) (inputs : List (RegionName 
       return decode t i
     pids := fun _ => 0, numPids := fun _ => 1
     undef := fun d _ _ => FP.Structural.defaultValue d }
-  let some s := runGrid Binary64.algebra k dims initial | throw "kernel execution failed"
+  let some s := runGrid algebra k dims initial | throw "kernel execution failed"
   for ((region,i),_) in s.cells.toList do
     let some port := outputs.find? (·.name == region) | throw s!"write to undeclared output {region.name}"
     unless port.contains i do throw s!"write outside {region.name} at {i}"
   outputs.mapM (resultTensor s)
+
+def runBinary64Files (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
+    (outputs : List Port) : Except String (List Tensor) :=
+  runFloatFiles Binary64.algebra dims k inputs outputs
 
 end VeriTile.Interp.Run

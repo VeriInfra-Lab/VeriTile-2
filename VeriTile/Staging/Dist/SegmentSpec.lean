@@ -153,14 +153,14 @@ N9. `AgentProgram.ofBody` is a definition, not a stub: it is five lines and the
     reader sees which program a flat body is. `slice` is a definition too
     (user decision, 2026-11-25): `slice_noSync` and `slice_sync` determine it.
 
-The event type is `Event` of `VeriTile/Staging/Dist/EventSpec.lean`, signed
+The event type is `Event` of `VeriTile/Dist/Event.lean`, signed
 on 2026-11-13; it is no longer a parameter.
 -/
 import VeriTile.Triton.Semantics.Step
 import VeriTile.Dist.State
 import VeriTile.Dist.Segment
 import VeriTile.Staging.Dist.LocationSpec
-import VeriTile.Staging.Dist.EventSpec
+import VeriTile.Dist.Event.Transfer
 
 namespace VeriTile.Dist
 

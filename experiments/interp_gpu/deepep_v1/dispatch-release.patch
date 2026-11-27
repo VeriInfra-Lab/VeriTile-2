@@ -1,0 +1,57 @@
+# Source: tile-ai/tilescale@9ba8a605d347f600a95d0275e2639cb00122c084 examples/distributed/deepseek_deepep/intranode/dispatch.py:429-437,508-514,671-679,737-743; tile-ai/tilescale@9ba8a605d347f600a95d0275e2639cb00122c084 examples/distributed/deepseek_deepep/intranode/combine.py:262-268
+# Licence: MIT
+# Changes: patched against the pinned source; four scoped volatile reads and three release head stores
+--- a/intranode/dispatch.py
++++ b/intranode/dispatch.py
+@@ -429,9 +429,9 @@
+                 num_tokens_to_recv = T.alloc_var("int32")
+                 if T.shuffle_elect(32):
+                     T.wait_ne(channel_start_offset[responsible_channel, responsible_rank], 0)
+-                    T.ld(channel_start_offset[responsible_channel, responsible_rank], total_offset, sem="volatile")
++                    T.ld(channel_start_offset[responsible_channel, responsible_rank], total_offset, sem="volatile", scope="sys")
+                     T.wait_ne(channel_end_offset[responsible_channel, responsible_rank], 0)
+-                    T.ld(channel_end_offset[responsible_channel, responsible_rank], num_tokens_to_recv, sem="volatile")
++                    T.ld(channel_end_offset[responsible_channel, responsible_rank], num_tokens_to_recv, sem="volatile", scope="sys")
+                     total_offset = -total_offset - 1
+                     num_tokens_to_recv = -num_tokens_to_recv - 1
+                     if recv_warp_id_in_rank == 0:
+@@ -508,7 +508,7 @@
+                     total_offset += num_cur_recv_tokens
+                     T.sync_threads(responsible_rank, num_threads_per_rank)
+                     if recv_warp_id_in_rank == num_warps_per_rank - 1 and T.shuffle_elect(32):
+-                        T.st(channel_head_idx[responsible_channel, responsible_rank], cached_channel_head_idx, scope="sys", sem="relaxed")
++                        T.st(channel_head_idx[responsible_channel, responsible_rank], cached_channel_head_idx, scope="sys", sem="release")
+
+                     # Exit
+                     num_tokens_to_recv -= num_cur_recv_tokens
+@@ -671,9 +671,9 @@
+                 num_tokens_to_recv = T.alloc_var("int32")
+                 if T.shuffle_elect(32):
+                     T.wait_ne(channel_start_offset[responsible_channel, responsible_rank], 0)
+-                    T.ld(channel_start_offset[responsible_channel, responsible_rank], total_offset, sem="volatile")
++                    T.ld(channel_start_offset[responsible_channel, responsible_rank], total_offset, sem="volatile", scope="sys")
+                     T.wait_ne(channel_end_offset[responsible_channel, responsible_rank], 0)
+-                    T.ld(channel_end_offset[responsible_channel, responsible_rank], num_tokens_to_recv, sem="volatile")
++                    T.ld(channel_end_offset[responsible_channel, responsible_rank], num_tokens_to_recv, sem="volatile", scope="sys")
+                     total_offset = -total_offset - 1
+                     num_tokens_to_recv = -num_tokens_to_recv - 1
+                     if recv_warp_id_in_rank == 0:
+@@ -737,7 +737,7 @@
+                     total_offset += num_cur_recv_tokens
+                     T.sync_threads(responsible_rank, num_threads_per_rank)
+                     if T.shuffle_elect(96):
+-                        T.st(channel_head_idx[responsible_channel, responsible_rank], cached_channel_head_idx, scope="sys", sem="relaxed")
++                        T.st(channel_head_idx[responsible_channel, responsible_rank], cached_channel_head_idx, scope="sys", sem="release")
+
+                     # Exit
+                     num_tokens_to_recv -= num_cur_recv_tokens
+--- a/intranode/combine.py
++++ b/intranode/combine.py
+@@ -262,6 +262,6 @@
+                                 min_head = T.min(min_head, warp_channel_head_idx[i, lane_id])
+                         if min_head != 2**31 - 1 and min_head > last_head:
+                             last_head = min_head
+-                            T.st(channel_head_idx[responsible_channel, lane_id], min_head, sem="relaxed", scope="sys")
++                            T.st(channel_head_idx[responsible_channel, lane_id], min_head, sem="release", scope="sys")
+                 else:  # other warps for reduction
+                     # All lanes will use data buffer, but only rank lane will use `head/tail/src_idx`
