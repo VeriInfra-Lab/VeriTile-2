@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "StableLogSumExp",
+    "lean": "VeriTile.Bench.Examples.StableLogSumExp.Kernels.optimizedLSEKernel",
+    "source": "bench/examples/StableLogSumExp/StableLogSumExp.py::guarded_log_sum_exp"
+  },
+  "grid": [
+    4
+  ],
+  "launch": {
+    "carrier": "source-rounded",
+    "enable_fp_fusion": false
+  },
+  "constexpr": {
+    "blockSize": 4
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "yReg",
+      "buffer": "yReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "boundary",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp32",
+          "shape": [
+            4,
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/StableLogSumExp-input.tensor"
+        }
+      },
+      "expected": {
+        "yReg": "tests/interp/fixtures/tensor_examples/StableLogSumExp-output.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "yReg",
+      "dtype": "bf16",
+      "shape": [
+        4
+      ]
+    }
+  ]
+}
