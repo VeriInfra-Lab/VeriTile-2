@@ -35,7 +35,9 @@ The generated CUDA selects `VOLATILE, SYS` on the four offset reads and `RELEASE
 
 ## Compare on the recorded inputs
 
-Use the [variant request](../batches/deepep-v1-variant-intranode-001/batch.json) through the project's distributed GPU runner. The original identity and rank-weighted cases, input generators and hashes, launch parameters, output schemas, two ranks and two repeats are preserved. The coordinator owns the GPU request and judgment.
+Use the [variant request](../batches/deepep-v1-variant-intranode-001/batch.json) through the project's distributed GPU runner. The original identity and rank-weighted cases, input generators and hashes, launch parameters, output schemas, two ranks and two repeats are preserved. The coordinator owns the GPU request and judgment. The ordinary path exercises DD 432/434/511 and DC 265. DD 674/676/740 have compilation coverage.
+
+Each rank hashes all eight Python files in its private materialized directory before passing that directory to the origin-checked harness. The runner saves the resulting `deepep-source-sha256` JSON line in the test's `stdout.log` under its repeat header. For both repeats, the judge requires exactly one complete record per rank. The [source hash table](source-sha256.json) pins the SHA-256 of the eight original files read from Git at the TileScale revision and of the two patched files for this batch. The patched values were independently reproduced from those blobs using the seven edits listed above. Both changed file hashes must match the patched values and differ from the originals. The other six must match their originals. Missing evidence, including from an older result bundle, yields a difference.
 
 ```sh
 python3 -B -m unittest discover -s experiments/interp_gpu/deepep_v1 -p 'test_*.py'

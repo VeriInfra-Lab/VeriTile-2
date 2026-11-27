@@ -1,6 +1,8 @@
 """Materialize the pinned DeepEP v1 original and the seven-site dispatch variant side by side."""
 import argparse
+import hashlib
 import importlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -9,6 +11,7 @@ import sys
 import tempfile
 
 PIN = '9ba8a605d347f600a95d0275e2639cb00122c084'
+SOURCE_RECORD = 'deepep-source-sha256 '  # Captured in the bundle stdout.log of this repeat.
 PORT = 'examples/distributed/deepseek_deepep'
 HERE = Path(__file__).resolve().parent
 KERNELS = {
@@ -54,6 +57,10 @@ def run(rank, ranks, inputs, outputs, launch):
     run_port = load_entry('experiments/interp_gpu/deepep_v1/harness.py::run_port', HERE.parents[2])
     with tempfile.TemporaryDirectory(prefix='deepep-rank-') as tmp:
         _, patched = materialize(port.parents[2], tmp)
+        files = {path.relative_to(patched).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                 for path in patched.rglob('*.py')}
+        sys.stdout.write(SOURCE_RECORD + json.dumps({'rank': rank, 'files': files}, sort_keys=True) + '\n')
+        sys.stdout.flush()
         run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
 
 
