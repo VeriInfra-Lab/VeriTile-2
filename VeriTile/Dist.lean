@@ -28,3 +28,4 @@ import VeriTile.Dist.Frontend.TritonDist.Shmem
 import VeriTile.Dist.Frontend.TritonDist.LanguageExtra
 import VeriTile.Dist.Assumptions
 import VeriTile.Dist.Meta.PrintTrustAssumptions
+import VeriTile.Dist.ScopeCheck
