@@ -115,6 +115,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.CountMonotoneVacuous"
              "lake build tests.lean.dist.NonWordObservation"
              "lake build tests.lean.dist.FetchAddObservation"
+             "lake env lean tests/lean/equiv/EquivSpecStubs.lean"
              "lake build tests.lean.dist.WordCounterCheck"
              "lake build tests.lean.dist.DeepEPChannel"
              "lake build tests.lean.dist.IndexQueueSingleSlotModel"
