@@ -15,9 +15,9 @@ The method is described in documents/TileLangSubset.md (Explicit exclusions):
    body of any function or struct of the same file that it names, transitively.
 
 --sources TILELANG_GIT TVM_GIT rescans the pinned Git objects, which are read and never
-executed, and writes the fixture; with --check it compares instead. --check alone compares
-the fixture's excluded rows with the list in `syntacticCall_tileLang_excluded` and with the
-generated matrix's `never` rows.
+executed, and writes the fixture; with --check it compares instead. --check alone checks that
+every fixture row is excluded by the rule or kept with its reason, and that the excluded rows
+are the list in `syntacticCall_tileLang_excluded` and the generated matrix's `never` rows.
 """
 import argparse
 import ast
@@ -174,6 +174,25 @@ def signed_list():
     return re.findall(r'"(\w+)"', statement[:statement.index(":= by")].split("=", 1)[1])
 
 
+def check(rows):
+    """Errors of a fixture: each row is excluded by the rule or kept with its reason, and the
+    excluded rows are the signed theorem's list and the matrix's `never` rows."""
+    errors = []
+    for r in rows:
+        name = r["export"]
+        if excluded(name):
+            if (r["status"], r["basis"]) != ("excluded", NAMED.get(name, "opcode prefix")):
+                errors.append(f"{name}: excluded by the rule, recorded as {r['status']}")
+        elif name not in KEPT:
+            errors.append(f"{name}: reaches {r['instructions']} but is neither excluded nor kept")
+        elif (r["status"], r["basis"]) != ("kept", KEPT[name]):
+            errors.append(f"{name}: kept with reason {KEPT[name]!r}, recorded as {r['status']}")
+    mine = [r["export"] for r in rows if r["status"] == "excluded"]
+    if not (mine == signed_list() == json.loads(ADMISSIONS.read_text())["never"]):
+        errors.append("excluded exports differ between the scan, the signed theorem and the matrix")
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--sources", nargs=2, metavar=("TILELANG", "TVM"))
@@ -187,10 +206,10 @@ def main():
             parser.exit(1, f"stale instruction scan: {FIXTURE.relative_to(ROOT)}\n")
     with FIXTURE.open() as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
+    errors = check(rows)
+    if errors:
+        parser.exit(1, "\n".join(errors) + "\n")
     mine = [r["export"] for r in rows if r["status"] == "excluded"]
-    never = json.loads(ADMISSIONS.read_text())["never"]
-    if not (mine == signed_list() == never):
-        parser.exit(1, "excluded exports differ between the scan, the signed theorem and the matrix\n")
     print(f"{len(mine)} excluded and {len(rows) - len(mine)} kept exports reach an instruction family")
 
 
