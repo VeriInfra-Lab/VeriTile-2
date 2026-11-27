@@ -25,5 +25,6 @@ import VeriTile.Dist.Spec.AllToAll
 import VeriTile.Dist.Segment
 import VeriTile.Dist.Frontend.TritonDist.DL
 import VeriTile.Dist.Frontend.TritonDist.Shmem
+import VeriTile.Dist.Frontend.TritonDist.LanguageExtra
 import VeriTile.Dist.Assumptions
 import VeriTile.Dist.Meta.PrintTrustAssumptions
