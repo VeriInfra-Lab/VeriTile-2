@@ -91,13 +91,19 @@ structure TailHandoff (l : Launch P) (h : History) (p : Addr) (i j : Nat) where
   release : Mode
   acquire : Mode
   sender : SenderPublication l h p i publication producer tail release
-  observed : (h[poll]? >>= Occurrence.event?) = some (consumer, .access .load tail acquire)
+  event : Event
+  observed : (h[poll]? >>= Occurrence.event?) = some (consumer, event)
+  acquired : event.acquireOf? = some (.word tail, acquire)
   modes : Mode.Pairs l.reach p producer consumer release acquire
   source : ReadsFrom h publication poll (.word tail)
   receiver : LocalPath l h p poll j
 
 theorem TailHandoff.hb (proof : TailHandoff l h p i j) : HB l h p i j :=
-  handoff proof.sender proof.observed proof.modes proof.source proof.receiver
+  let edge : SyncEdge l.reach p (proof.producer, .access .store proof.tail proof.release)
+      (proof.consumer, proof.event) :=
+    ⟨.word proof.tail, proof.release, proof.acquire, rfl, proof.acquired, proof.modes⟩
+  (proof.sender.orders.trans (edge.hb_of_readsFrom proof.sender.stored proof.observed rfl
+    proof.source)).trans proof.receiver.hb
 
 /-- The reverse edge uses the observed head acknowledgement and the next
 sender's word wait. The two local paths may belong to different rosters. -/
