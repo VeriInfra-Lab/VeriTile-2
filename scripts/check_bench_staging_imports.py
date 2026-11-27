@@ -13,6 +13,9 @@ or one `«…»` atom, and `«»` is removed per component. The module is stagin
 its first two components are `VeriTile`, `Staging`; it must then have exactly
 the components of ALLOWED. So `VeriTile.Staging.«Dist.TritonDistProgram»` and
 `VeriTile.Staging.Dist.«TritonDistProgram X»` fail: they are other files.
+Path-like components (`VeriTile.«Staging/X»`, `bench.«..».VeriTile.Staging.X`)
+are rejected in every tracked Lean file by check_import_paths.py, whose import
+parsing this check shares.
 
 The check is textual and reads direct imports only. Known blind spots:
 - staging reached transitively: e.g. a bench/ file importing a tests/lean/dist
@@ -20,38 +23,21 @@ The check is textual and reads direct imports only. Known blind spots:
 - an import whose module name is built by a macro.
 """
 from pathlib import Path
-import re
-import subprocess
 import sys
 
-from check_test_sorry import LEX_PART, views
+from check_import_paths import imports, lean_files
 
 ROOT = Path(__file__).resolve().parents[1]
 # The only staging module bench/ may import; remove this check once #48 moves it to a main target (#704).
 ALLOWED = 'VeriTile.Staging.Dist.TritonDistProgram'
 ALLOWED_PARTS = tuple(ALLOWED.split('.'))
-IMPORT = re.compile(rf"(?<![\w'!?.])import\s+(?:all\s+)?({LEX_PART}(?:\.{LEX_PART})*)")
-
-
-def parts(module):
-    return tuple(p[1:-1] if p.startswith('«') and p.endswith('»') else p
-                 for p in re.findall(LEX_PART, module))
 
 
 def check(root):
     """Return (number of bench/ Lean files scanned, violations as `path:line: module`)."""
-    # A plain directory pathspec, filtered here, matches under GIT_GLOB_PATHSPECS and GIT_LITERAL_PATHSPECS too.
-    listed = subprocess.run(['git', 'ls-files', '-z', '--', 'bench'], cwd=root,
-                            capture_output=True, text=True, check=True).stdout
-    files = [f for f in sorted(filter(None, listed.split('\0')))
-             if f.endswith('.lean') and (root / f).is_file()]
-    hits = []
-    for relative in files:
-        code, _ = views((root / relative).read_text())
-        for match in IMPORT.finditer(code):
-            name = parts(match[1])
-            if name[:2] == ALLOWED_PARTS[:2] and name != ALLOWED_PARTS:
-                hits.append(f'{relative}:{code.count(chr(10), 0, match.start()) + 1}: {match[1]}')
+    files = lean_files(root, 'bench')
+    hits = [f'{path}:{line}: {module}' for path, line, module, name in imports(root, files)
+            if name[:2] == ALLOWED_PARTS[:2] and name != ALLOWED_PARTS]
     return len(files), hits
 
 
