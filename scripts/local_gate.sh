@@ -2,9 +2,10 @@
 # The gate of record. Run it in a checkout of the commit under review, with the
 # Lean toolchain and the comparator on PATH (scripts/README.md).
 #
-#   scripts/local_gate.sh [--no-lean] [--status]
+#   scripts/local_gate.sh [--no-lean] [--status] [--list]
 #
 # --no-lean  documents and Python only
+# --list     print the command list without running it
 # --status   post the outcome on the head commit as the status `local-gate`
 #            (coordinator; needs push access to VeriInfra-Lab/VeriTile-2)
 #
@@ -15,11 +16,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # check_frozen_base.py with it separately (VeriTile/Staging/README.md).
 unset VERITILE_FROZEN_OVERRIDE
 
-lean=1 status=0
+lean=1 status=0 list=0
 for argument in "$@"; do
   case $argument in
     --no-lean) lean=0 ;;
     --status) status=1 ;;
+    --list) list=1 ;;
     *) echo "unknown argument: $argument" >&2; exit 2 ;;
   esac
 done
@@ -81,6 +83,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TensorDescriptorSource"
              "lake build tests.lean.dist.SourceHelperSyntax"
              "lake build tests.lean.InterpBridgeInvariant"
+             "lake build tests.lean.InterpBridgeCensus"
              "lake env lean tests/lean/InterpBridgeCensus.lean"
              "lake build tests.lean.InterpFPValue"
              "python3 -B -m unittest scripts.test_fp_value_carrier"
@@ -95,6 +98,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.ProcedureHelpers"
              "lake build tests.lean.dist.ElementHelper"
              "lake build tests.lean.dist.PointerCasts"
+             "lake build tests.lean.dist.P2PTransferViews"
              "lake env lean tests/lean/dist/P2PTransferViews.lean"
              "lake build tests.lean.dist.UnguardedShared"
              "lake build tests.lean.dist.Location"
@@ -105,13 +109,19 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TrustAssumptions"
              "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
              "lake build tests.lean.dist.TrustAssumptionImports"
+             "lake build tests.lean.TileLangSyntax"
              "lake env lean tests/lean/TileLangSyntax.lean"
+             "lake build tests.lean.TileLangManualAcceptance"
              "lake env lean tests/lean/TileLangManualAcceptance.lean"
              "python3 scripts/generate_tilelang_surface.py --check --check-accepted"
+             "lake build tests.lean.TileLangPinnedRoots"
              "lake env lean tests/lean/TileLangPinnedRoots.lean"
              "python3 scripts/transcribe_tilelang_roots.py --check-typed"
+             "lake build tests.lean.TileLangPrecedence"
              "lake env lean tests/lean/TileLangPrecedence.lean"
+             "lake build tests.lean.TileLangLower"
              "lake env lean tests/lean/TileLangLower.lean"
+             "lake build tests.lean.TileLangTransfer"
              "lake env lean tests/lean/TileLangTransfer.lean"
              "lake build tests.lean.dist.CountMonotoneVacuous"
              "lake build tests.lean.dist.NonWordObservation"
@@ -138,6 +148,10 @@ if [ "$lean" = 1 ]; then
     fi
   done
   commands+=("python3 scripts/check_test_sorry.py --compiled ${test_modules[*]}")
+fi
+if [ "$list" = 1 ]; then
+  printf '%s\n' "${commands[@]}"
+  exit 0
 fi
 
 log=$(mktemp -d)
