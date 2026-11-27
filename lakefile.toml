@@ -148,6 +148,8 @@ globs = [
   "bench.examples.StableLogSumExp.+",
   "bench.examples.VectorAdd.+",
   "bench.examples.Welford.+",
+  "tests.interp.TensorExamples",
+  "tests.interp.HyperConnections",
 ]
 
 # Full target: Lite + Math + ApproxGeLU. Build this when working on the
@@ -589,10 +591,6 @@ globs = ["VeriTile.Equiv", "VeriTile.Equiv.+"]
 [[lean_lib]]
 name = "VeriTileStaging"
 globs = ["VeriTile.Staging.+"]
-
-[[lean_lib]]
-name = "FileRunnerExamples"
-globs = ["tests.interp.TensorExamples", "tests.interp.HyperConnections"]
 
 [[lean_exe]]
 name = "veritile-run"
