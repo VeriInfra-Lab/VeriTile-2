@@ -571,6 +571,11 @@ globs = [
   "tests.lean.dist.E2ReadsFromDetermined",
   "tests.lean.dist.Tutorial05CAS",
   "tests.lean.dist.Tutorial05K10",
+  "tests.lean.dist.Tutorial05Stream",
+  "tests.lean.dist.Tutorial05HostCopy",
+  "tests.lean.dist.Tutorial05Whole",
+  "tests.lean.dist.Tutorial05WholeValues",
+  "tests.lean.dist.Tutorial05Plan",
   "tests.lean.dist.Tutorial05",
   # Also run directly by the gate; built here so that its compiled axiom audit imports them.
   "tests.lean.InterpBridgeCensus",

@@ -137,7 +137,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.IndexQueueSingleSlot"
              "lake build tests.lean.dist.Tutorial01"
              "lake build tests.lean.dist.E2ReadsFromDetermined"
-             "lake build tests.lean.dist.Tutorial05CAS tests.lean.dist.Tutorial05K10 tests.lean.dist.Tutorial05"
+             "lake build tests.lean.dist.Tutorial05CAS tests.lean.dist.Tutorial05K10 tests.lean.dist.Tutorial05Stream tests.lean.dist.Tutorial05HostCopy tests.lean.dist.Tutorial05Whole tests.lean.dist.Tutorial05WholeValues tests.lean.dist.Tutorial05Plan tests.lean.dist.Tutorial05"
              "lake env lean tests/lean/dist/Tutorial05.lean"
              "lake build tests.lean.dist.StorePublication")
   # Audit the compiled objects just built, including test modules imported by a root.
