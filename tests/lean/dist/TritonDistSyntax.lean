@@ -83,6 +83,14 @@ run_cmd
   unless overlapping.reverse == upstreamOverlap do
     throwError "unexpected set of upstream parses: {overlapping.reverse}"
 
+-- Neither the distributed polling production nor RawBodyControl is active.
+#guard_msgs in
+run_cmd for src in ["while x < n { }", "while flag != 1 { pass }"] do
+  let .error diagnostic := parseBlock (← getEnv) src
+    | throwError "unexpected scope-closed while parse: {src}"
+  unless diagnostic.endsWith "expected '}'" do
+    throwError "unexpected scope-closed while diagnostic: {diagnostic}"
+
 open scoped VeriTile.Dist.Frontend.TritonDist
 
 #guard_msgs in
@@ -90,7 +98,11 @@ run_cmd for (body, ticket) in forms do
   let .ok stx := parseBlock (← getEnv) body | throwError "failed to parse: {body}"
   unless hasDistNode stx do throwError "upstream fallback for distributed call: {body}"
   let diagnostic ← diagnosticOf stx
-  let expected := if ticket == "#79" then "" else "not implemented: " ++ ticket
+  let expected :=
+    if ticket == "#79" then ""
+    else if ["#80", "#81"].contains ticket then
+      "import TritonDist.Segments or the corresponding family frontend"
+    else "not implemented: " ++ ticket
   unless diagnostic == expected do
     throwError "{body}: expected '{expected}', got '{diagnostic}'"
 
@@ -285,14 +297,14 @@ example : match lower (triton { ready = dl.consume_token(value, token) }) with
   x = undefined_fn(1)
 } : DL.Source)
 
-/-- error: not implemented: #80 -/
+/-- error: use TritonDist.Body for a block with several distributed call families -/
 #guard_msgs in
 #check (triton {
   rank = dl.rank()
   libshmem_device.barrier_all_block()
 } : DL.Source)
 
-/-- error: not implemented: #81 -/
+/-- error: use TritonDist.Body for a block with several distributed call families -/
 #guard_msgs in
 #check (triton {
   rank = dl.rank()

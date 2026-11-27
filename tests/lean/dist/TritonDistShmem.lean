@@ -175,7 +175,7 @@ example : ¬ peBarrier.ReturnsAfterTransfers [(block, 1), (warp, 2)] (· = 2) :=
   libshmem_device.signal_wait_until(signal, libshmem_device.NVSHMEM_CMP_INVALID, 7)
 } : Shmem.Source)
 
-/-- error: not implemented: #81 -/
+/-- error: use TritonDist.Body for a block with several distributed call families -/
 #guard_msgs in
 #check (triton {
   libshmem_device.fence()
@@ -189,7 +189,7 @@ example : ¬ peBarrier.ReturnsAfterTransfers [(block, 1), (warp, 2)] (· = 2) :=
   x = dl.allocate_smem(1)
 } : Shmem.Source)
 
-/-- error: mixed dl and NVSHMEM blocks require the segment frontend (#82) -/
+/-- error: use TritonDist.Body for a block with several distributed call families -/
 #guard_msgs in
 #check (triton {
   libshmem_device.fence()
