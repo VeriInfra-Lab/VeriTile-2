@@ -84,6 +84,77 @@ class ForkTargetGates(unittest.TestCase):
             rejected = run('check_test_sorry.py', str(log), '--allowlist', str(allowlist))
             self.assertIn(f'SORRY\t{relative}\texample\t({relative}:2:0)', rejected.stderr)
 
+    def test_test_axiom_sources(self):
+        relative = 'tests/lean/AxiomProbe.lean'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            probe, allow = root / relative, root / 'allowed'
+            probe.parent.mkdir(parents=True)
+            args = ['--sources', '--root', str(root), '--allowlist', str(allow)]
+            for label, code in (
+                ('plain', 'axiom plain : True'),
+                ('hidden', 'private axiom hidden : True'),
+                ('nested', 'namespace N\naxiom nested : True\nend N'),
+                ('inSection', 'section\naxiom /- binder -/\n inSection : True\nend'),
+                ('«a»', 'axiom«a» : True'),
+                ('℘', 'axiom ℘ : True'),
+                ('«a axiom b»', 'axiom «a axiom b» : True'),
+                ('N.a', 'axiom N.a.{u} : Type u'),
+            ):
+                with self.subTest(label=label):
+                    probe.write_text(code + '\n-- axiom ignored : False\n')
+                    subprocess.run(['lake', 'env', 'lean', str(probe)], cwd=ROOT, check=True,
+                                   text=True, capture_output=True)
+                    allow.write_text('')
+                    result = run('check_test_sorry.py', *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f'axiom {label}', result.stderr)
+                    allow.write_text(f'{relative}\t{label}\ttest fixture\n')
+                    result = run('check_test_sorry.py', *args)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+
+            probe.write_text('def axiom℘ := 0\ndef ℘axiom := 1\n')
+            allow.write_text('')
+            subprocess.run(['lake', 'env', 'lean', str(probe)], cwd=ROOT, check=True,
+                           text=True, capture_output=True)
+            result = run('check_test_sorry.py', *args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            probe.write_text('axiom : True\n')
+            result = run('check_test_sorry.py', *args)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('axiom ?', result.stderr)
+
+    def test_test_axiom_output(self):
+        relative = 'tests/lean/GateAxiomPrint.lean'
+        self.probe(relative, 'axiom localWitness : True\n'
+                             'theorem usesWitness : True := localWitness\n#print axioms usesWitness\n')
+        direct = subprocess.run(['lake', 'env', 'lean', relative], cwd=ROOT,
+                                text=True, capture_output=True, check=True).stdout
+        self.assertIn('depends on axioms:', direct)
+        with tempfile.TemporaryDirectory() as temp:
+            log, allow = Path(temp) / 'log', Path(temp) / 'allow'
+            allow.write_text('')
+            for prefix, extra in [('', ['--test-file', relative]), (f'info: {relative}:3:0: ', [])]:
+                with self.subTest(prefix=prefix):
+                    log.write_text(prefix + direct)
+                    result = run('check_test_sorry.py', str(log), '--allowlist', str(allow), *extra)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f'{relative}\tusesWitness\tlocalWitness', result.stderr)
+            log.write_text(f"info: {relative}:3:0: 'T.cert' depends on axioms: [propext,\n"
+                           " Classical.choice, Quot.sound, sorryAx]\n"
+                           "info: foreign/Module.lean:1:0: 'outside' depends on axioms: [other]\n")
+            result = run('check_test_sorry.py', str(log), '--allowlist', str(allow))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('T.cert\tsorryAx', result.stderr)
+            allow.write_text(f'{relative}\tT.cert\tintentional test case\n')
+            result = run('check_test_sorry.py', str(log), '--allowlist', str(allow))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log.write_text(log.read_text().replace('sorryAx]', 'sorryAx, other]'))
+            result = run('check_test_sorry.py', str(log), '--allowlist', str(allow))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('T.cert\tother', result.stderr)
+
     def test_sources_that_hide_sorry_warnings_fail(self):
         # Each of these silenced the warning in a real build or `lake env lean` run (PR #605 reviews).
         # A body without any sorry source, so that each case depends only on its own rule.
@@ -404,13 +475,15 @@ class ForkTargetGates(unittest.TestCase):
     def test_signed_inductive_freezes_parameter_index_and_binder_info(self):
         name = 'VeriTileGateIndices.T'
         source = ('namespace VeriTileGateIndices\n'
-                  'inductive T (n : Nat) : Type where\n  | mk (value : Nat) : T n\n'
+                  'inductive T : Nat → Type where\n  | mk {n : Nat} (value : Nat) : T n\n'
                   'end VeriTileGateIndices\n')
         _, check = self.signed_declaration_probe('FrozenIndicesProbe', name, source)
         cases = [
-            ('index', source.replace('T (n : Nat) : Type', 'T : Nat → Type')
-             .replace('| mk (value : Nat) : T n', '| mk (n : Nat) (value : Nat) : T n')),
-            ('binder', source.replace('mk (value : Nat)', 'mk {value : Nat}')),
+            # The constructor uses the same implicit binder in both versions.
+            # Disable automatic promotion so only the parameter/index counts differ.
+            ('index', source.replace('inductive T',
+                                     'set_option inductive.autoPromoteIndices false in\ninductive T')),
+            ('binder', source.replace('(value : Nat)', '{value : Nat}')),
         ]
         for label, edited in cases:
             with self.subTest(label=label):
@@ -488,6 +561,60 @@ class ForkTargetGates(unittest.TestCase):
                     self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
                     self.assertIn(f'{name}: unsupported signed declaration', rejected.stderr)
                     self.assertEqual((tsv.read_bytes(), definitions.read_bytes()), before)
+
+
+    def test_signed_structure_class_marker(self):
+        name = 'VeriTileGateClassStructure.Record'
+        ordinary = ('namespace VeriTileGateClassStructure\n'
+                    'structure Record where\n  field : Nat\n'
+                    'end VeriTileGateClassStructure\n')
+        is_class = ordinary.replace('structure Record', 'class Record')
+        cases = [('toClass', ordinary, is_class), ('fromClass', is_class, ordinary)]
+        for label, source, edited in cases:
+            with self.subTest(direction=label):
+                _, check = self.signed_declaration_probe(f'FrozenClassStructure_{label}', name, source)
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+                self.assertNotIn('definition changed', rejected.stderr)
+                restored = check(source)
+                self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_structure_ancestor_class_marker(self):
+        ordinary = ('namespace VeriTileGateClassAncestor\n'
+                    'structure Parent where\n  field : Nat\n'
+                    'structure Child extends Parent where\n  flag : Bool\n'
+                    'structure Grandchild extends Child where\n  extra : Nat\n'
+                    'end VeriTileGateClassAncestor\n')
+        is_class = ordinary.replace('structure Parent', 'class Parent')
+        for leaf in ('Child', 'Grandchild'):
+            name = f'VeriTileGateClassAncestor.{leaf}'
+            for label, source, edited in [('toClass', ordinary, is_class), ('fromClass', is_class, ordinary)]:
+                with self.subTest(leaf=leaf, direction=label):
+                    _, check = self.signed_declaration_probe(f'FrozenClassAncestor_{leaf}_{label}', name, source)
+                    rejected = check(edited)
+                    self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                    self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+                    self.assertNotIn('definition changed', rejected.stderr)
+                    restored = check(source)
+                    self.assertEqual(restored.returncode, 0, restored.stderr)
+
+    def test_signed_inductive_class_marker(self):
+        name = 'VeriTileGateClassInductive.Choice'
+        ordinary = ('namespace VeriTileGateClassInductive\n'
+                    'inductive Choice where\n  | left\n  | right (value : Nat)\n'
+                    'end VeriTileGateClassInductive\n')
+        is_class = ordinary.replace('inductive Choice', 'class inductive Choice')
+        cases = [('toClass', ordinary, is_class), ('fromClass', is_class, ordinary)]
+        for label, source, edited in cases:
+            with self.subTest(direction=label):
+                _, check = self.signed_declaration_probe(f'FrozenClassInductive_{label}', name, source)
+                rejected = check(edited)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(f'{name}: statement changed since sign-off', rejected.stderr)
+                self.assertNotIn('definition changed', rejected.stderr)
+                restored = check(source)
+                self.assertEqual(restored.returncode, 0, restored.stderr)
 
 
 class FrozenTablesAgainstBase(unittest.TestCase):

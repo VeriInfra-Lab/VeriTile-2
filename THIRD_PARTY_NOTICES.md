@@ -41,6 +41,7 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
 | `VeriTile/Dist/Frontend/TritonExt/SignedSum.lean` | [all_to_all_single_2d.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_single_2d.py) |
 | `tests/lean/dist/SourceHelpers.lean` | [allgather_group_gemm.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/allgather_group_gemm.py) · [moe_reduce_ar.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_ar.py) · [moe_reduce_rs.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/moe_reduce_rs.py) · [04-deepseek-infer-all2all.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py) · [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) · [ep_all2all_fused.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/ep_all2all_fused.py) · [low_latency_all_to_all_v2.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/low_latency_all_to_all_v2.py) |
 | `VeriTile/Dist/Frontend/TritonExt/ProcedureHelpers.lean`, `tests/lean/dist/ProcedureHelpers.lean` | [all_to_all_vdev_2d_offset_inter_node.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_vdev_2d_offset_inter_node.py) · [reduce_scatter.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/reduce_scatter.py) |
+| `tests/lean/dist/P2PTransferViews.lean` | [p2p.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/p2p.py) |
 | `tests/lean/dist/ElementHelper.lean` | [all_to_all_single_2d.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/all_to_all_single_2d.py) |
 | `a05` | [08-overlapping-gemm-reduce-scatter.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/08-overlapping-gemm-reduce-scatter.py) |
 | `a06` | [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) |
@@ -92,7 +93,7 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
 
 ## TileLang
 
-[Source and licence at `35850c06875bcc84751417982bf7b4d662bafdbc`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/LICENSE). MIT. Reference pin. No litmus implementation was derived from this repository.
+[Source and licence at `35850c06875bcc84751417982bf7b4d662bafdbc`](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/LICENSE). MIT. The A3.1 parser tests transcribe the nine selected JIT roots from five byte-identical Python fixtures.
 
 ```text
     MIT License
@@ -119,6 +120,17 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE
 ```
+
+### Sources under `MIT`
+
+| File identifiers | Pinned source files |
+| --- | --- |
+| `scripts/fixtures/tilelang_roots/example_mha_bwd_bhsd.py.txt` | [example_mha_bwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py) |
+| `scripts/fixtures/tilelang_roots/example_mha_fwd_bhsd.py.txt` | [example_mha_fwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_fwd_bhsd.py) |
+| `scripts/fixtures/tilelang_roots/example_fusedmoe_tilelang.py.txt` | [example_fusedmoe_tilelang.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/fusedmoe/example_fusedmoe_tilelang.py) |
+| `scripts/fixtures/tilelang_roots/example_gemm.py.txt` | [example_gemm.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/gemm/example_gemm.py) |
+| `scripts/fixtures/tilelang_roots/example_warp_specialize_gemm_barrierpipe_stage2.py.txt` | [example_warp_specialize_gemm_barrierpipe_stage2.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/warp_specialize/example_warp_specialize_gemm_barrierpipe_stage2.py) |
+| `tests/lean/TileLangPinnedRoots.lean` | [example_mha_bwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_bwd_bhsd.py) · [example_mha_fwd_bhsd.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/flash_attention/example_mha_fwd_bhsd.py) · [example_fusedmoe_tilelang.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/fusedmoe/example_fusedmoe_tilelang.py) · [example_gemm.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/gemm/example_gemm.py) · [example_warp_specialize_gemm_barrierpipe_stage2.py](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/examples/warp_specialize/example_warp_specialize_gemm_barrierpipe_stage2.py) |
 
 ## Triton
 

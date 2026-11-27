@@ -23,6 +23,17 @@ reject() {
     exit 1
   fi
 }
+# Source constants must match both the file shape and the actual launch.
+reject --carrier fp32-basic --grid 2 --constexpr blockSize=4 --constexpr nElements=6 \
+  FlatVectorAdd "$fixtures/flat-add-x.tensor" "$fixtures/flat-add-y.tensor" "$work/result.tensor"
+reject --carrier fp32-basic --grid 1 --constexpr blockSize=4 --constexpr nElements=5 \
+  FlatVectorAdd "$fixtures/flat-add-x.tensor" "$fixtures/flat-add-y.tensor" "$work/result.tensor"
+reject --carrier fp32-basic --grid 3 --constexpr BLOCK_SIZE=3 \
+  FloatDTypeAdd "$fixtures/float-add-x.tensor" "$fixtures/float-add-y.tensor" "$work/result.tensor"
+reject --carrier fp32-basic --grid 3 --constexpr BLOCK_SIZE=2 --constexpr BLOCK_SIZE=2 \
+  FloatDTypeAdd "$fixtures/float-add-x.tensor" "$fixtures/float-add-y.tensor" "$work/result.tensor"
+reject --carrier fp32-basic --grid 2 --constexpr BLOCK_SIZE=2 \
+  VectorAdd "$fixtures/vector-x.tensor" "$fixtures/vector-y.tensor" "$work/result.tensor"
 reject --carrier missing --grid 2 VectorAdd "$fixtures/vector-x.tensor" "$fixtures/vector-y.tensor" "$work/vector.tensor"
 reject --carrier fp32-basic --grid 2 Missing "$fixtures/vector-x.tensor" "$work/vector.tensor"
 reject --carrier fp32-basic --grid 3 VectorAdd "$fixtures/vector-x.tensor" "$fixtures/vector-y.tensor" "$work/vector.tensor"

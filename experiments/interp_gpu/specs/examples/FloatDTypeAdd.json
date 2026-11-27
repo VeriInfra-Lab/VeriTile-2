@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FloatDTypeAdd",
+    "lean": "VeriTile.Bench.Examples.FloatDTypeAdd.Kernels.floatAddKernel",
+    "source": "bench/examples/FloatDTypeAdd/FloatDTypeAdd.py::float_add"
+  },
+  "grid": [
+    3
+  ],
+  "launch": {
+    "carrier": "fp32-basic"
+  },
+  "constexpr": {
+    "BLOCK_SIZE": 2
+  },
+  "arguments": [
+    {
+      "parameter": "x_ptr",
+      "buffer": "x"
+    },
+    {
+      "parameter": "y_ptr",
+      "buffer": "y"
+    },
+    {
+      "parameter": "out_ptr",
+      "buffer": "out"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "boundary",
+      "inputs": {
+        "x": {
+          "dtype": "fp32",
+          "shape": [
+            6
+          ],
+          "file": "tests/interp/fixtures/float-add-x.tensor"
+        },
+        "y": {
+          "dtype": "fp32",
+          "shape": [
+            6
+          ],
+          "file": "tests/interp/fixtures/float-add-y.tensor"
+        }
+      },
+      "expected": {
+        "out": "tests/interp/fixtures/float-add-sum.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "out",
+      "dtype": "fp32",
+      "shape": [
+        6
+      ]
+    }
+  ]
+}

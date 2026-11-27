@@ -8,6 +8,7 @@ the SHA-256 of the elaborated statement (the declaration's type: every
 constant, universe level, implicit argument and coercion), up to the names of
 bound variables. For a signed inductive or structure, the fingerprint also
 records parameter/index counts, binder annotations and ordered constructors.
+A class marker records when the signed type or a structure ancestor is a class.
 For a structure it also records its own and ancestor field/projection names
 and the effective field-default auxiliary names. This digest survives a move
 from staging to the main target under the same declaration name. The module
@@ -121,14 +122,14 @@ private def frozenInductiveShape (env : Environment) (i : InductiveVal) : String
 /-- Traverse the registered parent DAG, including implicit parents of a
 multiple-inheritance structure. Defaults can be overridden by a child, so
 look up effective default functions on each structure's flattened fields. -/
-private partial def frozenStructureShape (env : Environment) (work : List Name)
+private partial def frozenStructureShape (env : Environment) (root : Name) (work : List Name)
     (seen : NameSet) : List String × List Name :=
   match work with
   | [] => ([], [])
   | n :: rest =>
-    if seen.contains n then frozenStructureShape env rest seen else
+    if seen.contains n then frozenStructureShape env root rest seen else
     match getStructureInfo? env n with
-    | none => frozenStructureShape env rest (seen.insert n)
+    | none => frozenStructureShape env root rest (seen.insert n)
     | some s =>
       let fields := s.fieldNames.filterMap (getProjFnForField? env n)
       let projections := fields ++ s.parentInfo.map (·.projFn)
@@ -137,8 +138,9 @@ private partial def frozenStructureShape (env : Environment) (work : List Name)
       let inductiveShape := match env.find? n with
         | some (.inductInfo i) => frozenInductiveShape env i
         | _ => ""
-      let shape := s!"{n} {inductiveShape} fields {frozenNames s.fieldNames.toList} parents {frozenNames parents.toList} projections {frozenNames projections.toList} defaults {frozenNames defaults.toList}"
-      let (shapes, roots) := frozenStructureShape env (parents.toList ++ rest) (seen.insert n)
+      let marker := if n != root && isClass env n then " (class)" else ""
+      let shape := s!"{n} {inductiveShape} fields {frozenNames s.fieldNames.toList} parents {frozenNames parents.toList} projections {frozenNames projections.toList} defaults {frozenNames defaults.toList}{marker}"
+      let (shapes, roots) := frozenStructureShape env root (parents.toList ++ rest) (seen.insert n)
       (shape :: shapes, n :: (projections.toList ++ defaults.toList ++ roots))
 
 /-- An explicitly signed type or definition is itself a dependency. Keep the
@@ -150,11 +152,13 @@ private def frozenSignedRoot (env : Environment) (info : ConstantInfo) : String 
   match info with
   | .defnInfo _ => (ty, [info.name])
   | .inductInfo i =>
+    -- Keep the existing outer marker for the directly signed type.
+    let marker := if isClass env i.name then " (class)" else ""
     match getStructureInfo? env i.name with
-    | none => (s!"{ty} (inductive {frozenInductiveShape env i})", [info.name])
+    | none => (s!"{ty} (inductive {frozenInductiveShape env i}){marker}", [info.name])
     | some _ =>
-      let (shape, roots) := frozenStructureShape env [i.name] {}
-      (s!"{ty} (structure {frozenList shape})", roots)
+      let (shape, roots) := frozenStructureShape env i.name [i.name] {}
+      (s!"{ty} (structure {frozenList shape}){marker}", roots)
   | _ => (ty, [])
 
 private partial def frozenClosure (env : Environment) (work : List Name) (seen : NameSet) : NameSet :=

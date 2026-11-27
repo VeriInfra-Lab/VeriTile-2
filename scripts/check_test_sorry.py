@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail on `declaration uses 'sorry'` in a tests/lean file, unless allowlisted.
+"""Reject unapproved sorry warnings, axiom declarations and printed dependencies in tests/lean.
 
 A `sorry` in a test certificate is only a warning to Lean and Lake, and the
 environment audit of check_fork_target.py cannot see it in an `example`,
@@ -8,9 +8,15 @@ check on the output of every gate command: the warnings of `lake env lean
 tests/lean/...` and those Lake replays for every tests/lean module it builds
 or finds cached.
 
-scripts/test-sorry-allowlist.txt lists the accepted cases, one per line:
-`file<TAB>declaration<TAB>reason`. The declaration is the word at the reported
-position: the name of a theorem or definition, or `example`.
+Source checks also reject a test's own axiom declarations. Log checks audit
+the dependencies reported by `#print axioms` at test sites. Lake supplies
+the site in its log; direct Lean runs supply the test file on the command line.
+
+scripts/test-sorry-allowlist.txt uses `file<TAB>declaration<TAB>reason`.
+For a source axiom use the name as written, including any quoting or namespace
+prefix. For a sorry warning use the word at the reported position (or `example`).
+To permit sorryAx in printed dependencies use the fully qualified name printed
+for the audited declaration. An allowed source axiom still fails as a dependency.
 
 The scan only sees warnings that Lean prints, and options and `#guard_msgs`
 can hide them. `--sources` (one gate command) therefore matches what is being
@@ -58,6 +64,31 @@ WARNING = re.compile(r'^(?:warning: )?(?:\./|' + re.escape(str(ROOT)) + r'/)?(te
                      r'(?:warning: )?declaration uses .sorry.', re.MULTILINE)
 
 
+# Lean's identifier continuations include non-word Unicode letter-like characters
+# (Init/Meta/Defs.lean). The declaration command itself is sufficient for a hit.
+IDENT_REST = r"\w'!?\u03ca-\u03fb\u1f00-\u1ffe\u2100-\u214f\U0001d49c-\U0001d59f"
+NAME_PART = r"(?:«[^»\n]+»|[^\s.:«»(){}\[\]]+)"
+AXIOM_DECL = re.compile(rf"(?<![{IDENT_REST}.«])axiom(?![{IDENT_REST}»])(?:\s*({NAME_PART}(?:\.{NAME_PART})*))?")
+AXIOM_REPORT = re.compile(
+    r"^(?:(?:info: )?(?:\./|" + re.escape(str(ROOT)) + r"/)?"
+    r"(?P<file>tests/lean/[^:\n]+\.lean):\d+:\d+: (?:info: )?)?"
+    r"'(?P<name>[^\n]+?)' depends on axioms:\s*\[(?P<deps>[^\]]*)\]", re.MULTILINE)
+STANDARD_AXIOMS = {'propext', 'Classical.choice', 'Quot.sound'}
+
+
+def axiom_reports(text, direct_file, accepted):
+    for match in AXIOM_REPORT.finditer(text):
+        file = match['file'] or direct_file
+        if file is None:
+            continue
+        name = match['name']
+        deps = {item.strip() for item in match['deps'].split(',')} - STANDARD_AXIOMS
+        if (file, name) in accepted:
+            deps.discard('sorryAx')
+        for dep in sorted(deps):
+            yield f'AXIOM dependency\t{file}\t{name}\t{dep}'
+
+
 def allowed(path):
     entries = set()
     for number, line in enumerate(path.read_text().splitlines(), 1):
@@ -93,10 +124,24 @@ META_NAME = re.compile(r'\s*(?:\(\s*name\s*:=\s*([^\s)]+)\s*\)\s*)?(?:\(\s*prior
                        r'(?:"([^"]*)"|([^\s(:"]+))?')
 
 
+# Read names as whole tokens, including qualified components. A final letter r
+# in a name does not start a raw string. These are the identifier ranges from
+# Lean 4.29's Init/Meta/Defs.lean (isIdFirst, isIdRest).
+ID_FIRST = (r'A-Za-z_\u03b1-\u03ba\u03bc-\u03c9\u0391-\u039f\u03a1-\u03a2\u03a4-\u03a9'
+            r'\u03ca-\u03fb\u1f00-\u1ffe\u2100-\u214f\U0001d49c-\U0001d59f'
+            r'\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u017f')
+ID_SUFFIX = r"0-9'!?\u2080-\u2089\u2090-\u209c\u1d62-\u1d6a\u2c7c"
+LEX_NAME = rf'[{ID_FIRST}][{ID_FIRST}{ID_SUFFIX}]*'
+LEX_PART = rf'(?:{LEX_NAME}|«[^»]*(?:»|\Z))'
+LEX_IDENT = re.compile(rf'`?{LEX_PART}(?:\.{LEX_PART})*')
+RAW_OPEN = re.compile(r'r(#*)"')
+
+
 def views(text):
     """The text with comments and string contents blanked (code), and the same keeping docstrings (guards).
 
-    Both keep every offset and newline. Lean block comments nest.
+    Both keep offsets and newlines. Lean block comments nest. Raw string
+    contents are opaque, and quoted identifier components stay visible.
     """
     code, guard = list(text), list(text)
 
@@ -125,15 +170,27 @@ def views(text):
             if not text.startswith('/--', i):
                 blank(guard, i, end)
             i = end
+        elif text[i] == 'r' and (raw := RAW_OPEN.match(text, i)):
+            delimiter = '"' + raw[1]
+            closing = text.find(delimiter, raw.end())
+            end = n if closing < 0 else closing
+            blank(code, raw.end(), end)
+            blank(guard, raw.end(), end)
+            i = n if closing < 0 else end + len(delimiter)
+        elif name := LEX_IDENT.match(text, i):
+            i = name.end()
         elif text[i] == '"':
             end = i + 1
             while end < n and text[end] != '"':
                 end += 2 if text[end] == '\\' else 1
+            end = min(n, end)
             blank(code, i + 1, end)
             blank(guard, i + 1, end)
             i = end + 1
-        elif text.startswith(("'\"'", "'\\\"'"), i):  # the character literals '"' and '\"'
-            i += 3 if text.startswith("'\"'", i) else 4
+        elif text.startswith(('\'"\'', "'«'"), i):  # Character literal, outside an identifier.
+            i += 3
+        elif text.startswith('\'\\"\'', i):
+            i += 4
         else:
             i += 1
     return ''.join(code), ''.join(guard)
@@ -182,6 +239,10 @@ def tripwires(root, accepted, metaprograms=frozenset()):
             if not named(line):
                 hits += [f'{file}:{number}: {match.group(0).strip()}' for match in
                          [*TEST_WORDS.finditer(line), *TACTICS.finditer(code_lines[number - 1])]]
+        for match in AXIOM_DECL.finditer(code):
+            name = match[1] or '?'
+            if match[1] is None or (file, name) not in accepted:
+                hits.append(f'{file}:{text.count(chr(10), 0, match.start()) + 1}: axiom {name}')
         for match in META.finditer(code):
             found = META_NAME.match(text, match.end())
             name = match.group(1) if match.group(1) == 'macro_rules' else \
@@ -209,24 +270,30 @@ def main():
     parser.add_argument('logs', nargs='*', type=Path, help='output of gate commands')
     parser.add_argument('--allowlist', type=Path, default=ALLOWLIST)
     parser.add_argument('--meta-allowlist', type=Path, default=META_ALLOWLIST)
+    parser.add_argument('--test-file', help='test file of a direct Lean run (bare #print axioms output)')
     parser.add_argument('--sources', action='store_true', help='check the sources for ways to hide the warning')
     parser.add_argument('--root', type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sources:
         hits = tripwires(args.root, allowed(args.allowlist), allowed(args.meta_allowlist))
         if hits:
-            raise ValueError('a source uses or can hide sorry outside the allowlist:\n' + '\n'.join(hits))
-        print('[ok] no lakefile or tests/lean source uses or hides sorry outside the allowlist')
+            raise ValueError('unapproved test source:\n' + '\n'.join(hits))
+        print('[ok] test sources passed the proof and metaprogramming checks')
     accepted = allowed(args.allowlist)
     found = set()
+    reports = set()
     for log in args.logs:
-        for match in WARNING.finditer(log.read_text(errors='replace')):
+        text = log.read_text(errors='replace')
+        reports.update(axiom_reports(text, args.test_file, accepted))
+        for match in WARNING.finditer(text):
             file, line, column = match.group(1), int(match.group(2)), int(match.group(3))
             found.add((file, declaration(file, line, column), f'{file}:{line}:{column}'))
     rejected = sorted(f'SORRY\t{file}\t{name}\t({where})' for file, name, where in found
                       if (file, name) not in accepted)
+    if reports:
+        rejected.extend(sorted(reports))
     if rejected:
-        raise ValueError(f'tests/lean uses sorry outside {args.allowlist.name}:\n' + '\n'.join(rejected))
+        raise ValueError(f'unapproved test evidence ({args.allowlist.name}):\n' + '\n'.join(rejected))
 
 
 if __name__ == '__main__':

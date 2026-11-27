@@ -8,7 +8,16 @@ Signed on 2026-11-25 (user decisions of 2026-11-24 and 2026-11-25, recorded on
 `SyncEdge.hb_of_readsFrom` and the add-only counting edge `CountingEdge.hb`,
 with the definitions under them. C3, `implementsAll_of_canonical`,
 `DetRaceFree`, `UnorderedAtomicRace` and `Occurrence.discardedAddAt` stay
-unsigned and are signed with #54. Everything else in this file is a candidate
+unsigned and are signed with #54.
+
+Re-signed on 2026-11-26 (user decision E1 of 2026-11-26, recorded on #47;
+the agent recorded the signature on the user's delegation): this round signs
+the new statement of C2 `threshold_stays_enabled`, whose `CountMonotone` is
+restricted to configurations reachable from `l.initial σ₀` (decision 一 (a) of
+2026-11-25), and re-accepts the definitions `Fire.wait` and `Fire.bump` under
+`step_comm` with fix (a): a phase, rendezvous or delivery counter returns no
+count. C3 `detRaceFree_complete_eq_canonical` stays UNSIGNED, with `sorry`.
+Everything else in this file is a candidate
 statement to review, not a certificate. The five source/control comparisons are in
 tests/lean/dist/JudgmentVariants.lean. -/
 import VeriTile.Staging.Dist.SegmentSpec
@@ -101,9 +110,12 @@ private def bumpMem (w : CellWrites) (s : DistState) (b : Bump) (old : Nat) : Di
   | .word p => w.put s p (.of .nat (b.op.apply old b.amount))
   | _ => s
 
-/-- N5. Loads and updates return their old cell, waits the observed natural
-counter, adding bumps the old count. Stores, fences, set bumps and initiations
-return none. A completion takes no continuation. An access with missing or
+/-- Signed (#47, via step_comm; `wait` and `bump` re-signed 2026-11-26). N5. Loads and
+updates return their old cell. A wait and an adding bump
+return the old count only for a memory word; on a phase, rendezvous or
+delivery counter they return none, as `__syncthreads`, `barrier_all` and
+`quiet` return no count (#47, 2026-11-25). Stores, fences, set bumps and
+initiations return none. A completion takes no continuation. An access with missing or
 wrong data cannot execute. Actor choice and payload are separate from Event. -/
 inductive Fire {P : Type} (l : Launch P) (s : Machine) :
     Emission → DistState → List Outstanding → Option MemCell → Prop where
@@ -115,10 +127,11 @@ inductive Fire {P : Type} (l : Launch P) (s : Machine) :
   | fence (a m) : Fire l s ⟨a,.fence m,.noValue⟩ s.mem s.pending none
   | wait (a c cmp n m old) (read : s.count? l.initialCount c = some old) (enabled : cmp.holds old n) :
       Fire l s ⟨a,.wait c cmp n m,.noValue⟩ s.mem s.pending
-        (some (.of .nat old))
+        (match c with | .word _ => some (.of .nat old) | _ => none)
   | bump (a b old) (read : b.op = .add → s.count? l.initialCount b.counter = some old) :
       Fire l s ⟨a,.bump b,.noValue⟩ (bumpMem l.cells s.mem b old) s.pending
-        (if b.op = .add then some (.of .nat old) else none)
+        (if b.op = .add then (match b.counter with | .word _ => some (.of .nat old) | _ => none)
+          else none)
   | discardAdd (a p n m old) (read : s.count? l.initialCount (.word p) = some old) :
       Fire l s ⟨a,.bump ⟨.word p,.add,n,m⟩,.discardAddResult⟩
         (l.cells.put s.mem p (.of .nat (old + n))) s.pending none
@@ -364,14 +377,6 @@ def Fault (l : Launch P) (s : Config P) : Prop :=
     | .ready _ => True
     | .waiting h t _ => ¬ ((∀ x ∈ h :: t, x.actor.within a) ∧ BlockedGroup l a s.toMachine (h :: t))
 
-def Safe (l : Launch P) (s : DistState) : Prop :=
-  DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final
-
-/-- S4.4/#50. A race is a failure even if another schedule completes. Deadlock
-alone leaves the universal postcondition vacuous; Completes is separate. -/
-def ImplementsAll (l : Launch P) (s : DistState) (spec : Config P → Prop) : Prop :=
-  Safe l s ∧ ∀ sched final, Run l (l.initial s) sched final → Complete final → spec final
-
 def Completes (l : Launch P) (s : DistState) : Prop :=
   ∃ sched final, Run l (l.initial s) sched final ∧ Complete final ∧ ¬ DataRace l final.history
 
@@ -431,6 +436,14 @@ structure SoundLaunch (l : Launch P) : Prop where
     ∀ x ∈ f.history, ∀ y ∈ f.history, ∀ c g t, x.owner = .thread c g t →
       y.owner = .thread c g t → ∀ a b, x.program? = some a → y.program? = some b → a = b
 
+def Safe (l : Launch P) (s : DistState) : Prop :=
+  SoundLaunch l ∧ DRF l s ∧ ∀ sched final, Run l (l.initial s) sched final → ¬ Fault l final
+
+/-- S4.4/#50. A race is a failure even if another schedule completes. Deadlock
+alone leaves the universal postcondition vacuous; Completes is separate. -/
+def ImplementsAll (l : Launch P) (s : DistState) (spec : Config P → Prop) : Prop :=
+  Safe l s ∧ ∀ sched final, Run l (l.initial s) sched final → Complete final → spec final
+
 /-- Signed (#47), statement only; the proof is owed by #51. C1, S4.5/#51. Histories record the swapped order, so the
 equality asserted is on memory and continuations. -/
 theorem step_comm {l : Launch P} (sound : SoundLaunch l) {s final : Config P} {a b : Choice}
@@ -445,24 +458,33 @@ theorem wait_enabled_mono {init : Counter → Nat} {c : Counter} {n : Nat} {pre 
     (enabled : Cmp.ge.holds (c.value init pre) n) : Cmp.ge.holds (c.value init post) n :=
   Counter.ge_stable monotone prefixOf enabled
 
-/-- S4.6/#52. State-level C2 covers physical words as well as abstract
-counters. Every step that can modify the counter must preserve its type and
-not decrease it. Equality waits do not satisfy threshold stability. -/
-def CountMonotone (l : Launch P) (c : Counter) : Prop :=
-  ∀ {s t action n}, step l s action t → s.count? l.initialCount c = some n →
-    ∃ m ≥ n, t.count? l.initialCount c = some m
+/-- Signed (#47, re-signed 2026-11-26, via threshold_stays_enabled). S4.6/#52. State-level C2 covers physical words as well as abstract
+counters. Every step from a configuration reachable from `l.initial σ₀` that
+can modify the counter must preserve its type and not decrease it. Equality
+waits do not satisfy threshold stability. Unreachable configurations are
+excluded: over all configurations no launch satisfies this (#47, 2026-11-25). -/
+def CountMonotone (l : Launch P) (σ₀ : DistState) (c : Counter) : Prop :=
+  ∀ {pre s t action n}, Run l (l.initial σ₀) pre s → step l s action t →
+    s.count? l.initialCount c = some n → ∃ m ≥ n, t.count? l.initialCount c = some m
 
-/-- Signed (#47). C2 at state level, S4.6/#52: a threshold that holds stays
-enabled along any run whose steps never decrease the counter. -/
-theorem threshold_stays_enabled {l : Launch P} {c : Counter} {s t : Config P}
-    {sched n old} (mono : CountMonotone l c) (run : Run l s sched t)
-    (seen : s.count? l.initialCount c = some old) (enabled : n ≤ old) :
+private theorem Run.snoc {l : Launch P} {s t u : Config P} {xs : Schedule} {c : Choice}
+    (run : Run l s xs t) (last : step l t c u) : Run l s (xs ++ [c]) u := by
+  induction run with
+  | nil => exact .cons last (.nil _)
+  | cons first _ ih => exact .cons first (ih last)
+
+/-- C2 at state level, S4.6/#52: a threshold that holds at a reachable
+configuration stays enabled along any run whose steps never decrease the
+counter. Signed (#47), re-signed 2026-11-26 with the reachable `CountMonotone`. -/
+theorem threshold_stays_enabled {l : Launch P} {σ₀ : DistState} {c : Counter} {s t : Config P}
+    {pre sched n old} (mono : CountMonotone l σ₀ c) (reach : Run l (l.initial σ₀) pre s)
+    (run : Run l s sched t) (seen : s.count? l.initialCount c = some old) (enabled : n ≤ old) :
     ∃ v ≥ n, t.count? l.initialCount c = some v := by
-  induction run generalizing old with
+  induction run generalizing pre old with
   | nil => exact ⟨old,enabled,seen⟩
   | cons first _ ih =>
-    obtain ⟨m, ge, found⟩ := mono first seen
-    exact ih found (enabled.trans ge)
+    obtain ⟨m, ge, found⟩ := mono reach first seen
+    exact ih (reach.snoc first) found (enabled.trans ge)
 
 /-- C3 obstruction. Both scoped atomic sets are race-free with respect to
 each other, but swapping them changes the final counter. -/
@@ -529,19 +551,25 @@ theorem normalize_of_decreasing_swap {l : Launch P} {s : DistState} {canonical :
       exact (Relation.ReflTransGen.single swap).trans
         (ih (rank next) (by omega) next g reaches complete rfl)
 
-/-- UNSIGNED. Signed with #54. C3 candidate, S4.7–8/#53/#54. DetRaceFree uses HB, whose synchronization
-edges already check scope through Mode.Pairs. S5.2/#57 owns the source-level
-synchronization obligations. S4.7 owes normalization.
+/-- UNSIGNED. Signed with #54. C3 candidate, S4.7–8/#53/#54. No scope-consistency
+premise (#47, 2026-11-25): DetRaceFree uses HB, whose synchronization edges
+already check scope through Mode.Pairs, and `Fire` returns no count of a
+non-word counter, so an unrecorded observation cannot reach memory.
+S5.2/#57 owns the source-level synchronization obligations, outside this
+theorem. S4.7 owes normalization. Still false as stated after the 2026-11-25
+fix: two `acqRel` fetch-adds on one word whose results are stored are
+`DetRaceFree` in either order (tests/lean/dist/FetchAddObservation.lean).
 C1 will also need a simulation for suffixes, including reads-from and delivery
 ticket renaming; equality of the raw event histories would be false. -/
-theorem detRaceFree_scopeConsistent_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
+theorem detRaceFree_complete_eq_canonical {l : Launch P} {s : DistState} {canonical sched : Schedule}
     {reference final : Config P} (sound : SoundLaunch l) (safe : DetRaceFree l s)
     (refRun : Run l (l.initial s) canonical reference)
     (refComplete : Complete reference) (actual : Run l (l.initial s) sched final)
     (complete : Complete final) : final.mem = reference.mem := sorry
 
 /-- UNSIGNED. Signed with #54. For a memory specification, checking the canonical final
-memory and establishing race/fault freedom suffices on the deterministic-race-free fragment. -/
+memory and establishing race/fault freedom suffices on the deterministic-race-free
+fragment, through `detRaceFree_complete_eq_canonical`. -/
 theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : Schedule}
     {reference : Config P} (sound : SoundLaunch l) (safe : Safe l s) (det : DetRaceFree l s)
     (refRun : Run l (l.initial s) canonical reference)
@@ -549,7 +577,7 @@ theorem implementsAll_of_canonical {l : Launch P} {s : DistState} {canonical : S
     ImplementsAll l s (fun final => spec final.mem) := by
   refine ⟨safe, fun sched final actual complete => ?_⟩
   change spec final.mem
-  rw [detRaceFree_scopeConsistent_complete_eq_canonical sound det refRun done_ actual complete]
+  rw [detRaceFree_complete_eq_canonical sound det refRun done_ actual complete]
   exact ok
 
 open VeriTile.Triton.Concurrent (EventProgramIO Backend)

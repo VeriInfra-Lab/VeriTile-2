@@ -1,3 +1,4 @@
+import VeriTile.Dist.State
 import VeriTile.Dist.Event
 import VeriTile.Triton.Semantics.State
 import VeriTile.Triton.DSL.PythonFullConstructors
@@ -12,7 +13,7 @@ precondition of #156. See `documents/dist/PointerCasts.md` for the source pins.
 `with_pointer_views … in triton { … }` checks one active lane's address operations
 and produces signed-model cell ranges. It does not execute a load, store or
 external transfer. An NVSHMEM signal wait can observe a single supplied memory
-snapshot through `SignalWait.observe`. Numeric casts and bitcasts use the ordinary compute frontend.
+snapshot through `SignalWait.observe`. At completion, `SignalWrite.commit` updates the peer signal cell. Numeric casts and bitcasts use the ordinary compute frontend.
 -/
 namespace VeriTile.Dist.Frontend.TritonExt.PointerCasts
 
@@ -71,6 +72,7 @@ inductive Instruction where
   | store (pointer value : AddressExpr)
   | wait (signal : AddressExpr) (cmp : Cmp) (target : AddressExpr)
   | transfer (put : Bool) (destination source count peer : AddressExpr)
+  | putSignal (nbi : Bool) (destination source count address value : AddressExpr) (op : SignalOp) (peer : AddressExpr)
 
 structure CellRange where
   first : Addr
@@ -86,31 +88,50 @@ structure SignalWait where
   target : BitVec 64
   deriving DecidableEq
 
+private def readWord (context : String) (signedStorage : Bool) (stored : MemCell) :
+    Except String (BitVec 64) := do
+  if signedStorage then
+    let some i := stored.readAs .int | throw (context ++ ": expected an int64 cell")
+    let bits := BitVec.ofInt 64 i
+    unless bits.toInt == i do throw (context ++ ": stored value outside int64 range")
+    return bits
+  let some n := stored.readAs .nat | throw (context ++ ": expected a uint64 cell")
+  let bits := BitVec.ofNat 64 n
+  unless bits.toNat == n do throw (context ++ ": stored value outside uint64 range")
+  return bits
+
 /-- One observation of the pinned extern: return its uint64 result when ready,
 or `none` while blocked. Supply the launch's authoritative cell map
 (`DistState.cell`). An unrepresentable mathematical integer is not a word. -/
 def SignalWait.observe (w : SignalWait) (cell : Addr → MemCell) :
     Except String (Option (BitVec 64)) := do
-  let stored := cell w.address
-  let bits ← if w.signedStorage then do
-    let some i := stored.readAs .int | throw "signal wait: expected an int64 cell"
-    let bits := BitVec.ofInt 64 i
-    unless bits.toInt == i do throw "signal wait: stored value outside int64 range"
-    pure bits
-  else do
-    let some n := stored.readAs .nat | throw "signal wait: expected a uint64 cell"
-    let bits := BitVec.ofNat 64 n
-    unless bits.toNat == n do throw "signal wait: stored value outside uint64 range"
-    pure bits
+  let bits ← readWord "signal wait" w.signedStorage (cell w.address)
   letI : Decidable (w.cmp.holds bits.toNat w.target.toNat) := by
     cases w.cmp <;> unfold Cmp.holds <;> infer_instance
   return if w.cmp.holds bits.toNat w.target.toNat then some bits else none
+
+structure SignalWrite where
+  address : Addr
+  signedStorage : Bool
+  op : SignalOp
+  value : BitVec 64
+  deriving DecidableEq
+
+/-- Publish this signal at transfer completion. SET replaces the old cell.
+ADD reads its physical type and wraps the sum to 64 bits before storage. -/
+def SignalWrite.commit (w : SignalWrite) (state : DistState) : Except String DistState := do
+  let bits ← match w.op with
+    | .set => pure w.value
+    | .add => do pure ((← readWord "signal write" w.signedStorage (state.cell w.address)) + w.value)
+  let stored := if w.signedStorage then MemCell.of .int bits.toInt else MemCell.of .nat bits.toNat
+  return state.putCell w.address stored
 
 inductive Access where
   | wait (signal : SignalWait)
   | read (dtype : SourceDType) (range : CellRange)
   | write (dtype : SourceDType) (range : CellRange)
   | put (destination source : CellRange)
+  | putSignal (nbi : Bool) (destination source : CellRange) (signal : SignalWrite)
   | get (destination source : CellRange)
   deriving DecidableEq
 
@@ -136,6 +157,17 @@ private def Pointer.range (p : Pointer) (bytes : Nat) : Except String CellRange 
   unless bytes % unit == 0 do throw "pointer view: byte count is not divisible by the buffer unit"
   unless p.byteOffset + bytes ≤ p.allocation.extentBytes do throw "pointer view: access outside allocation"
   return ⟨⟨p.allocation.space, p.allocation.region, p.byteOffset / unit⟩, bytes / unit⟩
+
+private def Pointer.signalRange (p : Pointer) (context : String) : Except String CellRange := do
+  unless p.pointee == some .i64 || p.pointee == some .u64 do
+    throw (context ++ ": expected an int64 or uint64 pointer")
+  unless p.allocation.unit == .i64 || p.allocation.unit == .u64 do
+    throw (context ++ ": expected int64 or uint64 storage")
+  return ← p.range 8
+
+private def signalValue (n : Int) (context : String) : Except String (BitVec 64) := do
+  unless -(2^63) ≤ n && n < 2^64 do throw (context ++ " outside int64 and uint64 ranges")
+  return BitVec.ofInt 64 n
 
 private def Pointer.dereference (p : Pointer) : Except String (SourceDType × CellRange) := do
   let some dtype := p.pointee | throw "pointer view: cannot dereference a void pointer"
@@ -213,6 +245,17 @@ def project (launch : Launch) (code : List Instruction) : Except String (List Ac
   for instruction in code do
     let value := eval allocations env
     let ptr := fun e => value e >>= ptrValue
+    let transfer := fun (put : Bool) d s n rank => do
+      let dst ← ptr d
+      let src ← ptr s
+      unless dst.allocation.unit == src.allocation.unit do
+        throw "pointer view: cell transfers require the same dtype at both endpoints"
+      let bytes ← natIndex (← indexValue (← value n))
+      let peer ← natIndex (← indexValue (← value rank))
+      let dr ← dst.range bytes
+      let sr ← src.range bytes
+      if put then pure (← remote dst dr peer, sr, peer)
+      else pure (dr, ← remote src sr peer, peer)
     match instruction with
     | .assign name e => env := (name, ← value e) :: env
     | .load name e =>
@@ -228,26 +271,18 @@ def project (launch : Launch) (code : List Instruction) : Except String (List Ac
       accesses := accesses.push (.write dtype range)
     | .wait signal cmp target =>
       let p ← ptr signal
-      unless p.pointee == some .i64 || p.pointee == some .u64 do
-        throw "signal wait: expected an int64 or uint64 pointer"
-      unless p.allocation.unit == .i64 || p.allocation.unit == .u64 do
-        throw "signal wait: expected int64 or uint64 storage"
-      let word ← p.range 8
-      let rhs ← indexValue (← value target)
-      unless -(2^63) ≤ rhs && rhs < 2^64 do
-        throw "signal wait: target outside int64 and uint64 ranges"
-      accesses := accesses.push (.wait ⟨word.first, p.allocation.unit == .i64, cmp, BitVec.ofInt 64 rhs⟩)
+      let word ← p.signalRange "signal wait"
+      let rhs ← signalValue (← indexValue (← value target)) "signal wait: target"
+      accesses := accesses.push (.wait ⟨word.first, p.allocation.unit == .i64, cmp, rhs⟩)
     | .transfer put d s n rank =>
-      let dst ← ptr d
-      let src ← ptr s
-      unless dst.allocation.unit == src.allocation.unit do
-        throw "pointer view: cell transfers require the same dtype at both endpoints"
-      let bytes ← natIndex (← indexValue (← value n))
-      let peer ← natIndex (← indexValue (← value rank))
-      let dr ← dst.range bytes
-      let sr ← src.range bytes
-      if put then accesses := accesses.push (.put (← remote dst dr peer) sr)
-      else accesses := accesses.push (.get dr (← remote src sr peer))
+      let (dst, src, _) ← transfer put d s n rank
+      accesses := accesses.push (if put then .put dst src else .get dst src)
+    | .putSignal nbi d s n signal operand op rank =>
+      let (dst, src, peer) ← transfer Bool.true d s n rank
+      let p ← ptr signal
+      let word ← remote p (← p.signalRange "signal write") peer
+      let bits ← signalValue (← indexValue (← value operand)) "signal write: value"
+      accesses := accesses.push (.putSignal nbi dst src ⟨word.first, p.allocation.unit == .i64, op, bits⟩)
   return accesses.toList
 
 declare_syntax_cat viewExpr
@@ -272,6 +307,8 @@ scoped syntax ident "=" "tl.load(" viewExpr ")" : viewStmt
 scoped syntax "tl.store(" viewExpr "," viewExpr ")" : viewStmt
 scoped syntax ident "(" viewExpr "," viewExpr "," viewExpr "," viewExpr ")" : viewStmt
 scoped syntax (name := signalWaitCall) ident "(" viewExpr "," ident "," viewExpr ","? ")" : viewStmt
+
+scoped syntax ident "(" viewExpr "," viewExpr "," viewExpr "," viewExpr "," viewExpr "," ident "," viewExpr ","? ")" : viewStmt
 
 private def targetTerm (stx : TSyntax `viewTarget) : MacroM Term := do
   match stx with
@@ -361,6 +398,23 @@ private def stmtTerm (s : TSyntax `viewStmt) : MacroM Term := do
     let key := quote n.getId.toString
     let val ← exprTerm e
     `(Instruction.assign $key (.add (.var $key) $val))
+  | `(viewStmt| $fn:ident($d:viewExpr, $src:viewExpr, $n:viewExpr, $addr:viewExpr, $v:viewExpr, $op:ident, $r:viewExpr $[,]?)) =>
+    let nbi ← match fn.getId with
+      | `libshmem_device.putmem_signal_block => pure Bool.false
+      | `libshmem_device.putmem_signal_nbi_block => pure Bool.true
+      | _ => Macro.throwErrorAt fn "pointer view: unsupported signalling transfer"
+    let operation ← match op.getId with
+      | `libshmem_device.NVSHMEM_SIGNAL_SET => `(SignalOp.set)
+      | `libshmem_device.NVSHMEM_SIGNAL_ADD => `(SignalOp.add)
+      | _ => Macro.throwErrorAt op "signal write: unsupported signal operation"
+    let nbi := quote nbi
+    let dst ← exprTerm d
+    let source ← exprTerm src
+    let count ← exprTerm n
+    let address ← exprTerm addr
+    let bits ← exprTerm v
+    let peer ← exprTerm r
+    `(Instruction.putSignal $nbi $dst $source $count $address $bits $operation $peer)
   | `(viewStmt| $fn:ident($d:viewExpr, $src:viewExpr, $n:viewExpr, $r:viewExpr)) =>
     let name := fn.getId.toString
     let puts := ["libshmem_device.putmem_block", "libshmem_device.putmem_nbi_block"]
