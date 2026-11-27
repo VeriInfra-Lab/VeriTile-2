@@ -50,7 +50,9 @@ Guards and metaprograms are found anywhere in code, not only at a line start;
 `--` and `/- -/` comments (which nest) and string contents are skipped, and
 docstrings are kept for the guard rules. The compiled audit also checks axioms
 introduced during elaboration of gate-built test modules and their test imports.
-Direct-only test runs still receive the source and log checks.
+The gate also builds every `tests/lean` file it runs directly with `lake env lean`,
+so the audit covers those files too (scripts/test_fork_targets.py checks this).
+The `--run` program `tests/interp/ReshapeOrder.lean` has no theorems and is not audited.
 """
 import argparse
 import json

@@ -73,6 +73,10 @@ scoped syntax "tl.atomic_add(" tritonExpr "," tritonExpr "," &"mask" "=" tritonE
 scoped syntax "tl.atomic_add(" tritonExpr "," tritonExpr "," &"sem" "=" tritonExpr "," &"scope" "=" tritonExpr ")" : extraCallStmt
 scoped syntax (name := pendingExtraStmt) (priority := high) extraCallStmt : tritonStmt
 
+-- An empty polling loop is lowered by the A3 call frontend.
+scoped syntax (name := extraSpinStmt) (priority := high)
+  "while" tritonExpr "{" (&"pass")? "}" : tritonStmt
+
 declare_syntax_cat commonCallStmt
 scoped syntax lookahead(ident) &"barrier_all_intra_node_atomic_cas_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : commonCallStmt
 scoped syntax lookahead(ident) &"barrier_on_this_grid" "(" tritonExpr "," tritonExpr ")" : commonCallStmt

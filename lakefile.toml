@@ -547,6 +547,7 @@ globs = [
   "tests.lean.dist.UnguardedShared",
   "tests.lean.dist.Location",
   "tests.lean.dist.TritonDistShmem",
+  "tests.lean.dist.TritonDistLanguageExtra",
   "tests.lean.dist.SegmentFootprint",
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
@@ -569,6 +570,15 @@ globs = [
   "tests.lean.dist.Tutorial01",
   "tests.lean.dist.StorePublication",
   "tests.lean.dist.E2ReadsFromDetermined",
+  # Also run directly by the gate; built here so that its compiled axiom audit imports them.
+  "tests.lean.InterpBridgeCensus",
+  "tests.lean.dist.P2PTransferViews",
+  "tests.lean.TileLangSyntax",
+  "tests.lean.TileLangManualAcceptance",
+  "tests.lean.TileLangPinnedRoots",
+  "tests.lean.TileLangPrecedence",
+  "tests.lean.TileLangLower",
+  "tests.lean.TileLangTransfer",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
