@@ -1,6 +1,9 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/03-inter-node-allgather.py:65-78
+# Licence: MIT
+# Changes: rewritten as a minimal example; One thread per peer waits for that peer's signal; the block then synchronizes
 # LIT-b10. One thread per peer waits for that peer's signal; the block then
 # synchronizes.
-# Source: tutorials/03-inter-node-allgather.py:65-78 (TD-T03); TD-API,
+# Context: tutorials/03-inter-node-allgather.py:65-78 (TD-T03); TD-API,
 # __syncthreads. The peers signal with signal_op instead of the tutorial's
 # putmem_signal_block.
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.

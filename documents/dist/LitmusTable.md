@@ -1,9 +1,9 @@
 # Litmus table from documentation examples
 
-Status: delivered for ticket S8.1 (#71) on 2026-11-12, not yet reviewed by the
-user. Nothing here is a proved result, and nothing was executed: every source
-was read as text. The ticket carries the `sign-off` label; section 9 lists the
-rows whose expected outcome is least certain.
+The coordinator accepted the table on 2026-11-26 under the user's B2 decision of
+2026-11-22, as recorded on [S8.1 (#71)](https://github.com/VeriInfra-Lab/VeriTile-2/issues/71).
+Acceptance covers the documented expectations for all 32 rows. Section 9
+records the limits of their evidence. Model and GPU runs belong to later tickets.
 
 A row is a small program, a few lines per agent, taken from an example or a
 normative sentence of documentation, together with the set of outcomes that
@@ -16,9 +16,10 @@ knowledge of weak memory.
 
 Vocabulary: [PrimitiveSources.md](PrimitiveSources.md) for the primitives,
 their patterns, the evidence items `E-…`, the rules W1 to W6, the decisions D1
-to D7, the inferences I1 to I6 and the assumptions A1 and A2;
-[`EventSpec.lean`](../../VeriTile/Staging/Dist/EventSpec.lean) for `Event`,
-`Mode`, `Counter` and the pattern lemmas;
+to D8, the inferences I1 to I11 and the assumptions A1 to A10;
+[`Event.lean`](../../VeriTile/Dist/Event.lean) for `Event`, `Mode` and `Counter`,
+with the pattern (a) lemmas in [`Access.lean`](../../VeriTile/Dist/Event/Access.lean)
+and pattern (b) in [`Counter.lean`](../../VeriTile/Dist/Event/Counter.lean);
 [EventControlFlow.md](EventControlFlow.md) for the kernels K1 to K28.
 
 ## 1. Rules
@@ -36,15 +37,14 @@ carries.
 <https://archive.docs.nvidia.com/nvshmem/api/3.6.5/>, listed by
 <https://docs.nvidia.com/nvshmem/api/versions1.json>. Every NVSHMEM sentence
 quoted in this document was read there on 2026-11-12. `PrimitiveSources.md`
-quotes the same routines from `latest` (3.8.0) and says that the text of 3.6.5
-could not be obtained; section 8 lists where the two differ.
+now compares the frozen 3.6.5 manual with its earlier `latest` (3.8.0) evidence. Section 8 records the original comparison.
 
 **Marks.** Each row has one:
 
 | Mark | Meaning |
 | --- | --- |
 | Q | Decided by the quoted sentences alone |
-| R(x) | Decided only under x, a reading, decision or assumption of `PrimitiveSources.md`. D5 is a reading that the project counts as documented; A1 and A2 are registered assumptions; D1, D3 and D6 are decisions between conflicting or incomplete sources |
+| R(x) | Decided only under x, a reading, decision or assumption of `PrimitiveSources.md`. D5 is a reading that the project counts as documented; A1 to A10 are registered assumptions; D1, D3 and D6 are decisions between conflicting or incomplete sources; D7 limits what the NVSHMEM fence orders, and D8 orders accesses across a participating block barrier |
 | N | Not decided by documentation. The row says what is missing and takes the weakest treatment (W1 to W6) |
 | D2 | The two readings of decision D2 give different outcome sets. Both are given and none is chosen |
 
@@ -69,9 +69,9 @@ on a platform condition (L-CU5): the native-atomic attribute of the
 peer-to-peer link between each accessing GPU and the GPU that holds the
 object. Where a row says "if P-ATOM", its outcome holds when the attribute is
 1 for the two devices; otherwise the operations are not atomic and the row is
-a data race. No document of the project registers this condition (section 8).
+a data race. A8 registers this platform hypothesis; a GPU run must record the attribute.
 
-**Events.** The last field of a row names the constructors of `EventSpec.lean`
+**Events.** The last field of a row names the constructors of [`Event.lean`](../../VeriTile/Dist/Event.lean)
 that the row exercises. The map from primitives to events is fixed by ticket
 S2.6, not here.
 
@@ -281,17 +281,17 @@ Triton-distributed, "TS" is TileScale. "UB" is undefined behaviour.
 | --- | --- | --- | --- | --- |
 | LIT-a01 | Message passing through a flag at device scope | TD | 42 | R(D5) |
 | LIT-a02 | The flag is stored at block scope | TD | UB | R(A1 a) |
-| LIT-a03 | Message passing between two ranks at system scope | TD | 42 if P-ATOM | R(D5) |
+| LIT-a03 | Message passing between two ranks at system scope | TD | 42 if P-ATOM | R(D5, A8) |
 | LIT-a04 | Between two ranks with the flag at device scope | TD | UB | R(D5) |
 | LIT-a05 | Counter of finished tiles | TD | exactly one signal | Q |
-| LIT-a06 | Handshake by compare-and-swap | TD | the peer's value if P-ATOM | R(A1 b) |
-| LIT-a07 | One lane writes a slot and publishes the tail | TS | 42 if P-ATOM | R(A1 c) |
-| LIT-a08 | A warp copies, the block synchronizes, another lane publishes | TS | UB | N |
+| LIT-a06 | Handshake by compare-and-swap | TD | the peer's value if P-ATOM | R(A1 b, A8) |
+| LIT-a07 | One lane writes a slot and publishes the tail | TS | 42 if P-ATOM | R(A1 c, A8) |
+| LIT-a08 | A warp copies, the block synchronizes, another lane publishes | TS | payload under A8 and the scoped chain | R(A1 c, D8, A8) |
 | LIT-a09 | Load with `nc=True` of a word a peer writes | TS | UB | Q |
 | LIT-a10 | Message passing through a relaxed flag and two fences | TS | UB | N |
-| LIT-b01 | Store, notify, wait at system scope | TD | 42 if P-ATOM | R(A2) |
+| LIT-b01 | Store, notify, wait at system scope | TD | 42 if P-ATOM | R(A2, A8) |
 | LIT-b02 | The same with the wait at device scope | TD | UB | R(D5) |
-| LIT-b03 | Stores by all threads, `__syncthreads`, `fence`, notify | TD | UB | N |
+| LIT-b03 | Stores by all threads, `__syncthreads`, `fence`, notify | TD | tile under A8 and the scoped chain | R(D8, D7, A2, A8) |
 | LIT-b04 | Load after a wait whose token is not consumed | TD | UB | Q |
 | LIT-b05 | Two ranks add to a signal, a third waits for the sum | TD | 2 | Q |
 | LIT-b06 | The receiver polls the flag with an ordinary load | TD | UB | Q |
@@ -300,7 +300,7 @@ Triton-distributed, "TS" is TileScale. "UB" is undefined behaviour.
 | LIT-b09 | Host `set_signal` while a kernel waits with `T.wait_eq` | TS | UB | N |
 | LIT-b10 | One thread per peer waits, then `__syncthreads` | TD | all signals seen | Q |
 | LIT-b11 | Store before `T.barrier_blocks`, load by the peer after it | TS | UB | Q |
-| LIT-b12 | Relaxed store, `T.wait_ne`, volatile load | TS | UB | N |
+| LIT-b12 | Relaxed store, `T.wait_ne`, volatile load | TS | UB at `71e7145` (plain volatile load) | N |
 | LIT-b13 | Store before `barrier_all_block`, loads by two other ranks | TD | 42 on the target; third rank by reading | D2 |
 | LIT-c01 | Put-with-signal, wait, read | TD | payload | Q |
 | LIT-c02 | Put, then put-with-signal; the first put is read | TD | UB | Q |
@@ -312,7 +312,7 @@ Triton-distributed, "TS" is TileScale. "UB" is undefined behaviour.
 | LIT-c08 | Put to rank 1, `quiet`, signal to rank 2, which reads rank 1 | TD | by reading | D2 |
 | LIT-c09 | Remote TMA store, store wait, flag | TS | UB | N |
 
-Counts by mark: Q 13, R 10, N 7, D2 2 (one of them, LIT-b13, is Q for the
+Counts by mark: Q 13, R 12, N 5, D2 2 (one of them, LIT-b13, is Q for the
 target rank).
 
 ## 5. Rows
@@ -377,7 +377,7 @@ item that holds the quotation.
   "Synchronization visible across the entire system (multiple GPUs/nodes)".
   L-CU1 for the pattern, L-CU5 for the condition, E-TD5 for the access
   through `dl.symm_at`.
-- **Mark.** R(D5).
+- **Mark.** R(D5, A8).
 - **Events.** `access store plain` to memory of rank 1 by an agent of rank 0;
   `access store (atomic sys release)`; `access load (atomic sys acquire)`,
   repeated; `access load plain`.
@@ -441,10 +441,8 @@ item that holds the quotation.
 - **Decided by.** E-TD8: "Atomic compare-and-swap", with no description of the
   returned value. L-TD5 names the condition P-ATOM in the words of the front
   end. L-CU1 for the pattern.
-- **Mark.** R(A1, clause b); D5 for the strings.
-- **Events.** `access store plain`; `access update (atomic sys release)`,
-  repeated; `access update (atomic sys acquire)`, repeated; `access load
-  plain`. The two loops are of class L-sched.
+- **Mark.** R(A1 b, A8); D5 for the strings.
+- **Events.** `access store plain`; one atomic system-release wait/set cut (0 to 1 on the peer); one atomic system-acquire wait/set cut (1 to 0 locally); `access load plain`. A3 groups each pair in one step. The source loops are L-sched.
 
 #### LIT-a07. One lane writes a slot and publishes the tail
 
@@ -463,7 +461,7 @@ item that holds the quotation.
   semantics; receivers poll heads/tails with acquire/volatile loads to ensure
   visibility across PEs." E-TS13: the strings are listed and not defined.
   L-CU1 for the pattern.
-- **Mark.** R(A1, clause c).
+- **Mark.** R(A1 c, A8).
 - **Events.** `access store plain` to memory of rank 1; `access store (atomic
   sys release)`; `wait` on a `word` with `ge`, mode `atomic sys acquire`;
   `access load plain`.
@@ -480,18 +478,10 @@ item that holds the quotation.
   lane 32 executes `T.wait_ge(tail[0], 1)`; every thread calls
   `T.sync_threads()`; warp 0 copies `buf` to `out`.
 - **Asked.** Whether `out` equals `src`.
-- **Expected.** Not decided. Two orderings are needed that no source states:
-  on rank 0 from the stores of each copying lane to the release store of lane
-  32, and on rank 1 from the wait of lane 32 to the loads of warp 0. The
-  documentation of the barrier is L-TS3: "Synchronize all threads in a
-  block." It states a rendezvous and no memory ordering. Weakest treatment:
-  the copies of rank 1 are not ordered after the copies of rank 0, a data
-  race, undefined behaviour. If a block barrier orders what each thread did
-  before it ahead of what every thread does after it, the outcome under A1,
-  clause c, is `out == src`.
-- **Decided by.** Nothing. L-TS3 and E-TS1 ("They do not call NVSHMEM.") bound
+- **Expected.** At `71e7145`, the instruction guide identifies the whole-block barrier with `__syncthreads`; D8 gives the order among participating lanes. Under A1(c) and A8 the tail release/wait connects the publishing and waiting lanes. With both local barrier legs and that system-scope hand-off, only `out == src` is allowed. S5.2 owes the scoped chain proof. In the DeepEP version 1 port at `9ba8a605`, A5 supplies the order of the block barriers, and A6 and A10 supply the wait defaults and matching call reading.
+- **Decided by.** D8 applies at the front-end pin `71e7145` (`instructions.md:191` and E-CU7). L-TS3 and E-TS1 ("They do not call NVSHMEM.") bound
   what is stated.
-- **Mark.** N.
+- **Mark.** R(A1 c, D8, A8) at `71e7145`.
 - **Events.** `access store plain` by 32 agents; `bump` and `wait` on a
   `phase` counter; `access store (atomic sys release)`; `wait` with `ge`;
   `access load plain`. The event draft gives the barrier the scope `cta` and
@@ -526,7 +516,7 @@ item that holds the quotation.
 - **Expected.** Not decided. In CUDA C++ the example prints 42 (L-CU3),
   because the first fence is a release fence and the second an acquire fence.
   The front end documents the scope of `T.fence_gpu` and no order (L-TS3), and
-  `PrimitiveSources.md` has no row for it. Weakest treatment (W2): the fence
+  its row in `PrimitiveSources.md` §5.5 is weakest (W6). The fence
   orders nothing, the load of `data` races with the store, undefined
   behaviour. If `T.fence_gpu` is read as a fence with both orders, the outcome
   under A1, clause c, is 42. Triton-distributed has no documented fence with
@@ -557,7 +547,7 @@ item that holds the quotation.
   values", `notify` is "Send a signal to a specific rank". E-TD1: `"acquire"`
   "Ensures all previous writes by other threads are visible after the wait".
   E-TD4: the load is "Guaranteed to execute after wait".
-- **Mark.** R(A2). The wait is read by D5. D6 does not matter: the signal
+- **Mark.** R(A2, A8). The wait is read by D5. D6 does not matter: the signal
   takes the values 0 and 1 only.
 - **Events.** `access store plain`; `bump` of a `word` with `set`, mode
   `atomic sys release`; `wait` on the `word`, mode `atomic sys acquire`;
@@ -593,25 +583,18 @@ item that holds the quotation.
   waits at scope `sys` and loads the tile.
 - **Asked.** The value that the consumer reads for an element that a thread
   other than the notifying one stored.
-- **Expected.** Not decided. The element of the notifying thread itself is as
-  in LIT-b01. For the others the documentation of 3.6.5 hands the question to
-  the memory model of the threads (L-NV1), and no source says that
-  `__syncthreads` makes the stores of the other threads visible to the thread
-  that fences and notifies: TD-API has one line, "Block-level synchronization
-  barrier" (E-TD8). Weakest treatment, as decision D7 takes it: no ordering,
-  a data race between the store and the load, undefined behaviour. If the
-  barrier orders the stores of all threads ahead of the notify, the outcome
-  is the tile.
+- **Expected.** D8 orders every participating thread’s earlier stores before the notifying thread’s later actions. With the system-scope wait of this row, A2 and A8 give the signal edge; the tile is required when the CTA-local leg and the system-scope hand-off compose for the payload. S5.2 checks that chain. D7 gives the fence only its caller’s operations. Tutorial 01 itself uses a device-scope wait, whose cross-rank outcome stays LIT-b02.
 - **Decided by.** L-NV1 decides that the fence alone does not cover the other
-  threads. Nothing decides the barrier. The note E-NV22, which speaks of this
+  threads. D8 supplies the intra-block ordering. The note E-NV22, which speaks of this
   pattern, is in `latest` and not in the manual of 3.6.5; it concerns a
   block-scoped put followed by an NVSHMEM signal, not ordinary stores followed
   by `dl.notify`.
-- **Mark.** N.
+- **Mark.** R(D8, D7, A2, A8).
 - **Events.** `access store plain` by each thread; `bump` and `wait` on a
   `phase` counter; `fence` in mode `shmem`; `bump` of a `word`, mode `atomic
-  sys release`; `wait`; `access load plain`. This is the hazard that the head
-  of `EventSpec.lean` leaves to ticket S5.2.
+  sys release`; `wait`; `access load plain`. S5.2 checks the scope of the composed
+  chain using the per-edge coverage condition in
+  [`SyncEdge.covers`](../../VeriTile/Dist/Event/Access.lean).
 
 #### LIT-b04. Load after a wait whose token is not consumed
 
@@ -686,7 +669,7 @@ item that holds the quotation.
   signal fetch and the point-to-point synchronization routines of NVSHMEM.
   No document says that `dl.wait` is one of them (I2).
 - **Mark.** R(D5): under D5 the wait is a sequence of loads of the CUDA C++
-  model, which is not an NVSHMEM routine. D2: the same under both readings.
+  model, which is not an NVSHMEM routine. D2: the same under both readings. The 2026-11-23 decision records original tutorial 07 as unprovable and targets a repaired, single-family write/wait variant. Upstream reporting of the original finding is planned near project end.
 - **Events.** `initiate` and `complete` of a transfer whose completion is a
   `bump` of a `word` in mode `shmem`; `wait` on that `word` in mode `atomic
   gpu acquire`. Lemma `conflict_of_atomic_of_shmem`.
@@ -706,13 +689,16 @@ item that holds the quotation.
   done". Weakest treatment (W2): an ordinary store of the signal word with no
   ordering after the copy. It conflicts with the wait of the kernel, a data
   race, undefined behaviour. This is inference I6.
+  The 2026-11-23 decision and its 2026-11-24 Q6b extension record the original
+  as unprovable; the proof targets a repaired variant with matching host and
+  device signal operations ([PrimitiveSources §10](PrimitiveSources.md#10-still-open)).
 - **Decided by.** Nothing. For comparison, the CUDA C++ model restricts
   concurrent access to an atomic object by CPU and GPU threads (L-CU4); which
   thread performs the write of `set_signal` is not documented.
 - **Mark.** N.
 - **Events.** `bump` of a `word` with `set`, mode `plain`, by a rank agent;
-  `wait` on the `word`, mode `atomic gpu acquire`. This is the example at the
-  end of `EventSpec.lean`.
+  `wait` on the `word`, mode `atomic gpu acquire`. Their conflict follows from
+  [`conflict_of_plain`](../../VeriTile/Dist/Event/Access.lean).
 
 #### LIT-b09. Host `set_signal` while a kernel waits with `T.wait_eq`
 
@@ -750,8 +736,7 @@ item that holds the quotation.
   barrier". L-TD4: "wait for all peers done". E-NV11: the wait "blocks until
   the value contained in the signal data object, sig_addr, at the calling PE
   satisfies the wait condition".
-- **Mark.** Q. The row uses the rendezvous of the barrier only. What the
-  barrier does to memory ordering is the open point of LIT-a08 and LIT-b03.
+- **Mark.** Q. The row uses the rendezvous of the barrier only. Participant memory ordering follows D8 for this Triton barrier and for the TileScale barrier at the LIT-a08 front-end pin `71e7145`.
   D2: the same under both readings.
 - **Events.** `wait` on a `word` with `eq`, mode `shmem`, by several threads;
   `bump` and `wait` on a `phase` counter; `bump` of a `word` with `set`, mode
@@ -791,21 +776,12 @@ item that holds the quotation.
   executes `T.wait_ne(start[0], 0)`, then `T.ld(start[0], v, sem="volatile")`,
   and stores `-v - 1` to `out`.
 - **Asked.** The value of `out`.
-- **Expected.** Not decided. Under A1, clause c, and if P-ATOM the wait itself
-  is defined: the store and the loads of the wait are atomic at system scope,
-  and the wait returns after it has read -8. The second load is not: no
-  document defines `volatile` (E-TS13), so it is an ordinary load (W1), and
-  the relaxed store has no release side, so nothing orders the store before
-  that load. A data race, undefined behaviour. With `release` in the store
-  the acquire of the wait would order the load after the store, and the
-  outcome would be 7.
-- **Decided by.** Nothing for `volatile`. L-TS1 states an intent ("to ensure
-  visibility across PEs") and no definition.
-- **Mark.** N. At `9ba8a605` the waits take no scope or semantics argument and
-  their docstring is one line; the row is stated for the interface of
-  `71e7145`.
-- **Events.** `access store (atomic sys relaxed)`; `wait` on a `word` with
-  `ne`, mode `atomic sys acquire`; `access load plain`.
+- **Expected.** At the front-end pin `71e7145`, E-TS6 gives the wait system scope and acquire order. W1 treats the volatile load as plain. It conflicts with the other rank’s relaxed store, so the result is undefined.
+  In the version 1 port at `9ba8a605`, A6 and A10 give the wait its defaults. Under A7 the unqualified volatile load is GPU/relaxed and still conflicts across ranks, even under A8. The selected `scope="sys"` repair makes it system/relaxed. Under A8 the successful wait has observed -8, there is no later writer, and the output is 7.
+- **Decided by.** E-TS6 specifies the wait defaults. L-TS1 states an intent ("to ensure
+  visibility across PEs") and no definition of volatile.
+- **Mark.** N at `71e7145` (W1).
+- **Events.** `access store (atomic sys relaxed)`, `wait ne (atomic sys acquire)`, `access load plain` in the source file. The port uses `atomic gpu relaxed` for the load as written and `atomic sys relaxed` in the repair.
 
 #### LIT-b13. Store before `barrier_all_block`, loads by two other ranks
 
@@ -1031,7 +1007,7 @@ event of the whole block (decision D4, E-NV16).
 | Hazard | Row | What the documentation allows |
 | --- | --- | --- |
 | A host `set_signal` concurrent with a kernel wait (tutorial 07) | LIT-b08; LIT-b09 for TileScale | Nothing: the host routine is not described. Weakest treatment: undefined behaviour |
-| A `fence` after `__syncthreads`, followed by a notify of one thread (tutorial 01) | LIT-b03; LIT-a08 for the DeepEP port | The fence covers the calling thread only (L-NV1). Whether the barrier adds the other threads is stated by no source of 3.6.5 |
+| A `fence` after `__syncthreads`, followed by a notify of one thread (tutorial 01) | LIT-b03; LIT-a08 for the DeepEP port | The fence covers the calling thread only (L-NV1). D8 orders the participating block threads in both litmus files (TileScale at `71e7145`); the DeepEP port at `9ba8a605` needs A5. Neither extends the fence beyond its caller (D7) |
 | A wait after a non-blocking put without `quiet` (tutorial 04) | LIT-c04; LIT-c05 with the fence of the tutorial | Undefined behaviour without an ordering routine. With the fence the sources disagree; decision D1 takes the weaker one |
 
 Two further rows state a hazard of a tutorial as written that
@@ -1051,7 +1027,7 @@ with `dl.wait` on a word that an NVSHMEM signal writes, I2 with E-NV12).
 | `Event.bump` | `word`, `set`: LIT-a05, LIT-b01 to LIT-b04, LIT-b06, LIT-b08 to LIT-b10, LIT-c04 to LIT-c06, LIT-c08; as the completion of a transfer: LIT-b07, LIT-c01 to LIT-c03. `word`, `add`: LIT-b05 | `add` in mode `atomic` (`dl.notify` with `sig_op="add"`) |
 | `Event.wait` | `eq`: LIT-b09, LIT-b10, LIT-c01 to LIT-c06, LIT-c08, LIT-c09. `ge`: LIT-a07, LIT-a08, LIT-b05. `ne`: LIT-b12. `dl.wait` under D6: LIT-b01 to LIT-b04, LIT-b07, LIT-b08 | `le`, `gt`, `lt`: documented for the TileScale waits (E-TS6) and as NVSHMEM constants; no example and no target kernel uses them |
 | `Event.initiate`, `Event.complete` | `nbi = false`: LIT-b06, LIT-b07, LIT-c01 to LIT-c03. `nbi = true`: LIT-c04 to LIT-c06, LIT-c08. Get: LIT-c07. TileScale: LIT-c09 | A transfer under W5 (`putmem_rma*`): undocumented, no example |
-| `Mode.plain` | most rows; as the deciding mode in LIT-a08 to LIT-a10, LIT-b06, LIT-b08, LIT-b09, LIT-b12 | |
+| `Mode.plain` | most rows; as the deciding mode in LIT-a09, LIT-a10, LIT-b06, LIT-b08, LIT-b09, LIT-b12 | |
 | `Mode.atomic` | scope `cta`: LIT-a02. Scope `gpu`: LIT-a01, LIT-a04, LIT-a05, LIT-a10, LIT-b02, LIT-b07, LIT-b08. Scope `sys`: LIT-a03, LIT-a06 to LIT-a08, LIT-b01 to LIT-b04, LIT-b09, LIT-b12, LIT-c09 | |
 | `Mode.shmem` | LIT-b03, LIT-b05 to LIT-b07, LIT-b10, LIT-b13, every row of pattern (c) but LIT-c09 | `access` in mode `shmem`: the front end binds no NVSHMEM atomic memory operation |
 | `MemOrder` | `relaxed`: LIT-a10, LIT-b12. `acquire`, `release`: most rows | `acqRel`: documented as the default of `tl.atomic_add` (E-TR1); no example uses it |
@@ -1113,28 +1089,28 @@ These are observations. This ticket owns no other file and changes none.
    LIT-b13 and LIT-c08 give both.
 5. **Condition P-ATOM.** L-CU5 makes atomicity at system scope on the memory
    of another GPU depend on an attribute of the platform, and the front end
-   names the same condition (L-TD5). D5, A1 and A2 do not mention it. The rows
-   LIT-a03, LIT-a06, LIT-a07, LIT-b01 and LIT-b12 depend on it. Whether the
+   names the same condition (L-TD5). A8 registers this platform precondition. The rows
+   LIT-a03, LIT-a06, LIT-a07, LIT-a08, LIT-b01 and LIT-b03 use it. The repaired port variant of LIT-b12 also depends on it. Whether the
    two-GPU node has the attribute was not checked.
 6. **`T.fence_gpu` and `T.fence_sys`** have docstrings with a scope and no
-   order (L-TS3) and no row in `PrimitiveSources.md`. Kernels 5 and 21 of the
+   order (L-TS3); their §5.5 rows give W6. Kernels 5 and 21 of the
    TileScale census call `T.fence_sys`.
 
 ## 9. Rows to review first
 
-The expected outcome of these rows is the least certain.
+These rows expose the distinction between registered readings, platform preconditions and remaining open outcomes.
 
 | Row | Why |
 | --- | --- |
-| LIT-b03, LIT-a08 | The outcome turns on whether a block barrier orders the stores of other threads. No source says so; the weakest treatment makes tutorial 01 and the DeepEP sender undefined. The event draft leaves the point to ticket S5.2 |
-| LIT-b07 | It makes the inter-node path of tutorial 07 undefined, because `dl.wait` is read as CUDA atomics (D5) and the signal as an NVSHMEM operation. If `dl.wait` were documented as an NVSHMEM wait the outcome would be the payload |
-| LIT-b12 | It makes the offset handshake of the DeepEP port undefined through the word `volatile`. L-TS1 can be read as documenting what `volatile` is for |
+| LIT-b03, LIT-a08 | D8 gives the local order in both source files; the DeepEP port of LIT-a08 needs A5; D7 limits the NVSHMEM fence. S5.2 checks the scoped chain across the system-scope signal. |
+| LIT-b07 | It makes the inter-node path of tutorial 07 undefined, because `dl.wait` is read as CUDA atomics (D5) and the signal as an NVSHMEM operation. The proof targets a repaired single-family signal/wait pair (2026-11-23) |
+| LIT-b12 | The source file at `71e7145` has a plain volatile load (W1) and UB. In the port at `9ba8a605`, A7 gives the load GPU scope and UB; the system-scope repair gives 7 under A6, A7, A8 and A10 |
 | LIT-c05 | It rests on decision D1 between sources that disagree; the other reading gives the payload |
 | LIT-b13, LIT-c08 | Two outcome sets, by decision D2, which is open |
-| LIT-a03, LIT-a06, LIT-a07, LIT-b01 | Stated "if P-ATOM", a condition that nothing registers yet |
+| LIT-a03, LIT-a06, LIT-a07, LIT-b01 | Stated "if P-ATOM", the platform condition now registered as A8 |
 | LIT-a05 | Marked Q on the docstring of base Triton alone; the scope string of the call is still under A1, clause d |
 | LIT-b10 | Marked Q on a one-line description of `__syncthreads`; only the rendezvous is used |
-| LIT-a09 | Marked Q on a docstring that explains its rule by an instruction; the rule itself is stated at the level of the front end |
+| LIT-a09 | Marked Q because the [pinned `T.ld` docstring](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/comm.py#L78-L85) explicitly forbids using `nc=True` on memory a peer may write during the kernel |
 
 ## 10. Not checked
 

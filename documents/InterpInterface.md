@@ -2,8 +2,10 @@
 
 Status: frozen by ticket I0.1 and signed on 2026-11-11; the fingerprints are in
 `documents/dist/FrozenStatements.tsv`. The bridge statement was signed again on
-2026-11-12 with the carrier `WithBot ℝ` in place of `ℝ` (ticket I4.1). The Lean
-side lives in `VeriTile/Staging/Interp/`; nothing here is a proved result yet.
+2026-11-12 with the carrier `WithBot ℝ` in place of `ℝ` (ticket I4.1). Every
+stub has since moved to `VeriTile/Interp/`, and both signed statements are proved
+there: `interp_eq_structural_exec` in `VeriTile/Interp/Adequacy/Exec.lean` and
+`bridge_exec` in `VeriTile/Interp/Bridge/Exec.lean`.
 
 The interpreter line builds one executable definition of kernel execution and
 connects it to the semantics the theorems are about:
@@ -19,10 +21,10 @@ theorems; their statements are frozen by this ticket.
 
 ## 1. Names and signatures
 
-All names are in the namespace `VeriTile.Interp`. A stub is declared `opaque`
-or with a `sorry` body in `VeriTile/Staging/Interp/Interface.lean`; the ticket
-in the last column replaces it by a definition with the same name and type in
-the main target, and deletes the stub in the same change.
+All names are in the namespace `VeriTile.Interp`. Each name started as a stub,
+`opaque` or with a `sorry` body, in `VeriTile/Staging/Interp/Interface.lean`; the
+ticket in the last column replaced it by a definition with the same name and type in
+the main target and deleted the stub in the same change.
 
 | Name | Type | Meaning | Defined by |
 | --- | --- | --- | --- |
@@ -43,7 +45,7 @@ does. Looping over the program ids of a grid belongs to the runner (I7.2).
 
 ## 2. Frozen statements
 
-Adequacy (`VeriTile/Staging/Interp/Adequacy.lean`, proved by I3.3):
+Adequacy (`VeriTile/Interp/Adequacy/Exec.lean`, proved by I3.3):
 
 ```lean
 theorem interp_eq_structural_exec {α : Type} [Inhabited α]
@@ -82,9 +84,14 @@ I4.3 ships a kernel and a state that satisfy it.
 What the two statements do not say:
 
 - Nothing about a GPU. Agreement with GPU runs is measured, not proved.
-- Nothing about a particular carrier being IEEE-correct. `interp` over Lean
-  `Float` approximates the real semantics; the bit-level carrier is the
-  collaborator's model.
+- Nothing about a particular carrier being IEEE-correct. The binary64 carrier
+  approximates the real semantics using Lean `Float`. With one NaN operand,
+  `max` returns its first operand and `min` its second. For example, `max NaN 1 = NaN`,
+  `max 1 NaN = 1`, `min NaN 1 = 1`, and `min 1 NaN = NaN`.
+  `reduceMax` and `reduceMin` inherit these rules by folding from −∞ and +∞,
+  respectively, with the accumulator as the first operand. This differs from
+  both IEEE 754-2019 `maximum`/`minimum` and `maximumNumber`/`minimumNumber`.
+  The bit-level carrier is the precise model for the operations it supports.
 - Nothing about kernels that use constructs `FP.Structural.exec` rejects; on
   those both sides of the adequacy statement are `none`.
 
@@ -170,9 +177,13 @@ integer output states a sentinel outside the kernel's result range.
 
 - How inputs are generated from a seed: owned by `scripts/interp/gen_inputs.py` (I8.1), which must produce identical bytes on every machine.
 - The directory layout of requests and results: `documents/GpuExchangeProtocol.md`.
-- The export format of the symbolic carrier (I6.3).
 
 ## 4. Expression tree format, version 1
+
+This section specifies the export format and is outside the statement fingerprints.
+A version 1 reader rejects any other version with a diagnostic. Adding a node kind
+or reordering metadata fields requires a new version. Trees have no sharing:
+each occurrence of a subtree is written in full.
 
 `VeriTile.Interp.Symbolic.writeTrees` writes one UTF-8 JSON object with an integer
 `version` of 1 and an `outputs` array. Each entry is one output element in caller
@@ -224,8 +235,39 @@ reduceMax symbols outside the carrier's lane format.
 Run `PYTHONPATH=scripts python3 -m interp.symeval trees.json` for the reference.
 Optional `--float float.tensor` and `--gpu gpu.tensor` report absolute distance
 for each output. Both tensors must have the same number of elements as the
-export. Rational operations use Fraction. The GPU protocol, section 9, pins
-neither SymPy nor mpmath. The standard-library reference uses Decimal with
-50 significant digits for exp, log and related operations, and binary64 libm
-for sin, cos, tan, atan and erf. Values and distances are printed as strings
-to preserve rational fractions and decimal precision.
+export. Values and distances are printed as strings to preserve fractions and
+decimal precision.
+
+The reference evaluator uses exact rational arithmetic (`Fraction`), including
+integer powers of rational inputs. For exp, log, sqrt and non-integer pow, it
+uses 50 significant decimal digits. The precision contract calls for correct
+rounding at each step and does not track cancellation across steps. Python's
+C Decimal backend computes non-integer powers using correctly rounded exp and
+log, and documents that the final power is almost always correctly rounded.
+`sin`, `cos`, `tan`, `atan` and `erf` use binary64 and the platform libm, with
+typical relative error around `1e-16`. The current comparisons target fp32.
+The GPU protocol, section 9, pins neither SymPy nor mpmath.
+[Precision decision on #126](https://github.com/VeriInfra-Lab/VeriTile-2/issues/126#issuecomment-7121320412),
+[Python Decimal power](https://docs.python.org/3/library/decimal.html#decimal.Context.power)
+(accessed 2026-11-24).
+
+## NumPy runner
+
+`Carrier.exportPython` emits a module whose `run` entry point evaluates the typed
+kernel through the NumPy carrier. The runner rounds floating literals, arithmetic
+results and casts to the operation's declared dtype. For FP8 it uses
+non-saturating round-to-nearest-even overflow.
+
+| Format | Largest finite magnitude | First overflowing positive integer | Overflow result |
+| --- | ---: | ---: | --- |
+| E4M3FN (`f8e4`) | 448 | 465 (464 rounds to 448) | NaN |
+| E5M2 (`f8e5`) | 57,344 | 61,440 (61,439 rounds to 57,344) | Infinity with the sign of the exact result |
+
+The bounds apply symmetrically to negative values. The public runner tests
+exercise both signs for rational literals, addition of representable operands and FP32-to-FP8 casts.
+Lean's bit-level `FPValue` reference covers FP32 and BF16. FP8 overflow agreement
+with the project's GPU remains unverified. On the project's H800, the pinned
+Triton implementation selects finite saturation for default FP32-to-FP8 casts,
+including the numeric conversion performed by a store. The CPU runner retains
+its current behavior pending a GPU comparison.
+[Pinned conversion evidence](https://github.com/VeriInfra-Lab/VeriTile-2/issues/579#issuecomment-7169215868).

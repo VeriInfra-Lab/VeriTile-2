@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Check the elaborated registrations imported from the fork target directories.
+
+Labels from §7 and the census are pooled across entries. Membership does not
+establish that a label belongs to a particular assumption's §7 row.
+"""
+from collections import Counter
+import csv
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+from check_fork_target import ROOT, TARGETS, sources
+
+
+REGISTRY = '''
+open Lean Meta Elab Command VeriTile.Dist
+open private trustAssumptionRegistry from VeriTile.Dist.Meta.PrintTrustAssumptions
+
+-- Read the actual registry, including persistent attribute registrations. Open
+-- metadata parameters symbolically so inspecting a label needs no sample input.
+run_cmd do
+  let builtins := TrustAssumptions.builtinTrustAssumptionDeclarations.map Prod.fst
+  let attributed := (trustAssumptionRegistry.getState (← getEnv)).map (·.declaration)
+  IO.println ("EXPECTED-REGISTRATIONS " ++ (toJson ((builtins ++ attributed).map Name.toString)).compress)
+  let entries ← liftCoreM registeredTrustAssumptions
+  for entry in entries do
+    let labels ← liftTermElabM <| withTransparency .all do
+      let metadata ← mkConstWithFreshMVarLevels entry.metadata
+      forallTelescopeReducing (← inferType metadata) fun args _ => do
+        let mut xs ← mkAppM ``TrustAssumption.affectedKernels #[mkAppN metadata args]
+        let mut labels : Array String := #[]
+        repeat
+          let list ← whnf xs
+          if list.isAppOf ``List.nil then break
+          unless list.isAppOfArity ``List.cons 3 do
+            throwError "{entry.name}: cannot enumerate affectedKernels: {list}"
+          let fields := list.getAppArgs
+          let value ← whnf fields[1]!
+          let label ← match getStringValue? value with
+            | some literal => pure literal
+            | none => do
+              if value.hasFVar then throwError "{entry.name}: parameter-dependent kernel label"
+              let label ← evalExpr String (mkConst ``String) value
+              unless ← isDefEq value (toExpr label) do
+                throwError "{entry.name}: could not confirm computed kernel label"
+              pure label
+          labels := labels.push label
+          xs := fields[2]!
+        return labels
+    IO.println ("KERNEL-LABELS " ++ (Json.arr #[toJson entry.declaration.toString, toJson entry.name.toString, toJson labels]).compress)
+'''
+
+
+def documented_labels():
+    sources = (ROOT / "documents/dist/PrimitiveSources.md").read_text()
+    section = sources.split("\n## 7. Named assumptions\n", 1)[1].split("\n## ", 1)[0]
+    labels = set()
+    for row in section.splitlines():
+        if not row.startswith("| Affected kernels |"):
+            continue
+        labels.update(re.findall(r"\bK\d+\b", row))
+        for first, last in re.findall(r"\bK(\d+) to K(\d+)\b", row):
+            labels.update(f"K{i}" for i in range(int(first), int(last) + 1))
+        for number, name in re.findall(r"\b(D\d+) `(\w+)`", row):
+            labels.update((f"{number} {name}", name))
+        if "K-M" in row:
+            labels.update(f"K-M {n}" for n in re.findall(r"\[(D\d+) ", row))
+        # Some files occur only in §7, including the specialized TileScale
+        # examples. Preserve the front end attached to that part of the prose.
+        prose = re.sub(r"\]\([^)]*\)", "]", row)
+        parts = re.split(r"\b(Triton-distributed|TileScale)\b", prose)
+        for frontend, clause in zip(parts[1::2], parts[2::2]):
+            for name in re.findall(r"`(?:[\w./-]+/)?([\w.-]+\.py)`", clause):
+                labels.update((f"{frontend} {name}", name))
+
+    with (ROOT / "scripts/census/targets.tsv").open() as targets:
+        for _, frontend, _, _, path, _ in csv.reader(
+                (line for line in targets if line.strip() and not line.startswith("#")), delimiter="\t"):
+            if not path:
+                continue
+            name = Path(path).name
+            labels.update((path, name, f"{frontend} {name}"))
+            tutorial = re.fullmatch(r"tutorials/(\d+)-[\w-]+\.py", path)
+            if tutorial:
+                labels.add(f"{frontend} tutorial {tutorial[1]}")
+
+    census = (ROOT / "documents/census/MinimalSyntax.md").read_text()
+    for match in re.finditer(r"^### ([^\n:]+): kernels\n([\s\S]*?)(?=^###? |\Z)", census, re.M):
+        for line in match[2].splitlines():
+            if re.match(r"^\| \d+ \|", line):
+                _, _, _, _, path, name, _, _ = (cell.strip().strip("`") for cell in line.split("|"))
+                labels.update((name, f"{match[1]} {name}", f"{match[1]} {Path(path).name}"))
+    return labels
+
+
+def check_registry(source):
+    known = documented_labels()
+    probe = "import Batteries.Tactic.OpenPrivate\n" + source + "\n" + REGISTRY
+    process = subprocess.run(["lake", "env", "lean", "--stdin"], input=probe,
+                             cwd=ROOT, capture_output=True, text=True)
+    if process.returncode:
+        sys.stderr.write(process.stdout + process.stderr)
+        return process.returncode
+    entries = [json.loads(line.removeprefix("KERNEL-LABELS ")) for line in process.stdout.splitlines()
+               if line.startswith("KERNEL-LABELS ")]
+    expected, = [json.loads(line.removeprefix("EXPECTED-REGISTRATIONS "))
+                 for line in process.stdout.splitlines() if line.startswith("EXPECTED-REGISTRATIONS ")]
+    wanted = Counter(expected)
+    seen = Counter(declaration for declaration, _, _ in entries)
+    if seen != wanted:
+        for declaration in sorted((wanted - seen).elements()):
+            print(f"missing trust registration: {declaration}", file=sys.stderr)
+        for declaration in sorted((seen - wanted).elements()):
+            print(f"unexpected trust registration: {declaration}", file=sys.stderr)
+        return 1
+    if not entries:
+        raise ValueError("no trust registrations returned")
+    missing = [(entry, label) for _, entry, labels in entries for label in labels if label not in known]
+    for entry, label in missing:
+        print(f"{entry}: unknown affected kernel {label!r}", file=sys.stderr)
+    if missing:
+        return 1
+    print(f"Checked {sum(len(labels) for _, _, labels in entries)} kernel labels in {len(entries)} trust registrations.")
+    return 0
+
+
+def main():
+    # Lake's fork libraries include submodules independently of root imports.
+    paths = [p for directory in TARGETS.values() for p in sources(directory)]
+    imports = ["import " + ".".join(p.relative_to(ROOT).with_suffix("").parts) for p in paths]
+    return check_registry("\n".join(imports))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

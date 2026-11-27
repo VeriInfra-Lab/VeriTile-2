@@ -1,6 +1,9 @@
+# Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/01-distributed-notify-wait.py:100-116
+# Licence: MIT
+# Changes: rewritten as a minimal example; The threads of a block store a tile to the peer, synchronize, fence, and one notify follows
 # LIT-b03. The threads of a block store a tile to the peer, synchronize,
 # fence, and one notify follows.
-# Source: tutorials/01-distributed-notify-wait.py:100-116 (TD-T01), with the
+# Context: tutorials/01-distributed-notify-wait.py:100-116 (TD-T01), with the
 # wait at system scope so that row LIT-b02 does not apply.
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
 # A source for later tickets: not run here, and nothing imports it.

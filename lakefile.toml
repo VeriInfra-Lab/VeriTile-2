@@ -148,6 +148,8 @@ globs = [
   "bench.examples.StableLogSumExp.+",
   "bench.examples.VectorAdd.+",
   "bench.examples.Welford.+",
+  "tests.interp.TensorExamples",
+  "tests.interp.HyperConnections",
 ]
 
 # Full target: Lite + Math + ApproxGeLU. Build this when working on the
@@ -508,15 +510,65 @@ globs = [
   "tests.lean.WelfordSourceContexts",
   "tests.lean.InterpReflectSmoke",
   "tests.lean.InterpEvalSmoke",
+  "tests.lean.InterpFloatCarrier",
   "tests.lean.InterpSymbolic",
   "tests.lean.InterpArraySmoke",
   "tests.lean.InterpBridgeInvariant",
+  "tests.lean.InterpAdequacyNeg",
+  "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
+  "tests.lean.dist.AtomicSetRuns",
+  "tests.lean.dist.CountingNegatives",
+  "tests.lean.dist.CountingPattern",
+  "tests.lean.dist.CountingLaunch",
+  "tests.lean.dist.CountingRuns",
+  "tests.lean.dist.CountingWitness",
+  "tests.lean.dist.JudgmentVariants",
   "tests.lean.dist.TritonExtConstexpr",
   "tests.lean.dist.TritonExtProfiler",
   "tests.lean.InterpReflectBench",
+  "tests.lean.dist.TritonExtParsing",
+  "tests.lean.dist.IndexQueueCells",
+  "tests.lean.dist.IndexQueueCellValues",
+  "tests.lean.dist.IndexQueueDispatchLoad",
+  "tests.lean.dist.IndexQueueSlotRace",
+  "tests.lean.dist.IndexQueueCellsClient",
+  "tests.lean.dist.IndexQueueWarpOrder",
+  "tests.lean.dist.IndexQueueSenderElection",
   "tests.lean.dist.TensorDescriptorSource",
   "tests.lean.dist.SourceHelperSyntax",
+  "tests.lean.InterpFloatCensus",
+  "tests.lean.dist.TritonDistSyntax",
+  "tests.lean.dist.StateViews",
+  "tests.lean.dist.SourceHelpers",
+  "tests.lean.dist.ProcedureHelpers",
+  "tests.lean.dist.ElementHelper",
+  "tests.lean.dist.PointerCasts",
+  "tests.lean.dist.UnguardedShared",
+  "tests.lean.dist.Location",
+  "tests.lean.dist.TritonDistShmem",
+  "tests.lean.dist.SegmentFootprint",
+  "tests.lean.dist.TrustAssumptions",
+  "tests.lean.dist.TrustAssumptionCollision",
+  "tests.lean.dist.TrustAssumptionDuplicateImports",
+  "tests.lean.dist.TrustAssumptionImports",
+  "tests.lean.dist.CountMonotoneVacuous",
+  "tests.lean.dist.NonWordObservation",
+  "tests.lean.dist.FetchAddObservation",
+  "tests.lean.dist.WordCounterCheck",
+  "tests.lean.dist.DeepEPChannel",
+  "tests.lean.dist.IndexQueueSingleSlotModel",
+  "tests.lean.dist.IndexQueueSingleSlotRuns",
+  "tests.lean.dist.IndexQueueSingleSlotShape",
+  "tests.lean.dist.IndexQueueSound",
+  "tests.lean.dist.IndexQueueHiddenWrite",
+  "tests.lean.dist.IndexQueueSingleSlotRefines",
+  "tests.lean.dist.IndexQueueSingleSlotNegative",
+  "tests.lean.dist.IndexQueueSingleSlotWitness",
+  "tests.lean.dist.IndexQueueSingleSlot",
+  "tests.lean.dist.Tutorial01",
+  "tests.lean.dist.StorePublication",
+  "tests.lean.dist.E2ReadsFromDetermined",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
@@ -543,3 +595,7 @@ globs = ["VeriTile.Equiv", "VeriTile.Equiv.+"]
 [[lean_lib]]
 name = "VeriTileStaging"
 globs = ["VeriTile.Staging.+"]
+
+[[lean_exe]]
+name = "veritile-run"
+root = "tests.interp.Main"

@@ -1,3 +1,6 @@
+-- Source: triton-lang/triton@f797708c0626e5f9840ca5b0a98790e2c7cb09ad python/triton/language/random.py:12-70,88-114,126-143
+-- Licence: MIT
+-- Changes: transcribed to Lean; express the Triton 32-bit counter round, key update and uniform conversion with BitVec and formal FP arithmetic
 import VeriTile.Triton.Float.ScalarOps
 
 /-!

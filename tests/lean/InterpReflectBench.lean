@@ -38,7 +38,7 @@ reflect_kernel FloatDTypeAdd.Kernels.optimizedKernel
 reflect_kernel FloatDTypeSoftmax.Kernels.floatStableSoftmaxKernel
 reflect_kernel FloatDTypeSoftmax.Kernels.floatSoftmaxRecipKernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel FloatDTypeSoftmax.Kernels.commonPrefix
 reflect_kernel FloatDTypeSoftmax.Kernels.originalKernel
 reflect_kernel FloatDTypeSoftmax.Kernels.reciprocalKernel
@@ -49,22 +49,21 @@ reflect_kernel FusedSiLU.Kernels.siluStepGateKernel
 reflect_kernel FusedSiLU.Kernels.siluStepSiluKernel
 reflect_kernel FusedSiLU.Kernels.siluStepResidualKernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel FusedSiLU.Kernels.unfusedSiLUKernel
 reflect_kernel FusedSwiglu.Kernels.swiglu_fused_kernel
 reflect_kernel FusedSwiglu.Kernels.silu_step_kernel
 reflect_kernel FusedSwiglu.Kernels.mul_step_kernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel FusedSwiglu.Kernels.swiglu_unfused
 reflect_kernel HyperConnectionsDepth.Kernels.matrixKernel
 reflect_kernel HyperConnectionsDepth.Kernels.scalarKernel
 reflect_kernel HyperConnectionsDepth.Kernels.optimizedKernel
 reflect_kernel HyperConnectionsDepth.Kernels.matrixOptimizedKernel
-/-- error: (kernel) declaration type mismatch, 'VeriTile.Bench.Examples.HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel.toReal_mirror' -/
-#guard_msgs (substring := true) in
-run_cmd Lean.withoutModifyingEnv do
-  Lean.Elab.Command.elabCommand (← `(reflect_kernel HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel))
+/-- error: reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsDepth.Kernels:123: match S,T,D,numIters with -/
+#guard_msgs in
+reflect_kernel HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel
 reflect_kernel HyperConnectionsDepth.Kernels.originalKernel
 reflect_kernel HyperConnectionsDepth.Kernels.matrixOriginal
 reflect_kernel HyperConnectionsWidth.Kernels.matrixKernel
@@ -73,10 +72,9 @@ reflect_kernel HyperConnectionsWidth.Kernels.middleKernel
 reflect_kernel HyperConnectionsWidth.Kernels.optimizedKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixMiddleKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixOptimizedKernel
-/-- error: (kernel) declaration type mismatch, 'VeriTile.Bench.Examples.HyperConnectionsWidth.Kernels.mhcWidthConnectionKernel.toReal_mirror' -/
-#guard_msgs (substring := true) in
-run_cmd Lean.withoutModifyingEnv do
-  Lean.Elab.Command.elabCommand (← `(reflect_kernel HyperConnectionsWidth.Kernels.mhcWidthConnectionKernel))
+/-- error: reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsWidth.Kernels:218: match S,T,D,numIters with -/
+#guard_msgs in
+reflect_kernel HyperConnectionsWidth.Kernels.mhcWidthConnectionKernel
 reflect_kernel HyperConnectionsWidth.Kernels.originalKernel
 reflect_kernel HyperConnectionsWidth.Kernels.matrixOriginal
 reflect_kernel LogExp.originalKernel
@@ -90,7 +88,7 @@ reflect_kernel RowWiseSum.Kernels.reversedKernel
 reflect_kernel SoftmaxReciprocal.Kernels.stableSoftmaxKernel
 reflect_kernel SoftmaxReciprocal.Kernels.softmaxRecipKernel
 /-- error: reflect_kernel: unsupported constructor VeriTile.Triton.ComputeKernel.rec -/
-#guard_msgs (substring := true) in
+#guard_msgs (error, substring := true) in
 reflect_kernel SoftmaxReciprocal.Kernels.commonPrefix
 reflect_kernel SoftmaxReciprocal.Kernels.originalKernel
 reflect_kernel SoftmaxReciprocal.Kernels.reciprocalKernel
@@ -107,6 +105,13 @@ reflect_kernel Welford.Kernels.onlineWelfordKernel
 namespace VeriTile.Tests.InterpReflectBench
 open VeriTile Triton Interp
 open VeriTile.Triton.FP
+
+private def partialDepth (S : Nat) (tau : ℝ) : ComputeKernel :=
+  HyperConnectionsDepth.Kernels.mhcDepthConnectionKernel "res_mix" "branch_out" "h_post" "out" S 1 1 0 tau
+
+/-- error: reflect_kernel: symbolic dimension dispatch at bench.examples.HyperConnectionsDepth.Kernels:122: match S, 1, 1, 0 with -/
+#guard_msgs in
+reflect_kernel partialDepth
 
 -- Binary64 arithmetic for these small fixtures. An unused mandatory operation
 -- produces NaN so an unexpected dependency fails the output checks.
@@ -155,7 +160,7 @@ private def outputs (k : QKernel) (inputs : List (RegionName × Float)) (ports :
 end VeriTile.Tests.InterpReflectBench
 
 open Lean in
-#eval show CoreM Unit from do
+#eval show Elab.Command.CommandElabM Unit from do
   let env ← getEnv
   -- Read the declarations of the imported example files, independently of the reflection list.
   let mut rows := #[]
@@ -171,16 +176,20 @@ open Lean in
       let reason ← if env.contains (info.name ++ `toReal_mirror) then do
         reflected := reflected + 1
         pure "Reflected"
-      else match name with
-        | "commonPrefix" => pure "Prefix extraction projects the kernel body via `ComputeKernel.rec`."
-        | "unfusedSiLUKernel" | "swiglu_unfused" =>
-          pure "Sequential composition projects component bodies via `ComputeKernel.rec`."
-        | "mhcDepthConnectionKernel" | "mhcWidthConnectionKernel" =>
-          pure "Matching symbolic dimensions leaves the branch unknown in the `toReal` equation."
-        | _ => throwError "unaccounted kernel {info.name}"
+      else
+        let id := mkIdent info.name
+        let saved ← get
+        let messages ← try
+          modify fun st => { st with messages := {} }
+          Elab.Command.elabCommand (← `(command| reflect_kernel $id:ident))
+          pure (← get).messages.toList
+        finally set saved
+        let [err] := messages.filter (·.severity == .error)
+          | throwError "expected one rejection for {info.name}"
+        err.data.toString
       let file := s!"bench/examples/{exampleDir}/Kernels.lean"
       let some ranges ← findDeclarationRanges? info.name | throwError "missing source range {info.name}"
       let line := ranges.selectionRange.pos.line
-      rows := rows.push s!"| [{exampleDir}](../{file}#L{line}) | `{name}` | {reason} |"
-  for row in rows.qsort (· < ·) do IO.println row
+      rows := rows.push ((exampleDir, line), s!"| [{exampleDir}](../{file}#L{line}) | `{name}` | {reason} |")
+  for (_, row) in rows.qsort (fun a b => a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2 < b.1.2)) do IO.println row
   IO.println s!"{reflected} of {rows.size} kernels reflected."

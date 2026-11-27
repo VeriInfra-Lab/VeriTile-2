@@ -1,9 +1,10 @@
 """Repository documentation checks must distinguish prose links from examples."""
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 
-from check_docs import check_links, links
+from check_docs import DERIVED_SOURCES, ROOT, check_attribution, check_links, links
 
 
 class DocumentationLinks(unittest.TestCase):
@@ -40,6 +41,57 @@ class DocumentationLinks(unittest.TestCase):
             self.assertEqual(len(errors), 2)
             self.assertIn('README.md:1:', errors[0])
             self.assertIn('README.md:2:', errors[1])
+
+
+class Attribution(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.notices = self.root / 'THIRD_PARTY_NOTICES.md'
+        shutil.copyfile(ROOT / self.notices.name, self.notices)
+        for directory, patterns in DERIVED_SOURCES.items():
+            for pattern in patterns:
+                for source in (ROOT / directory).glob(pattern):
+                    dest = self.root / source.relative_to(ROOT)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, dest)
+                    sidecar = source.with_name(source.name + '.attribution')
+                    if sidecar.is_file():
+                        shutil.copyfile(sidecar, dest.with_name(sidecar.name))
+        self.file = self.root / 'tests/dist_litmus/a01_message_passing_device.py'
+        self.assertEqual(check_attribution(self.root), [])
+
+    def test_header_mutations(self):
+        text = self.file.read_text()
+        for old, new, diagnostic in [
+            ('Apache-2.0 WITH LLVM-exception', 'MIT', 'expected Licence:'),
+            ('5d63af4077b8ae9c569d55428cb2cdc8ebbc31a5', '0' * 40, 'pin or path'),
+            ('memory_model.rst', 'no_such_source.rst', 'pin or path'),
+        ]:
+            with self.subTest(mutation=new):
+                self.assertIn(old, text)
+                self.file.write_text(text.replace(old, new))
+                self.assertIn(diagnostic, '\n'.join(check_attribution(self.root)))
+
+    def test_file_in_wrong_licence_subsection(self):
+        text = self.notices.read_text()
+        self.notices.write_text(text.replace('### Sources under `Apache-2.0 WITH LLVM-exception`',
+                                             '### Sources under `MIT`'))
+        self.assertIn('expected Licence: MIT from NVIDIA CCCL', '\n'.join(check_attribution(self.root)))
+
+    def test_frozen_fixture_requires_adjacent_notice(self):
+        path = self.root / 'scripts/fixtures/source_materializations/seeded_dropout.py.txt.attribution'
+        path.unlink()
+        self.assertIn('missing attribution sidecar', '\n'.join(check_attribution(self.root)))
+
+    def test_missing_and_duplicate_notice(self):
+        text = self.notices.read_text()
+        row = next(line for line in text.splitlines() if line.startswith('| `a01`'))
+        self.notices.write_text(text.replace(row, row.replace('`a01`, ', '')))
+        self.assertIn('a01 missing from notices', '\n'.join(check_attribution(self.root)))
+        self.notices.write_text(text.replace(row, row + '\n' + row))
+        self.assertIn('a01: appears more than once', '\n'.join(check_attribution(self.root)))
 
 
 if __name__ == '__main__':

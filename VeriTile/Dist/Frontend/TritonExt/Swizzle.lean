@@ -1,3 +1,6 @@
+-- Source: triton-lang/triton@0add68262ab0a2e33b84524346cb27cbb2787356 python/triton/language/standard.py:77-114
+-- Licence: MIT
+-- Changes: transcribed to Lean; expand the grouped coordinate calculation with fresh integer registers
 import VeriTile.Triton.DSL.SourceProcedures
 import VeriTile.Triton.DSL.PythonFullConstructors
 
@@ -11,21 +14,24 @@ The coordinate correspondence has domain M > 0, N > 0, G > 0,
 0 <= i < M and 0 <= j < N. Machine-integer source correspondence additionally
 requires representable intermediate products. Runtime dimensions are retained.
 Known nonpositive literal dimensions are rejected; runtime validity remains a
-kernel precondition. The final group uses min(M - firstRow, G) rows.
+kernel precondition. The final group uses min(M - firstRow, G) rows. Directly
+written integer literals are cast to `tl.int64` to keep integer arithmetic
+when they are captured. This can differ from Triton's inferred literal dtype.
+Both original call sites pass expressions or names in place of literals.
+The bare block, call-signature and source-procedure entry points support the
+tuple assignment. The `triton_function` body does not support it.
 
 Sources (accessed 2026-11-16):
 * Triton v3.5.1, python/triton/language/standard.py:77-114 (docstring and
   implementation correspondence):
   https://github.com/triton-lang/triton/blob/v3.5.1/python/triton/language/standard.py#L77-L114
-* Front-end documentation defines row-major to column-major order per group:
-  https://triton-lang.org/main/python-api/generated/triton.language.swizzle2d.html
 * Triton-distributed at 7908e4ea9010bb2238f9f05b28c904fd4b71c60a,
   python/triton_dist/kernels/nvidia/ep_all2all_fused.py:651,793:
   https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/ep_all2all_fused.py#L651
   Direct targets start at 599 and 750. Targets at 839, 1020 and 1288 reach
   them through calls at 981; 1095/1183; 1386/1468/1509/1585, respectively.
-  This adapter covers the two call patterns, not the other constructs of the
-  five complete kernels.
+  All five targets were retired in #483. The listed sites are the archived
+  callers represented by the two regression patterns.
 -/
 namespace VeriTile.Dist.Frontend.TritonExt.Swizzle
 open Lean Elab Term

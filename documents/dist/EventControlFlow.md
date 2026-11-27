@@ -20,7 +20,7 @@ Each claim carries one of three marks, as in `DeepEPInventory.md`:
 - **U** (unchecked): not established. Section 9 lists every such item.
 
 Vocabulary: `PrimitiveSources.md` for the primitives, their patterns (a, b, c)
-and the rules W1 to W6, A1, A2, D4 to D7; `VeriTile/Dist/Agent.lean` for the
+and the rules W1 to W6, assumptions A1 to A10 and decisions D4 to D8; `VeriTile/Dist/Agent.lean` for the
 agents (rank, CTA, group, thread).
 
 ## 1. Summary
@@ -42,12 +42,10 @@ arguments (scalars, grid, tensor shapes).
 | --- | --- | --- |
 | No event; the body is one segment | 9 | K5 `ceil_div`, K7 `calc_gather_index._kernel`, K8 `_quant_kernel`, K9 `_dequant_kernel`, K10 `kernel_ring_reduce`, K13 `kernel_ring_reduce_tma`, K14 `kernel_ring_reduce_non_tma`, K21 `add_continuous_kernel`, K22 `get_dispatch_layout_main` |
 | Events; a flat list per CTA exists | 8 | K1 `producer_consumer_kernel`, K2 `nvshmem_device_producer_all_gather_2d_put_block_kernel`, K6 `all_to_all_kernel`, K12 and K20 `kernel_inter_node_p2p_for_same_local_rank` (two copies), K17 `kernel_consumer_gemm_persistent`, K18 `nvshmem_device_producer_p2p_put_block_kernel`, K24 `cached_notify_dispatch_main` |
-| Events; a flat list exists per thread, and per CTA only after an order is fixed among events that the source gives to different threads | 4 | K3 `all_gather_push_1d_kernel`, K4 `all_gather_push_2d_kernel`, K23 `notify_dispatch_main`, K27 `cached_notify_combine_main` |
-| No flat list fixed before execution (section 1.2) | 7 | K11, K15, K16, K19, K25, K26, K28 |
+| Events; a flat list exists per thread, and per CTA only after an order is fixed among events that the source gives to different threads | 7 | K11, K15 and K16 under A3; K3 `all_gather_push_1d_kernel`, K4 `all_gather_push_2d_kernel`, K23 `notify_dispatch_main`, K27 `cached_notify_combine_main` |
+| No flat list fixed before execution (section 1.2) | 4 | K19, K25, K26, K28 |
 
-So 17 rows are covered with the CTA as the only agent, 4 more are covered if
-either the owner is a thread or an order among thread events is chosen, and 7
-are not covered.
+So 17 rows are covered with the CTA as the only agent, 7 more have fixed per-thread cuts once the A3 empty-spin rule is applied, and 4 still require data- or schedule-dependent continuation. A thread list does not fix an order between sibling threads.
 
 Three qualifications:
 
@@ -63,7 +61,7 @@ Three qualifications:
   sizes and destination addresses are loaded from memory (`T04:148-150`,
   `T04:178`, `T04:233-258`): the list of events is fixed, the evaluated
   arguments of the events are not (section 1.4).
-- **In the group of 4**, the events that different threads own are: waits on
+- **In the four direct thread-ownership examples**, the events that different threads own are: waits on
   distinct words in K3 and K4 (a wait writes no memory, I); plain stores to
   distinct peers in K23 (thread `tx` stores on rank `tx`, `DD:65-68`); plain
   loads of local memory in K27.
@@ -73,7 +71,7 @@ Three qualifications:
 | Why | Rows | Kernels | Where |
 | --- | --- | --- | --- |
 | A branch on a value that an atomic update returns, on a word the other CTAs of the kernel write. The event under it is fired or not; no loop | 1 | K19 `kernel_gemm_rs_producer_persistent` | `T08:274-284` |
-| A spin loop with an empty body: the number of rounds depends on the schedule, and a failing round does nothing but read the word again | 3 | K11 `barrier_all_intra_node_atomic_cas_block`, K15 `barrier_all_intra_node_non_atomic_block`, K16 its helper | `CO:162-167`, `CO:178-179` |
+| An empty-body source spin depends on the schedule; A3 represents it as one blocking cut, removing this reason for a variable model list | 3 | K11 `barrier_all_intra_node_atomic_cas_block`, K15 `barrier_all_intra_node_non_atomic_block`, K16 its helper | `CO:162-167`, `CO:178-179` |
 | A loop with events and copies in its body whose number of rounds depends on input data (senders) and on the schedule (receivers) | 3 | K25 `dispatch_main`, K26 `cached_dispatch_main`, K28 `combine_main` | `DD:332-418`, `DD:451-514`, `DD:601-660`, `DD:693-743`, `DC:171-224`, `DC:242-265`, `DC:276-345` |
 
 Facts behind the three lines:
@@ -90,7 +88,7 @@ Facts behind the three lines:
   pass` (`CO:177-179`). Each failing round is one more atomic access. Read as
   one blocking event (wait until the word holds the expected value, and for
   `atomic_cas` swap it in the same step), each thread has a fixed list of
-  three events (I). The same spin form occurs inside K25, K26 and K28
+  three source cuts per participating thread for K11 or K16 under A3 (six for K15, which calls K16 twice). The CAS wait and successful set fire together. Different, nonempty spin bodies occur in K25, K26 and K28
   (`DD:452-458`, `DD:694-700`, `DC:284-287`).
 - **K25, K26, K28, senders.** The number of rounds of the sender loop is a
   function of input data alone: the column of `is_token_in_rank` for the
@@ -143,8 +141,8 @@ Facts that bear on the owner of a segment:
   (`DD:410`, `DD:461`, `DD:509`, `DC:216`). The groups of one CTA are
   therefore not at the same program point (I).
 - That the two-argument `T.sync_threads(id, count)` is a barrier of the
-  `count` threads that pass the same `id` is an inference from the arguments
-  and from the comment "here all warps should share the same new tail"
+  `count` threads that pass the same `id` is registered as the rendezvous A4; A5(b) orders participant accesses. The original inference used the arguments
+  and the comment "here all warps should share the same new tail"
   (`DD:409`). The docstring at the pin says "Synchronize all threads in a
   block" for every form (`TB:702-703`); section 8, item 1.
 
@@ -173,14 +171,14 @@ events).
 
 | Constructor or parameter | Used by | Not used in the two sets |
 | --- | --- | --- |
-| `access` | K11, K15, K16 (`atomic_cas`, `ld`, `st`), K19 (`tl.atomic_add`), K23, K25 to K28 (`T.st`, `T.ld`, `T.put_warp`) | |
+| `access` | K15/K16 (the explicit `st`); the CAS spins of K11 contribute `wait` and `bump` below. K19 (`tl.atomic_add`), K23, K25 to K28 (`T.st`, `T.ld`, `T.put_warp`) | |
 | `fence` | K1, K6 (`libshmem_device.fence`) | |
-| `bump` | K1, K19 (`dl.notify`), K6 (`signal_op`); the barrier calls of K1, K3, K4, K11, K15, K16 and K23 to K28 | |
-| `wait` | K1, K17 (`dl.wait`), K3, K4, K6 (`signal_wait_until`), K25, K26, K28 (`T.wait_ge`, `T.wait_ne`) | |
+| `bump` | K11 (successful CAS set under A3), K1/K19 (`dl.notify`), K6 (`signal_op`); the barrier calls of K1, K3, K4, K11, K15, K16 and K23 to K28 | |
+| `wait` | K11/K15/K16 (A3 word waits), K1/K17 (`dl.wait`), K3/K4/K6 (`signal_wait_until`), K25, K26, K28 (`T.wait_ge`, `T.wait_ne`) | |
 | `initiate`, `complete` | K2, K3, K4, K18 (`putmem_signal_block`), K4, K6 (`putmem_signal_nbi_block`), K6 (`putmem_nbi_block`), K12, K20 (`putmem_block`) | |
 | `Cmp` | `eq` (`NVSHMEM_CMP_EQ`, `T03:74`, `T04:274`), `ge` (`T.wait_ge`, `DD:334`), `ne` (`T.wait_ne`, `DD:431`); `dl.wait` under D6 | `le`, `gt`, `lt` |
 | `Counter` | `word`; `phase` (`__syncthreads`, `T.sync_threads`); `rendezvous` (`T.sync_blocks`, `T.barrier_blocks`) | `delivered`: no kernel of the two sets calls `quiet` |
-| `Mode` | `plain`; `atomic` at scope `sys` and `gpu`; `shmem` | `atomic` at scope `cta`: the string occurs only in K28 (`T.st` and `T.ld` with `scope="cta"`, `DC:255`, `DC:284`, `DC:286`), where A1 assumes nothing for it, so these accesses are `plain` (W1) |
+| `Mode` | `plain`; `atomic` at scope `sys` and `gpu`; CTA-scoped phase edges under D8/A5; `shmem` | For explicit load/store scope arguments, `cta` occurs only in K28 (`T.st` and `T.ld` with `scope="cta"`, `DC:255`, `DC:284`, `DC:286`), where A1 assumes nothing for it, so these accesses are `plain` (W1) |
 
 `dl.wait` of K17 waits on `rank_end - rank_beg + 1` words in one call
 (`T07:178-185`); K1 passes 1 (`T01:91`, `T01:129`).
@@ -219,7 +217,7 @@ out of scope by the map and were not opened. The files were read on
 
 **How the Triton-distributed rows were chosen.** Every function decorated
 with `triton.jit` or `triton_dist.jit` in T01 to T08 has a row (14, the same
-14 as kernels 106 to 119 of `documents/census/MinimalSyntax.md`). The
+14 as kernels 65 to 78 of `documents/census/MinimalSyntax.md`). The
 functions under `python/triton_dist/` were followed by reading from each call
 in a tutorial:
 
@@ -265,25 +263,25 @@ answers question 3 of the ticket.
 
 | Row | Kernel (definition) | Launch | Events | Agents | Flat list fixed before execution |
 | --- | --- | --- | --- | --- | --- |
-| K1 | `producer_consumer_kernel` (`T01:64`) | grid 20, 4 warps (`T01:191-204`) | B-id (`T01:79`, `T01:117`); L-count (`T01:85`, `T01:123`), bound `num_inputs` | CTA; no thread index in the text | Yes. Per round: wait, store to the peer, barrier, fence, notify (producer) or wait, load, barrier, fence, notify (consumer) |
+| K1 | `producer_consumer_kernel` (`T01:64`) | grid 20, 4 warps (`T01:191-204`) | B-id (`T01:79`, `T01:117`); L-count (`T01:85`, `T01:123`), bound `num_inputs` | CTA; no thread index in the text | Yes. Per round: wait, store to the peer, barrier, fence, notify (producer) or wait, load, barrier, fence, notify (consumer) D8 orders all participating threads to the notify; D7 limits the fence to its caller. The as-written GPU-scope wait lacks a cross-rank edge (I3). |
 | K2 | `nvshmem_device_producer_all_gather_2d_put_block_kernel` (`T02:108`) | grid `num_ranks` (`T02:196-205`) | B-id (`T02:120`) | CTA | Yes: one transfer |
-| K3 | `all_gather_push_1d_kernel` (`T03:62`) | grid `num_ranks` (`T03:100`) | B-id (`T03:67`); B-thread (`T03:69`) | Program `pid == rank`: one thread per peer rank (`T03:68-76`). Other programs: CTA | Per thread: yes. Per CTA: the waiting program has `WORLD_SIZE - 1` waits owned by different threads, then one barrier; the others have one transfer |
-| K4 | `all_gather_push_2d_kernel` (`T03:112`) | grid `num_ranks`, 32 warps (`T03:182-191`) | B-id (`T03:134`, `T03:135`, `T03:160`); B-thread (`T03:149`, `T03:161`) | As K3 in the waiting program (`T03:149-154`); thread 0 alone at `T03:161-166`; otherwise CTA | Per thread: yes. Per CTA: as K3 for the waiting program; the others have at most one wait, one barrier and one transfer |
+| K3 | `all_gather_push_1d_kernel` (`T03:62`) | grid `num_ranks` (`T03:100`) | B-id (`T03:67`); B-thread (`T03:69`) | Program `pid == rank`: one thread per peer rank (`T03:68-76`). Other programs: CTA | Per thread: yes. Per CTA: the waiting program has `WORLD_SIZE - 1` waits owned by different threads, then one barrier; the others have one transfer D8 orders the threads at the block barrier. |
+| K4 | `all_gather_push_2d_kernel` (`T03:112`) | grid `num_ranks`, 32 warps (`T03:182-191`) | B-id (`T03:134`, `T03:135`, `T03:160`); B-thread (`T03:149`, `T03:161`) | As K3 in the waiting program (`T03:149-154`); thread 0 alone at `T03:161-166`; otherwise CTA | Per thread: yes. Per CTA: as K3 for the waiting program; the others have at most one wait, one barrier and one transfer D8 orders the threads at each block barrier. |
 | K5 | `ceil_div` (`T04:78`) | called at `T04:198`, `T04:223` | no event | — | Yes: no event |
 | K6 | `all_to_all_kernel` (`T04:94`) | grid `WORLD_SIZE`, 16 warps (`T04:89-92`, `T04:537`) | B-id on `MODE` and `ONLINE_QUANT_FP8` (`T04:240`, `T04:249`, `T04:264`); B-thread (`T04:262`). The L-data loops (`T04:198`, `T04:223`) hold no event | CTA; thread 0 alone fires the signal and the wait | Yes: one to three transfers, a fence, at most one signal, one wait. Event sizes and one address depend on loaded data (section 1.4) |
 | K7 | `calc_gather_index._kernel` (`T04:296`) | `T04:321-331` | no event | CTA | Yes: no event |
 | K8 | `_quant_kernel` (`T04:336`) | `T04:413-419` | no event | CTA | Yes: no event |
 | K9 | `_dequant_kernel` (`T04:375`) | `T04:425-427` | no event | CTA | Yes: no event |
 | K10 | `kernel_ring_reduce` (`T05:64`) | `T05:137-166` | no event. It loads symmetric memory that peers filled by host copies (`T05:200`, `T05:219`) | CTA | Yes: no event |
-| K11 | `barrier_all_intra_node_atomic_cas_block` (`CO:154`) | grid 1 (`T05:216`, `CO:258`) | B-thread (`CO:160`, `CO:165`); L-sched, empty body (`CO:162-163`, `CO:166-167`) | One thread per rank of the node, inside `dl.simt_exec_region` (`CO:158`) | No: the number of `atomic_cas` events of a thread depends on the schedule. With each spin loop read as one blocking event: three events per thread (I) |
+| K11 | `barrier_all_intra_node_atomic_cas_block` (`CO:154`) | grid 1 (`T05:216`, `CO:258`) | B-thread (`CO:160`, `CO:165`); L-sched, empty body (`CO:162-163`, `CO:166-167`) | One thread per rank of the node, inside `dl.simt_exec_region` (`CO:158`) | Yes per participating thread under A3: two indivisible wait/set cuts, then the D8 block barrier. The two-rank atomic premise is A8 |
 | K12 | `kernel_inter_node_p2p_for_same_local_rank` (`T06:234`) | grid 1, 16 warps (`T06:211`, `T06:365-374`) | none | CTA | Yes: one transfer |
 | K13 | `kernel_ring_reduce_tma` (`RS:666`) | `RS:749-775` | no event | CTA | Yes: no event |
 | K14 | `kernel_ring_reduce_non_tma` (`RS:639`) | `RS:721-729` | no event | CTA | Yes: no event |
-| K15 | `barrier_all_intra_node_non_atomic_block` (`CO:184`) | grid 1 (`CO:260`) | Calls K16 twice (`CO:194`, `CO:196`) | As K16 | No, as K16; six events per thread under the same reading (I) |
-| K16 | `_barrier_all_intra_node_non_atomic_once_block` (`CO:172`), helper of K15 | — | B-thread (`CO:174`); L-sched, empty body (`CO:178-179`) | One thread per rank of the node (`CO:173-174`) | No: the number of `ld` events of a thread depends on the schedule. With the spin loop read as one blocking event: store, wait, barrier (I) |
-| K17 | `kernel_consumer_gemm_persistent` (`T07:78`) | grid `min(num_gemm_sms, tiles)`, 8 warps (`T07:410-435`) | L-count (`T07:148`), bound from `M`, `N`, `K`, block sizes, `NUM_SMS`, program id (`T07:100-103`, `T07:129-131`) | CTA | Yes: `tiles_per_SM` times one wait and one segment |
-| K18 | `nvshmem_device_producer_p2p_put_block_kernel` (`T07:270`) | grid `n_nodes - 1`, 32 warps (`T07:233-244`) | L-count (`T07:287`) | CTA | Yes. With that grid each CTA runs one round (I) |
-| K19 | `kernel_gemm_rs_producer_persistent` (`T08:134`) | grid `min(num_gemm_sms, tiles)`, 8 warps (`T08:320-346`) | L-count (`T08:209`, `T08:266`); B-sched (`T08:280`) | CTA | No for the `dl.notify`: fired or not by the value an atomic add returned. Yes for the atomic adds |
+| K15 | `barrier_all_intra_node_non_atomic_block` (`CO:184`) | grid 1 (`CO:260`) | Calls K16 twice (`CO:194`, `CO:196`) | As K16 | Yes per participating thread under A3: two calls of K16 give six cuts. The proof assumes A8; applicability on the platform selecting this fallback remains open (I10) |
+| K16 | `_barrier_all_intra_node_non_atomic_once_block` (`CO:172`), helper of K15 | — | B-thread (`CO:174`); L-sched, empty body (`CO:178-179`) | One thread per rank of the node (`CO:173-174`) | Yes per participating thread under A3: store, one blocking word wait, then the D8 block barrier. A8 governs cross-rank atomics. |
+| K17 | `kernel_consumer_gemm_persistent` (`T07:78`) | grid `min(num_gemm_sms, tiles)`, 8 warps (`T07:410-435`) | L-count (`T07:148`), bound from `M`, `N`, `K`, block sizes, `NUM_SMS`, program id (`T07:100-103`, `T07:129-131`) | CTA | Yes: `tiles_per_SM` times one wait and one segment Its CUDA-family wait conflicts with the NVSHMEM signal. Only the repaired single-family variant is the proof target (2026-11-23). |
+| K18 | `nvshmem_device_producer_p2p_put_block_kernel` (`T07:270`) | grid `n_nodes - 1`, 32 warps (`T07:233-244`) | L-count (`T07:287`) | CTA | Yes. With that grid each CTA runs one round (I) Its NVSHMEM completion writes the signal used by K17; see the K17 repair. |
+| K19 | `kernel_gemm_rs_producer_persistent` (`T08:134`) | grid `min(num_gemm_sms, tiles)`, 8 warps (`T08:320-346`) | L-count (`T08:209`, `T08:266`); B-sched (`T08:280`) | CTA | No for the `dl.notify`: fired or not by the value an atomic add returned. Yes for the atomic adds A1(d) gives the base atomic its named scope/order; the returned old value still controls the branch. |
 | K20 | `kernel_inter_node_p2p_for_same_local_rank` (`RS:472`) | grid 1, 16 warps (`RS:172`, `RS:621-630`) | none | CTA | Yes: one transfer |
 | K21 | `add_continuous_kernel` (`RS:182`) | grid 16 (`RS:210-223`) | no event | CTA | Yes: no event |
 
@@ -295,19 +293,18 @@ Six of the seven kernels read the thread index with `T.get_thread_binding()`
 | Row | Kernel (definition) | Launch | Events | Agents | Flat list fixed before execution |
 | --- | --- | --- | --- | --- | --- |
 | K22 | `get_dispatch_layout_main` (`DL:78`) | `ceil(E/4) + ceil(R/8)` blocks, 256 threads (`DL:69-72`, `DL:84`) | no event. Branches on block and thread (`DL:95`, `DL:103`, `DL:118`, `DL:147`); L-count loops (`DL:96`, `DL:106`, `DL:127`, `DL:150`) | Threads that share CTA memory with no barrier call (`DL:88-108`, `DL:119-152`) | Yes per thread: no event. One segment per CTA presupposes an order among threads (U) |
-| K23 | `notify_dispatch_main` (`DD:37`) | `num_ranks + 1` blocks, 128 threads (`DD:30`, `DD:55`) | B-id (`DD:59`); B-thread (`DD:65`); L-count (`DD:67`), compile-time bound | Block 0: threads `tx < num_ranks` own the stores to peers; the barrier calls are not under a thread branch. Other blocks: warps | Per thread: yes. Per CTA: block 0 has three rendezvous and, between the first two, `num_ranks * (1 + num_local_experts)` stores owned by `num_ranks` threads; the other blocks have one barrier |
-| K24 | `cached_notify_dispatch_main` (`DD:192`) | 1 block, 128 threads (`DD:200`) | none | CTA | Yes: rendezvous, four clears, rendezvous |
-| K25 | `dispatch_main` (`DD:270`) | `num_sms` blocks, 768 threads (`DD:255`, `DD:300`) | B-id (`DD:306`); B-thread (many); sender: L-data (`DD:332`, `DD:343`); receiver: L-sched (`DD:451`, `DD:452`) and loops bounded by loaded values (`DD:467`, `DD:481`, `DD:493`) | Groups per peer rank; warps and elected lanes inside a group (section 1.3) | No. Sender group: fixed once `is_token_in_rank` is fixed. Receiver group: depends on the schedule |
-| K26 | `cached_dispatch_main` (`DD:547`) | as K25 (`DD:534`, `DD:571`) | as K25: `DD:576`; `DD:601`, `DD:612`; `DD:693`, `DD:694`, `DD:709`, `DD:722` | as K25 | No, as K25 |
-| K27 | `cached_notify_combine_main` (`DC:25`) | `num_sms // 2 + 1` blocks, `max(128, 32 * num_ranks)` threads (`DC:19-20`, `DC:32`) | B-id (`DC:35`); in the other blocks L-count (`DC:52`) and a branch on the thread and the counter (`DC:55`) | Block 0: CTA. Other blocks: one warp per rank; a warp whose index is `num_ranks` or more returns (`DC:42-45`) | Per thread: yes. Block 0: rendezvous, two clears, rendezvous. Other blocks: one plain load per lane and round |
-| K28 | `combine_main` (`DC:120`) | `num_sms` blocks, 768 threads (`DC:109`, `DC:141`) | B-id (`DC:147`); B-thread (many); sender: L-data (`DC:171`), L-count inside a round (`DC:183`); receiver: L-sched (`DC:242`, `DC:285`), L-count over tokens (`DC:276`), L-data (`DC:310`, `DC:331`) | Sender: groups of warps per destination rank. Receiver: lanes of warp 0 and 23 reduction warps (section 1.3) | No. Sender group: fixed once the prefix matrices are fixed. Receiver: depends on the schedule |
+| K23 | `notify_dispatch_main` (`DD:37`) | `num_ranks + 1` blocks, 128 threads (`DD:30`, `DD:55`) | B-id (`DD:59`); B-thread (`DD:65`); L-count (`DD:67`), compile-time bound | Block 0: threads `tx < num_ranks` own the stores to peers; the barrier calls are not under a thread branch. Other blocks: warps | Per thread: yes. Per CTA: block 0 has three rendezvous and, between the first two, `num_ranks * (1 + num_local_experts)` stores owned by `num_ranks` threads; the other blocks have one barrier A5(a) orders the two whole-block barriers; A10 supplies the matching inter-block primitive readings. |
+| K24 | `cached_notify_dispatch_main` (`DD:192`) | 1 block, 128 threads (`DD:200`) | none | CTA | Yes: rendezvous, four clears, rendezvous A10 supplies the matching inter-block primitive readings. |
+| K25 | `dispatch_main` (`DD:270`) | `num_sms` blocks, 768 threads (`DD:255`, `DD:300`) | B-id (`DD:306`); B-thread (many); sender: L-data (`DD:332`, `DD:343`); receiver: L-sched (`DD:451`, `DD:452`) and loops bounded by loaded values (`DD:467`, `DD:481`, `DD:493`) | Groups per peer rank; warps and elected lanes inside a group (section 1.3) | No. Sender group: fixed once `is_token_in_rank` is fixed. Receiver group: depends on the schedule A4/A5 order the participating groups/warps. A6/A10 give waits system/acquire; A7/A8 distinguish the four unsuffixed GPU-scope loads of K25/K26 from the system-scope repair. The receiver spin has a body outside A3. |
+| K26 | `cached_dispatch_main` (`DD:547`) | as K25 (`DD:534`, `DD:571`) | as K25: `DD:576`; `DD:601`, `DD:612`; `DD:693`, `DD:694`, `DD:709`, `DD:722` | as K25 | No, as K25 Same as K25 under A4–A8 and A10, including the two volatile loads in this kernel; its receiver spin has a body. |
+| K27 | `cached_notify_combine_main` (`DC:25`) | `num_sms // 2 + 1` blocks, `max(128, 32 * num_ranks)` threads (`DC:19-20`, `DC:32`) | B-id (`DC:35`); in the other blocks L-count (`DC:52`) and a branch on the thread and the counter (`DC:55`) | Block 0: CTA. Other blocks: one warp per rank; a warp whose index is `num_ranks` or more returns (`DC:42-45`) | Per thread: yes. Block 0: rendezvous, two clears, rendezvous. Other blocks: one plain load per lane and round A10 supplies the matching inter-block primitive readings. |
+| K28 | `combine_main` (`DC:120`) | `num_sms` blocks, 768 threads (`DC:109`, `DC:141`) | B-id (`DC:147`); B-thread (many); sender: L-data (`DC:171`), L-count inside a round (`DC:183`); receiver: L-sched (`DC:242`, `DC:285`), L-count over tokens (`DC:276`), L-data (`DC:310`, `DC:331`) | Sender: groups of warps per destination rank. Receiver: lanes of warp 0 and 23 reduction warps (section 1.3) | No. Sender group: fixed once the prefix matrices are fixed. Receiver: depends on the schedule A4/A5 order participating groups, whole blocks and unmasked warps. A6/A10 give system/acquire to covered waits; the receiver spin has a body outside A3 and CTA-scope strings retain W1. |
 
 ## 5. Events of each kernel
 
 Columns: **Pattern** is the pattern of the primitive's row in
 `PrimitiveSources.md`; "plain access" is an ordinary load or store, with no
-primitive, of memory on another rank or of memory that a peer writes; "no
-row" is a base TileLang call that the table does not list. **By** is the
+primitive, of memory on another rank or of memory that a peer writes. A4 and A5 label the participating barriers even where the primitive table has no separate row. **By** is the
 agent that executes the line. **Under** lists the enclosing control flow
 from the outside in.
 
@@ -437,9 +434,9 @@ CTAs of this kernel only (I).
 | `DD:70` | `T.barrier_blocks(barrier_signal)` | b | block 0 | B-id `DD:59` |
 | `DD:75` | read and write of `per_rank_buffer`, which the peers filled | plain access | thread | B-id `DD:59`; B-thread `DD:73`; L-count `DD:74` |
 | `DD:84` | read of `per_expert_buffer`, which the peers filled | plain access | thread | B-id `DD:59`; B-thread `DD:80`; L-count `DD:83` |
-| `DD:87` | `T.sync_threads()` | no row | block 0 | B-id `DD:59` |
+| `DD:87` | `T.sync_threads()` | b (A5(a)) | block 0 | B-id `DD:59` |
 | `DD:99` | `T.barrier_blocks(barrier_signal)` | b | block 0 | B-id `DD:59` |
-| `DD:114` | `T.sync_threads()` | no row | block | B-id `DD:100` |
+| `DD:114` | `T.sync_threads()` | b (A5(a)) | block | B-id `DD:100` |
 
 Thread `rank` of block 0 writes the counter that the host polls (`DD:76-77`;
 section 6), and threads `tx < num_local_experts` write the per-expert
@@ -462,16 +459,16 @@ lane" is the lane that `T.shuffle_elect(32)` picks in a warp.
 | --- | --- | --- | --- | --- |
 | `DD:314` | `T.st(channel_start_offset[...], scope="sys", sem="relaxed", dst_pe=responsible_rank)` | a | elected lane of warp 0 of the group | B-thread `DD:311` |
 | `DD:316` | `T.st(channel_end_offset[...], scope="sys", sem="relaxed", dst_pe=responsible_rank)` | a | the same | B-thread `DD:311` |
-| `DD:317` | `T.sync_warp()` | no row | warp | none |
+| `DD:317` | `T.sync_warp()` | b (A5(c)) | warp | none |
 | `DD:334-338` | `T.wait_ge` on the peer's head word (`peer = responsible_rank`) | b | elected lane of each warp | L-data `DD:332`; B-thread `DD:333` |
-| `DD:339` | `T.sync_warp()` | no row | warp | L-data `DD:332` |
+| `DD:339` | `T.sync_warp()` | b (A5(c)) | warp | L-data `DD:332` |
 | `DD:363-370` | `T.put_warp(..., dst_pe=responsible_rank)` | a | the warp whose turn it is | L-data `DD:332`, `DD:343`; data branch `DD:352`; B-thread `DD:360` |
 | `DD:374` | `T.st(channel_src_idx_buffers[...], dst_pe=responsible_rank)`, default scope and semantic | a | elected lane of that warp | the same, then B-thread `DD:373` |
 | `DD:383` | `T.ld(topk_idx[...], nc=True)` of local input | a | lanes below `num_topk` | the same, then B-thread `DD:377` |
 | `DD:387-391` | `T.st(channel_topk_idx_buffers[...], dst_pe=responsible_rank)` | a | the same | the same |
 | `DD:395` | `T.ld(topk_weights[...], nc=True)` of local input | a | the same | the same |
 | `DD:397-401` | `T.st(channel_topk_weights_buffers[...], dst_pe=responsible_rank)` | a | the same | the same |
-| `DD:410` | `T.sync_threads(responsible_rank, num_threads_per_rank)` | no row | group | L-data `DD:332` |
+| `DD:410` | `T.sync_threads(responsible_rank, num_threads_per_rank)` | b (A4, A5(b)) | group | L-data `DD:332` |
 | `DD:412-418` | `T.st(channel_tail_idx[...], scope="sys", sem="release", dst_pe=responsible_rank)` | a | elected lane of warp 0 of the group | L-data `DD:332`; B-thread `DD:411` |
 
 Receiver blocks (`DD:420`). The group is the threads with one source rank
@@ -484,11 +481,11 @@ Receiver blocks (`DD:420`). The group is the threads with one source rank
 | `DD:433` | `T.wait_ne(channel_end_offset[...], 0)` | b | the same | B-thread `DD:430` |
 | `DD:434` | `T.ld(channel_end_offset[...], sem="volatile")` | a | the same | B-thread `DD:430` |
 | `DD:453` | `T.ld(channel_tail_idx[...], sem="acquire", scope="sys")` | a | thread 0 of the group | L-sched `DD:451`; L-sched `DD:452` (left at `DD:456-458` when the tail differs from the head) |
-| `DD:461` | `T.sync_threads(responsible_rank, num_threads_per_rank)` | no row | group | L-sched `DD:451` |
+| `DD:461` | `T.sync_threads(responsible_rank, num_threads_per_rank)` | b (A4, A5(b)) | group | L-sched `DD:451` |
 | `DD:471-478` | `T.put_warp` from the local ring buffer, which the peer fills, to `recv_x` (`dst_pe` is -1) | a | warp | L-sched `DD:451`; loop `DD:467`, bound `tail - head` |
 | `DD:485-489` | `T.ld(channel_src_idx_buffers[...], nc=True)` | a | thread | L-sched `DD:451`; loop `DD:481` |
 | `DD:497-502` | reads of `channel_topk_idx_buffers` and `channel_topk_weights_buffers`, which the peer fills | plain access | thread | L-sched `DD:451`; loop `DD:493` |
-| `DD:509` | `T.sync_threads(responsible_rank, num_threads_per_rank)` | no row | group | L-sched `DD:451` |
+| `DD:509` | `T.sync_threads(responsible_rank, num_threads_per_rank)` | b (A4, A5(b)) | group | L-sched `DD:451` |
 | `DD:511` | `T.st(channel_head_idx[...], scope="sys", sem="relaxed")` on a local word | a | elected lane of the last warp of the group | L-sched `DD:451`; B-thread `DD:510` |
 
 In the inner sender loop the round ends early with `continue` for a token
@@ -529,30 +526,30 @@ Sender blocks (`DC:147`). The group of a warp is `send_rank_id` (`DC:148`).
 | Lines | Call | Pattern | By | Under |
 | --- | --- | --- | --- | --- |
 | `DC:175-179` | `T.wait_ge` on the peer's head word (`peer=send_rank_id`) | b | elected lane of each warp | L-data `DC:171`; B-thread `DC:174` |
-| `DC:180` | `T.sync_warp()` | no row | warp | L-data `DC:171` |
+| `DC:180` | `T.sync_warp()` | b (A5(c)) | warp | L-data `DC:171` |
 | `DC:189-196` | `T.put_warp(..., dst_pe=send_rank_id)` | a | warp | L-data `DC:171`; L-count `DC:183`, bound `num_round_tokens` (`DC:173`) |
 | `DC:201` | `T.ld(src_idx[...], nc=True)` of local input | a | elected lane | the same, then B-thread `DC:200` |
 | `DC:202` | `T.st(channel_src_idx_buffers[...], dst_pe=send_rank_id)` | a | elected lane | the same |
 | `DC:207` | `T.ld(topk_weights[...], nc=True)` of local input | a | lanes below `num_topk` | the same loops, then B-thread `DC:205` |
 | `DC:208-210` | `T.st(channel_topk_weights_buffers[...], dst_pe=send_rank_id)` | a | the same | the same |
-| `DC:216` | `T.sync_threads(send_rank_id, threads_per_rank)` | no row | group | L-data `DC:171` |
+| `DC:216` | `T.sync_threads(send_rank_id, threads_per_rank)` | b (A4, A5(b)) | group | L-data `DC:171` |
 | `DC:218-224` | `T.st(channel_tail_idx[...], scope="sys", sem="release", dst_pe=send_rank_id)` | a | the lane that `T.shuffle_elect(96)` picks | L-data `DC:171`; B-thread `DC:217` |
 
 Receiver blocks (`DC:226`).
 
 | Lines | Call | Pattern | By | Under |
 | --- | --- | --- | --- | --- |
-| `DC:237` | `T.sync_threads()` | no row | CTA | none |
+| `DC:237` | `T.sync_threads()` | b (A5(a)) | CTA | none |
 | `DC:253` | `T.ld(channel_tail_idx[responsible_channel, lane_id], sem="acquire", scope="sys")` | a | lane `lane_id < num_ranks` of warp 0 | B-thread `DC:239`; L-sched `DC:242` (left at `DC:248-249` when every other warp has retired) |
 | `DC:255` | `T.st(shared_channel_tail_idx[lane_id], sem="release", scope="cta")` to CTA-shared memory | a | the same | the same |
 | `DC:265` | `T.st(channel_head_idx[...], sem="relaxed", scope="sys")` on a local word | a | the same | the same, then a branch on values read from CTA-shared memory `DC:263` |
 | `DC:281` | `T.ld(send_head[token_idx, lane_id], nc=True)` of local input | a | lanes below `num_ranks` of a reduction warp | B-thread `DC:266`; L-count `DC:276`; B-thread `DC:280` |
 | `DC:284` | `T.ld(shared_channel_tail_idx[lane_id], sem="acquire", scope="cta")` | a | lane of a reduction warp | B-thread `DC:266`; L-count `DC:276` |
 | `DC:286` | the same load again | a | the same | the same, then L-sched `DC:285` (`T.warp_any`: the warp leaves together) |
-| `DC:289` | `T.sync_warp()` | no row | warp | B-thread `DC:266`; L-count `DC:276` |
+| `DC:289` | `T.sync_warp()` | b (A5(c)) | warp | B-thread `DC:266`; L-count `DC:276` |
 | `DC:312-316` | `T.ld(channel_x_buffers[...], nc=True)` of the ring buffer, which the peers fill | a | lane | L-count `DC:276`, `DC:308`; L-data `DC:310` |
 | `DC:333-337` | `T.ld(channel_topk_weights_buffers[...], nc=True)` | a | lanes below `num_topk` | L-count `DC:276`; B-thread `DC:328`; L-data `DC:331` |
-| `DC:348` | `T.sync_warp()` | no row | warp | B-thread `DC:266` |
+| `DC:348` | `T.sync_warp()` | b (A5(c)) | warp | B-thread `DC:266` |
 
 Ordinary accesses to CTA-shared memory by different agents, with no barrier
 after `DC:237`: `warp_retired` is read at `DC:247` and `DC:261` and written
@@ -618,11 +615,11 @@ not called from `reduce_scatter_2d_op` or below (`RS:793-831`).
    (`docs/programming_guides/instructions.md:191`). K25, K26 and K28 pass a
    rank index and the thread count of one group (`DD:410`, `DD:461`,
    `DD:509`, `DD:652`, `DD:703`, `DD:738`, `DC:216`). No document read here
-   states that this form waits for `arrive_count` threads only.
-2. **The waits of the port carry no scope or order.** At `9ba8a605`
+   states that this form waits for `arrive_count` threads only. A4 explicitly supplies that group rendezvous and A5(b) orders only its participants.
+2. **The waits of the port omit scope and order in the source.** At `9ba8a605`
    `wait_ne` and `wait_ge` take `(value, expected, peer=-1)` (`TC:135-142`).
    `PrimitiveSources.md` (E-TS6) cites `71e7145`, where they also take
-   `scope="sys"` and `semantics="acquire"`.
+   `scope="sys"` and `semantics="acquire"`. A6 gives the port these defaults; A10 reads its `peer` argument by the registered row.
 3. **`T.shuffle_elect(96)`** elects "exactly one lane" in each group of 96
    consecutive threads by its docstring (`TB:438-445`). K26 and K28 use it
    to publish tail and head (`DD:653`, `DD:739`, `DC:217`); K25 uses
@@ -646,7 +643,7 @@ not called from `reduce_scatter_2d_op` or below (`RS:793-831`).
    `create_ag_gemm_context(max_M, N, K, dtype, rank, num_ranks,
    num_local_ranks=8, ag_intranode_stream=None, ag_internode_stream=None)`
    (`AG:511-521`). The call does not fit the definition (I; not run). This
-   adds to E-TD17 of `PrimitiveSources.md`.
+   adds to E-TD17 of `PrimitiveSources.md`. Separately, the original inter-node signal/wait is unprovable; the 2026-11-23 choice is the repaired single-family variant.
 7. **Tutorial 08 has two host paths**, chosen by `has_fullmesh_nvlink()`
    (`RS:807-810`); only one of them launches K13 or K14 and K20.
 

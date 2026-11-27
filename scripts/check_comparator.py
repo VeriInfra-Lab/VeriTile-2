@@ -118,7 +118,8 @@ def library_targets(manifest):
     return sorted(modules), sorted(set(names))
 
 
-def check(workspace, source=None, trust=False, library=False):
+def stage(workspace, source=None, trust=False, library=False):
+    """Write one wrapper module into the judge; return what build() and finish() need."""
     state = prepare(workspace)
     judge = workspace / 'project'
     logs = Path(state['logs'])
@@ -148,36 +149,62 @@ def check(workspace, source=None, trust=False, library=False):
     program = add_import(text, 'Lean') + '\n' + footer
     (judge / 'VeriTileComparator' / (tag + '.lean')).write_text(program)
     (job_logs / 'Source.lean').write_text(program)
+    return {'state': state, 'judge': judge, 'label': label, 'tag': tag, 'module': module,
+            'job_logs': job_logs, 'metadata': metadata, 'trust': trust}
+
+
+def build(job):
     # These are trusted repository sources, not an untrusted agent submission.
     # Elaboration discovers actual theorem objects, never regex-matched names.
-    with (job_logs / 'build.log').open('w') as output:
-        build = subprocess.run(['lake', 'build', module], cwd=judge,
+    # Lake replays a stored log when the module is already built.
+    with (job['job_logs'] / 'build.log').open('w') as output:
+        built = subprocess.run(['lake', 'build', job['module']], cwd=job['judge'],
                                stdout=output, stderr=subprocess.STDOUT)
-    if build.returncode or not metadata.is_file():
-        print((job_logs / 'build.log').read_text(), file=sys.stderr)
-        raise ValueError(f'{label}: elaboration/inventory failed; logs: {job_logs}')
-    inventory = json.loads(metadata.read_text())
-    shutil.copyfile(metadata, job_logs / 'targets.json')
+    if built.returncode or not job['metadata'].is_file():
+        print((job['job_logs'] / 'build.log').read_text(), file=sys.stderr)
+        raise ValueError(f'{job["label"]}: elaboration/inventory failed; logs: {job["job_logs"]}')
+
+
+def finish(job):
+    """Run the comparator on a built wrapper; print nothing, so callers may run it in threads."""
+    judge, job_logs, tag, module = job['judge'], job['job_logs'], job['tag'], job['module']
+    inventory = json.loads(job['metadata'].read_text())
+    shutil.copyfile(job['metadata'], job_logs / 'targets.json')
     config = write_config(judge, inventory['aliases'], challenge=module, solution=module,
                           filename=f'.lake/comparator/{tag}/config.json')
     shutil.copyfile(config, job_logs / 'config.json')
     with (job_logs / 'comparator.log').open('w') as output:
-        result = subprocess.run(comparator_command(judge, state['comparator'], config),
+        result = subprocess.run(comparator_command(judge, job['state']['comparator'], config),
                                 stdout=output, stderr=subprocess.STDOUT)
-    report = {**state, 'source': label, 'mode': 'source-replay',
+    report = {**job['state'], 'source': job['label'], 'mode': 'source-replay',
               'theorem_count': len(inventory['theorems']),
               'theorems': inventory['theorems'], 'evidence_dir': str(job_logs),
               'comparator_exit': result.returncode, 'accepted': result.returncode == 0}
     (job_logs / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
-    if result.returncode:
-        print((job_logs / 'comparator.log').read_text(), file=sys.stderr)
-        raise ValueError(f'{label}: comparator rejected; logs: {job_logs}')
-    if trust:
-        for line in (job_logs / 'build.log').read_text().splitlines():
+    return report
+
+
+def report_lines(job, report):
+    """What check() prints for one job: comparator log on rejection, else audit and summary lines."""
+    if not report['accepted']:
+        print((job['job_logs'] / 'comparator.log').read_text(), file=sys.stderr)
+        raise ValueError(f'{job["label"]}: comparator rejected; logs: {job["job_logs"]}')
+    lines = []
+    if job['trust']:
+        for line in (job['job_logs'] / 'build.log').read_text().splitlines():
             for marker in ('Axiom audit:', 'Spec audit:'):
                 if marker in line:
-                    print(line[line.index(marker):])
-    print(f'Comparator: {label}: {len(inventory["theorems"])} theorem(s) accepted; logs: {job_logs}')
+                    lines.append(line[line.index(marker):])
+    lines.append(f'Comparator: {job["label"]}: {report["theorem_count"]} theorem(s) accepted; logs: {job["job_logs"]}')
+    return lines
+
+
+def check(workspace, source=None, trust=False, library=False):
+    job = stage(workspace, source, trust, library)
+    build(job)
+    report = finish(job)
+    for line in report_lines(job, report):
+        print(line)
     return report
 
 

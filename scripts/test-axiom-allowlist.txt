@@ -1,0 +1,6 @@
+# Approved test axiom declarations. Format: file<TAB>declaration<TAB>reason.
+# The source check matches the spelling after axiom. The compiled audit matches
+# the declaring module's file and fully qualified name (including for private
+# declarations). Write the full name in the source to share one exact entry;
+# if the two spellings differ, both checks need their own exact entry.
+# Entries here only approve declarations; printed dependencies are still checked.

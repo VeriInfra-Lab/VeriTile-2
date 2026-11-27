@@ -7,3 +7,6 @@ imported here.
 
 This target contains no `sorry` and imports nothing from `VeriTile/Staging/`.
 -/
+
+import VeriTile.TileLang.DSL.Syntax
+import VeriTile.TileLang.DSL.Lower

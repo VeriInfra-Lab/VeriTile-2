@@ -25,9 +25,85 @@ def bareWidth : ComputeKernel := triton {
 
 example : bareWidth = triton {
   tl.region input = tl.bfloat16, in_splits_offsets = tl.int32
-  data_elem_size = 2
-  splits_elem_size = 4
+  data_elem_size = tl.cast(2, tl.int32)
+  splits_elem_size = tl.cast(4, tl.int32)
 } := rfl
+
+-- allreduce.py:642,669. Exercise the signature-only entry point with an i32
+-- load as the runtime dividend. The scalar ABI cases below use call_args.
+def allreduceSignature : CallSignature where
+  pointers := [("symm_in_ptr", .bf16), ("symm_ptr", .i32), ("elems_ptr", .i32)]
+
+def allreduceVectorWidths (elems_ptr : RegionName) : ComputeKernel :=
+  with_triton_signature allreduceSignature in triton {
+    elems = tl.load(elems_ptr + 0)
+    input_vec_size = 128 // tl.constexpr(symm_in_ptr.dtype.element_ty.primitive_bitwidth)
+    symm_vec_size = 128 // tl.constexpr(symm_ptr.dtype.element_ty.primitive_bitwidth)
+    input_count = elems // input_vec_size
+    symm_count = elems // symm_vec_size
+  }
+
+example (elems_ptr : RegionName) : allreduceVectorWidths elems_ptr =
+    with_triton_signature allreduceSignature in triton {
+      elems = tl.load(elems_ptr + 0)
+      input_vec_size = tl.cast(8, tl.int32)
+      symm_vec_size = tl.cast(4, tl.int32)
+      input_count = elems // input_vec_size
+      symm_count = elems // symm_vec_size
+    } := rfl
+
+-- allreduce.py:642–645 and 663,669–676. Isolate each runtime loop bound
+-- from the surrounding barriers, grid coordinates, and data transfers.
+-- The source ABI requires explicit call_args for an i32 scalar.
+def oneShotSignature : CallSignature where
+  pointers := [("symm_in_ptr", .bf16)]
+  scalars := [("elems", .i32)]
+
+def oneShotVectorCount (count : Int) : ComputeKernel :=
+  with_triton_call oneShotSignature call_args [elems := count] in triton {
+    VEC_SIZE = 128 // tl.constexpr(symm_in_ptr.dtype.element_ty.primitive_bitwidth)
+    vector_count = elems // VEC_SIZE
+  }
+
+example (count : Int) : oneShotVectorCount count =
+    with_triton_call oneShotSignature call_args [elems := count] in triton {
+      VEC_SIZE = tl.cast(8, tl.int32)
+      vector_count = elems // VEC_SIZE
+    } := rfl
+
+def twoShotSignature : CallSignature where
+  pointers := [("symm_ptr", .i32)]
+  scalars := [("elems", .i32), ("world_size", .i32)]
+
+def twoShotVectorCount (count ranks : Int) : ComputeKernel :=
+  with_triton_call twoShotSignature call_args [elems := count, world_size := ranks] in triton {
+    elems_per_rank = elems // world_size
+    VEC_SIZE = 128 // tl.constexpr(symm_ptr.dtype.element_ty.primitive_bitwidth)
+    vector_count = elems_per_rank // VEC_SIZE
+  }
+
+example (count ranks : Int) : twoShotVectorCount count ranks =
+    with_triton_call twoShotSignature call_args [elems := count, world_size := ranks] in triton {
+      elems_per_rank = elems // world_size
+      VEC_SIZE = tl.cast(4, tl.int32)
+      vector_count = elems_per_rank // VEC_SIZE
+    } := rfl
+
+-- reduce_scatter.py:404. A pointer dtype has no primitive-width property.
+/-- error: tl.constexpr requires a statically known value -/
+#guard_msgs in
+def pointerWidth : ComputeKernel :=
+  with_triton_signature ({pointers := [("symm_input_ptr", .i32)]} : CallSignature) in triton {
+    ITEM_SIZE = tl.constexpr(symm_input_ptr.dtype.primitive_bitwidth) // 8
+  }
+
+-- tutorials/04-deepseek-infer-all2all.py:344. The reference kernel's float
+-- constant needs an explicit transcription binding.
+/-- error: tl.constexpr requires a statically known value -/
+#guard_msgs in
+def floatConstexpr : ComputeKernel := triton {
+  FP8_MAX_INV = tl.constexpr(1 / 448.)
+}
 
 -- common_ops.py:83,102–103,132. Test the source constants independently
 -- of the consuming NVSHMEM helper and the environment register query.
@@ -89,8 +165,8 @@ def signatureExpected : ComputeKernel :=
   let NUM_EXPERTS : Nat := 7
   let TP_SIZE : Nat := 8
   with_triton_signature allConstants in triton {
-    data_elem_size = 2
-    splits_elem_size = 4
+    data_elem_size = tl.cast(2, tl.int32)
+    splits_elem_size = tl.cast(4, tl.int32)
     envreg1 = tl.cast(1, tl.int64)
     tl.static_assert(true)
     tl.static_assert(true)
@@ -128,8 +204,8 @@ def callExpected : ComputeKernel :=
   let NUM_EXPERTS : Nat := 8
   let TP_SIZE : Nat := 9
   with_triton_call invoked call_args [offset := (7 : Int)] in triton {
-    data_elem_size = 2
-    splits_elem_size = 4
+    data_elem_size = tl.cast(2, tl.int32)
+    splits_elem_size = tl.cast(4, tl.int32)
     envreg2 = tl.cast(2, tl.int64)
     tl.static_assert(true)
     tl.static_assert(true)
@@ -190,12 +266,41 @@ def runtimePower : ComputeKernel :=
 #guard_msgs in
 def negativePower : ComputeKernel := triton { x = next_power_of_2(-1) }
 
+-- Pin the dtype chosen when a folded constexpr becomes a register.
+example : triton { x = tl.constexpr(2147483647) } =
+    triton { x = tl.cast(2147483647, tl.int32) } := rfl
+
+example : triton { x = tl.constexpr(2147483648) } =
+    triton { x = tl.cast(2147483648, tl.uint32) } := rfl
+
+example : triton { x = tl.constexpr(4294967296) } =
+    triton { x = tl.cast(4294967296, tl.int64) } := rfl
+
+example : triton { x = tl.constexpr(9223372036854775808) } =
+    triton { x = tl.cast(9223372036854775808, tl.uint64) } := rfl
+
+example : triton { x = tl.constexpr(-2147483648) } =
+    triton { x = tl.cast(-2147483648, tl.int32) } := rfl
+
+example : triton { x = tl.constexpr(-2147483649) } =
+    triton { x = tl.cast(-2147483649, tl.int64) } := rfl
+
+/-- error: folded constexpr register exceeds Triton's integer range -/
+#guard_msgs in
+example : ComputeKernel := triton { x = tl.constexpr(18446744073709551616) }
+
 /-- The last input covered by the pinned implementation. -/
 def upperPower : ComputeKernel := triton {
   tl.static_assert(next_power_of_2(18446744073709551616) == 18446744073709551616)
 }
 
 example : upperPower = triton { tl.static_assert(true) } := rfl
+
+/-- error: folded constexpr register exceeds Triton's integer range -/
+#guard_msgs in
+def oversizedRegister : ComputeKernel := triton {
+  x = next_power_of_2(18446744073709551616)
+}
 
 /-- error: next_power_of_2 requires an integer in [0, 2^64] -/
 #guard_msgs in

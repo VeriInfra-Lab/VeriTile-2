@@ -549,10 +549,10 @@ certificate. Its statements and expressions are as follows.
 
 | Certificate | Accepted syntax and obligations |
 | --- | --- |
-| Statements | Assignment, region store, region atomic add, counted compute loop, compute `ifThen` and `ifThenElse`. Both branches and the loop body certify under the same invariant. Stores and atomics accept an absent mask, a mask, or a mask with an ignored fallback. |
-| Finite algorithm expressions | Any natural, integer or Boolean result, real constants, tracked register references, scalar broadcast and fill, `natToReal`, `withPrecision .real`, every floating cast, real add/subtract/multiply/divide, real sum and maximum reductions, real `max2`, real-typed maximum and minimum, lane-wise `where`, `exp`, `log`, libdevice exp/log, sigmoid and square root. The finite operands of these constructors certify recursively; nested operations in every evaluated expression must also satisfy the site rules. |
-| Finite reads and decoding | Direct region loads at a declared dtype, unmasked or masked with a finite explicit fallback; a masked real load may omit the fallback. A direct unmasked integer region load may feed an E5 decode to real. |
-| Compute expressions | Algorithm expressions, compute-tagged algorithm expressions and fp32 compute region loads whose projected real load is finite. An untracked assignment may use any supported expression that meets the site rules, including a register-only negative infinity. |
+| Statements | Assignment, region or pointer store, region atomic add, counted compute loop, compute `ifThen` and `ifThenElse`. Both branches and the loop body certify under the same invariant. Stores and atomics accept an absent mask, a mask, or a mask with an ignored fallback. |
+| Finite algorithm expressions | Any natural, integer or Boolean result, real constants, tracked register references, scalar broadcast and fill, `natToReal`, `withPrecision .real`, every floating cast, real add/subtract/multiply/divide, real sum and maximum reductions, real `max2`, real-typed maximum and minimum, lane-wise `where`, `exp`, `log`, libdevice exp/log, sigmoid, square root, real negation, dimension insertion, matrix transpose and rank-two real dot with either dot backend. Finiteness of `log` and `sqrt` uses the real model: `WithBot.realLog 0` is finite, whereas floating hardware computes negative infinity for the logarithm of zero. Both exponentials accept an operand that evaluates to `⊥`: `WithBot.realExp ⊥ = 0`. Other operands required to be finite certify recursively; nested operations in every evaluated expression must also satisfy the site rules. |
+| Finite reads and decoding | Masked real pointer loads from the declared pointer regions and direct region loads at a declared dtype, unmasked or masked with a finite explicit fallback; a masked real load may omit the fallback. A direct unmasked integer region load may feed an E5 decode to real. |
+| Compute expressions | Algorithm expressions, compute-tagged algorithm expressions, fills of a compute-tagged finite scalar and fp32 compute loads whose projected real load is finite. An untracked assignment may use any supported expression that meets the site rules, including a register-only negative infinity. |
 
 Choose the layout's read dtypes, byte regions and register names. The initial
 invariant requires each offset of a declared read region to have its declared
@@ -571,7 +571,7 @@ undefined-value agreement of each declared read dtype is required at every
 offset of its region. Region addresses are always in bounds, and the layout
 can describe offsets symbolically. Undeclared region/dtype pairs and the
 out-of-bounds tables impose no obligation. The Welford witness has an
-undefined real value of one.
+undefined real value of one. For the `mul_step_kernel` and `swiglu_unfused` census layouts, `scratchLayoutSatisfiable` gives the scratch region `S` a finite bf16 cell at every offset and the other inputs real cells. Its empty register store works with every choice of tracked registers.
 
 Apply `FiniteBridge.bridgePre` to the body certificate and initial invariant,
 then `bridge_exec` with the successful projection. The [regression
@@ -582,3 +582,23 @@ symbolic block size (including zero), and checks a declared E5 byte input.
 The positive [store-one/load example](../VeriTile/Interp/Bridge/Exec.lean#L821)
 proves its precondition in every state. Storing negative infinity before a
 load still gives different observable results and fails the certificate.
+
+The [certificate census](../tests/lean/InterpBridgeCensus.lean) checks 68
+example kernel definitions with distinct region arguments and symbolic numeric
+parameters. For the four AdamUpdate definitions, `Layout.pointerRegion`
+contains the three input regions. A pointer base must belong to this set;
+adding a natural offset keeps the region of each lane. A tracked pointer
+register retains that property across assignments. A pointer load requires
+every permitted target to be readable at its dtype, and a pointer store
+requires every permitted target to be writable. The seven HyperConnections
+matrix definitions use finite fills, index transformations and finite dot
+products. Each of the two dimension dispatchers is checked on both branches.
+
+For the [online softmax](../bench/examples/OnlineSoftmax/Kernels.lean#L39),
+the initial `m` is negative infinity. The first iteration uses the old `m`
+both in `maximum(m, xi)` and in `exp(m - m_new)`. The census leaves `m` and
+`m_new` untracked. Both plain and libdevice exponentials in the real model always produce
+a finite value: `WithBot.realExp` maps bottom to zero and a finite real to
+its real exponential. This proves finiteness of the loop accumulator and
+the final quotient for every symbolic loop bound, including zero. All nested
+reads still need their site checks. The D1 tests reject direct and register-mediated stores of negative infinity through both regions and pointers, for every layout.

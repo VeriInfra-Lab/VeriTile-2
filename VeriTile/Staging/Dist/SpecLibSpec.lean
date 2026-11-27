@@ -1,20 +1,34 @@
 /-
 VeriTile.Staging.Dist.SpecLibSpec
 
-Interface and statements of the specification library, frozen by ticket S7.1.
-Signed: `allGather_apply` and `allReduce_eq_of_leaves_perm` (2026-11-11) and
-`moeCombine_of_moeDispatch` (2026-11-12), each with the definitions under it.
-Signed on 2026-11-23 (user decisions of that day, recorded on #66; the agent
-recorded the signature on the user's delegation): coverage of a reduction tree
-in the subset form (`ReduceOrder.CoversOn`, `ReduceOrder.Covers`) with
-`ReduceOrder.eval_eq_sum_of_coversOn`, `ReduceOrder.eval_eq_sum_of_covers` and
-`allReduce_eq_sum_of_covers`, and the statements of S7.2:
-`reduceScatter_eq_sum_of_covers`, `gemmReduceScatter_eq_sum_of_covers`,
-`reduceScatter_twoRanks`, `gemm_apply`, `allGatherGemm_eq`,
-`allGatherGemm_apply`, `gemmReduceScatter_apply`, which freeze `reduceScatter`,
-`gemm`, `allGatherGemm` and `gemmReduceScatter`. Everything else is UNSIGNED:
-`ReduceOrder.ofList` and the helper lemmas of coverage, all-to-all (S7.4) and
-the attention merge (S7.5).
+S7.1 records the signatures for the collective specification library.
+`moeCombine_of_moeDispatch`, signed on 2026-11-12 with its dependencies,
+remains here. The attention merge (S7.5) remains unsigned here.
+
+The all-to-all (S7.4) declarations signed on 2026-11-24 (#66, #69)
+now live in `VeriTile/Dist/Spec/AllToAll.lean`. The seven signed statements
+are `allToAll_apply`, `allToAll_involutive`,
+`AllToAllLayout.receives_iff`, `allToAllV_recv_eq_of_receives`,
+`allToAllV_exists_of_wellFormed`, `AllToAllLayout.fixedSize_wellFormed` and
+`allToAllV_fixedSize_iff`, which freeze `allToAll`, `AllToAllLayout`,
+`AllToAllLayout.Receives`, `AllToAllLayout.WellFormed`, `AllToAllV` and
+`AllToAllLayout.fixedSize`. The additional step-2 lemmas live in the same
+module and remain unsigned.
+
+The 2026-11-11 statements `allGather_apply` and `allReduce_eq_of_leaves_perm`
+now live in `VeriTile/Dist/Spec/AllGather.lean` and
+`VeriTile/Dist/Spec/AllReduce.lean`, respectively.
+
+The declarations signed on 2026-11-23 (#66) moved to `VeriTile/Dist/Spec/` in #500.
+- `RankTensor.lean` contains `ReduceOrder.CoversOn`, `ReduceOrder.Covers`,
+  `ReduceOrder.eval_eq_sum_of_coversOn` and `ReduceOrder.eval_eq_sum_of_covers`.
+  `ReduceOrder.ofList` and the coverage helpers also live there and remain unsigned.
+- `AllReduce.lean` contains `allReduce_eq_sum_of_covers`.
+- `ReduceScatter.lean` contains `reduceScatter_eq_sum_of_covers`,
+  `gemmReduceScatter_eq_sum_of_covers`, `reduceScatter_twoRanks`, `gemm_apply`,
+  `allGatherGemm_eq`, `allGatherGemm_apply` and `gemmReduceScatter_apply`, with
+  their frozen definitions `reduceScatter`, `gemm`, `allGatherGemm` and
+  `gemmReduceScatter`.
 
 The library states what a collective computes, as a mathematical function or
 relation over one tensor per rank. It is independent of any front end and of
@@ -87,50 +101,11 @@ Decisions that the tickets left open:
     output of one query row, with the denominator not in logarithmic form.
 16. Negative examples are concrete instances; S7.2–S7.5 choose them.
 -/
-import VeriTile.Dist.Spec.RankTensor
-import Mathlib.Logic.Equiv.Fin.Basic
+import VeriTile.Dist.Spec.AllToAll
 
 namespace VeriTile.Dist
 
 open scoped BigOperators
-
-/-! ## All-to-all (S7.4) -/
-
-/-- UNSIGNED. Owner: S7.4. Fixed-size all-to-all. The buffer of each rank has
-one chunk of `n` rows per peer. Afterwards chunk `s` of rank `d` is what chunk
-`d` of rank `s` was. -/
-def allToAll {numRanks n : Nat} {ι : Type} (x : RankTensor numRanks (Fin (numRanks * n) × ι)) :
-    RankTensor numRanks (Fin (numRanks * n) × ι) :=
-  fun d i => x i.1.divNat (finProdFinEquiv (d, i.1.modNat), i.2)
-
-/-- UNSIGNED. Owner: S7.4. The tables of a variable-length all-to-all.
-`count s d` is the number of rows that rank `s` sends to rank `d`;
-`sendOffset s d` is the first of these rows in the send buffer of `s`;
-`recvOffset d s` is the first row in the receive buffer of `d` that they
-fill. -/
-structure AllToAllLayout (numRanks : Nat) where
-  count : Fin numRanks → Fin numRanks → Nat
-  sendOffset : Fin numRanks → Fin numRanks → Nat
-  recvOffset : Fin numRanks → Fin numRanks → Nat
-
-/-- UNSIGNED. Owner: S7.4. Row `p` of the receive buffer of rank `d` is filled
-from rank `s`. -/
-def AllToAllLayout.Receives {numRanks : Nat} (L : AllToAllLayout numRanks)
-    (d s : Fin numRanks) (p : Nat) : Prop :=
-  L.recvOffset d s ≤ p ∧ p < L.recvOffset d s + L.count s d
-
-/-- UNSIGNED. Owner: S7.4. The precondition of a variable-length all-to-all:
-no row of a receive buffer is filled from two sources. -/
-def AllToAllLayout.WellFormed {numRanks : Nat} (L : AllToAllLayout numRanks) : Prop :=
-  ∀ d s₁ s₂ p, L.Receives d s₁ p → L.Receives d s₂ p → s₁ = s₂
-
-/-- UNSIGNED. Owner: S7.4. Variable-length all-to-all. Row `i` of the rows
-that rank `s` sends to rank `d` arrives at row `recvOffset d s + i` of the
-receive buffer of `d`. Rows that no source fills are not constrained. -/
-def AllToAllV {numRanks : Nat} {ι : Type} (L : AllToAllLayout numRanks)
-    (send recv : RankTensor numRanks (Nat × ι)) : Prop :=
-  ∀ s d i, i < L.count s d → ∀ j,
-    recv d (L.recvOffset d s + i, j) = send s (L.sendOffset s d + i, j)
 
 /-! ## MoE dispatch and combine, attention chunk merge (S7.5) -/
 
@@ -213,7 +188,14 @@ theorem moeCombine_of_moeDispatch {numRanks numTokens : Nat} {ι : Type}
     (hback : MoEStoreBack rows results back)
     (horder : ∀ s t, ∀ d ∈ (order s t).leaves, d ∈ R.dest s t) :
     moeCombine order back =
-      fun s i => (order s i.1).eval fun d => R.weight s i.1 d * tokens s i := sorry
+      fun s i => (order s i.1).eval fun d => R.weight s i.1 d * tokens s i := by
+  funext s ⟨t, j⟩
+  simp only [moeCombine, ReduceOrder.eval_eq_sum_leaves]
+  apply congrArg List.sum
+  apply List.map_congr_left
+  intro d hd
+  obtain ⟨p, row, _⟩ := hdispatch.1.existsUnique_row s t d (horder s t d hd)
+  rw [hback d p s t row j, hexpert d p s t row j, hdispatch.2 d p s t row j]
 
 /-- UNSIGNED. Owner: S7.5. The attention result of one query row over one
 chunk of keys: `weight` is the softmax denominator, the sum of the

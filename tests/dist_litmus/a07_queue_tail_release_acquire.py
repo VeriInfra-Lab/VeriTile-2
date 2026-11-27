@@ -1,5 +1,8 @@
+# Source: tile-ai/tilescale@9ba8a605d347f600a95d0275e2639cb00122c084 examples/distributed/deepseek_deepep/deepep.md:189-190
+# Licence: MIT
+# Changes: rewritten as a minimal example; One lane writes a slot of the peer and publishes the tail
 # LIT-a07. One lane writes a slot of the peer and publishes the tail.
-# Source: examples/distributed/deepseek_deepep/deepep.md:190 at TileScale
+# Context: examples/distributed/deepseek_deepep/deepep.md:190 at TileScale
 # 9ba8a605 ("Queue semantics"); docs/distributed_api_reference.md, "Peer
 # Memory Operations" and "Wait and Barrier Operations" (TS-API).
 # Table: documents/dist/LitmusTable.md. Front end: TileScale 71e7145.

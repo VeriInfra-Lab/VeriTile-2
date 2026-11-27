@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "HyperConnectionsDepth",
+    "lean": "VeriTile.Bench.Examples.HyperConnectionsDepth.Kernels.matrixKernel",
+    "source": "bench/examples/HyperConnectionsDepth/HyperConnectionsDepth.py::matrixKernel"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "S": 2,
+    "T": 4,
+    "D": 2,
+    "numIters": 2
+  },
+  "arguments": [
+    {
+      "parameter": "resMixReg",
+      "buffer": "resMixReg"
+    },
+    {
+      "parameter": "branchOutReg",
+      "buffer": "branchOutReg"
+    },
+    {
+      "parameter": "hPostReg",
+      "buffer": "hPostReg"
+    },
+    {
+      "parameter": "outReg",
+      "buffer": "outReg"
+    },
+    {
+      "parameter": "tau",
+      "value": 2
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "resMixReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            2,
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-res.tensor"
+        },
+        "branchOutReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            4,
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-branch.tensor"
+        },
+        "hPostReg": {
+          "dtype": "fp32",
+          "shape": [
+            4,
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-post.tensor"
+        }
+      },
+      "expected": {
+        "outReg": "tests/interp/fixtures/tensor_examples/hyper-depth.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "outReg",
+      "dtype": "fp32",
+      "shape": [
+        2,
+        2,
+        2
+      ]
+    }
+  ]
+}

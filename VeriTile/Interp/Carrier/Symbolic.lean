@@ -7,6 +7,13 @@ open VeriTile.Triton VeriTile.Triton.FP VeriTile.Triton.FP.Equational
 inductive DotKind where
   | dot | dotWithOptions | dotTyped | dotAcc
 
+/-- The carrier implements sum, max and min; only sum and max have typed variants. -/
+abbrev ValidReduction (op : ScanOp) (typed : Bool) : Prop :=
+  match op with
+  | .sum | .max => True
+  | .min => typed = false
+  | .prod => False
+
 /-- Scalar calls with no constructor in the upstream equational signature. -/
 inductive Call where
   | fma (p : IndexComputePrecision)
@@ -16,7 +23,7 @@ inductive Call where
   | minimum (p : Option ComputeDType) (d : FloatDType)
   | divRN
   | float8E5Bits (d : FloatDType) (bits : Float8E5Bits)
-  | reduction (op : ScanOp) (typed : Bool) (p : Option ComputeDType) (d : FloatDType)
+  | reduction (op : ScanOp) (typed : Bool) {valid : ValidReduction op typed} (p : Option ComputeDType) (d : FloatDType)
       (shape : TileShape) (axis : Nat) (keepDims : Bool)
   | dot (kind : DotKind) (p : Option ComputeDType) (left right out : FloatDType)
       (options : DotOptions) (k : Nat)
@@ -37,8 +44,9 @@ private def call (op : Call) (args : List Expr) : Expr := .leaf (.call op args)
 
 private def reduce (op : ScanOp) (typed : Bool) (p : Option ComputeDType) (d : FloatDType)
     {shape : TileShape} (axis : Fin shape.length) (keep : Bool)
-    (xs : TileIndex shape → Expr) (i : TileIndex (TileShape.reduceShape shape axis keep)) : Expr :=
-  call (.reduction op typed p d shape axis.val keep)
+    (xs : TileIndex shape → Expr) (i : TileIndex (TileShape.reduceShape shape axis keep))
+    (valid : ValidReduction op typed := by decide) : Expr :=
+  call (.reduction op typed (valid := valid) p d shape axis.val keep)
     ((List.finRange _).map (reductionInputs shape axis keep xs i))
 
 private def products {m k n : Nat} : (batch : TileShape) →

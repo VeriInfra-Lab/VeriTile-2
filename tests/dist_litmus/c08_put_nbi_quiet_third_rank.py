@@ -1,6 +1,9 @@
+# Source: VeriInfra-Lab/VeriTile-2@51419efee8944c00d6d6a8296bf708ad2956b1d7 documents/dist/LitmusTable.md:983-1003
+# Licence: MIT
+# Changes: rewritten as a minimal example; Rank 0 puts to rank 1, quiets, and signals rank 2, which then loads the destination on rank 1
 # LIT-c08. Rank 0 puts to rank 1, quiets, and signals rank 2, which then
 # loads the destination on rank 1.
-# Source: NVSHMEM 3.6.5, "Memory Ordering" (nvshmem_quiet), "Memory Model",
+# Context: NVSHMEM 3.6.5, "Memory Ordering" (nvshmem_quiet), "Memory Model",
 # "Visibility Guarantees", and "Using NVSHMEM", "Data Consistency"; release
 # notes of 3.6.5, "Limitations".
 # Table: documents/dist/LitmusTable.md. Front end: Triton-distributed 7908e4e.
