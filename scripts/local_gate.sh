@@ -72,6 +72,8 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.InterpSymbolic"
              "lake env lean tests/lean/InterpSymbolic.lean"
              "lake build tests.lean.InterpArraySmoke"
+             "lake build tests.lean.dist.P2PPutViews"
+             "lake env lean tests/lean/dist/P2PPutViews.lean"
              "lake build tests.lean.dist.TritonExtParsing"
              "lake build tests.lean.dist.IndexQueueCells"
              "lake build tests.lean.dist.IndexQueueCellValues"
