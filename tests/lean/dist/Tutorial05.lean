@@ -1,25 +1,64 @@
-/- T05, Route B (#664). Hand-transcribed phases at Triton-distributed
+import tests.lean.dist.Tutorial05WholeOrder
+import tests.lean.dist.Tutorial05Race
+import tests.lean.dist.Tutorial05Fault
+import tests.lean.dist.Tutorial05NoAcquire
+
+/-! T05, Route B (#664), at Triton-distributed
 7908e4ea9010bb2238f9f05b28c904fd4b71c60a, tutorials/05-intra-node-reduce-scatter.py.
-The sender posts each copy into its slice of the destination scatter buffer
-(192–200). Each rank submits its copies, K11 and K10 to the current stream
-(207–220). The two outer barriers (267,273) bracket the entire call.
-Placed describes the values supplied by finished host copies. The phase
-theorem passes the actual K11 final memory to K10. This chosen boundary is
-explicit; CUDA stream ordering is outside the single-kernel Run relation.
+The main result `Whole.t05` schedules the physical host copies (192–200),
+both CAS groups including the system acquire and CO:168, and the K10 tiles
+in a single launch (207–220). The two outer barriers (267,273) bracket the call.
+`Whole.NoAcquire.reachable_race` removes the receive group from that same
+transcription. The older phase-only controls below retain their `Placed` premise.
 
-K11's matching word edge comes from the two CAS loops (common_ops.py:158–167).
-A store and a reader on another lane require endpoint handoffs. At CO:168
-WordRound.via_cta uses the concrete roster, arrivals and wait of RoundEdge.
-
-The physical output tensor has dtype bfloat16 (T05:211,254). S7 uses real
-entries. The hand transcription to kernels/host code and physical numerical
-relation are source-bridge obligations of #157/#158. The negative includes an
-unfinished remote copy and uses values exactly representable in BF16. -/
-import tests.lean.dist.Tutorial05CAS
-import tests.lean.dist.Tutorial05K10
+The rank-local current-stream correspondence is registered as
+`t05_current_stream_order`; it contributes no cross-rank edge. Physical BF16
+arithmetic is a separate unproved obligation of #157/#158. -/
 
 namespace VeriTile.Tests.T05Pilot
 open VeriTile.Dist VeriTile.Tests.E2ReadsFromDetermined
+namespace Whole
+
+/-- Race freedom includes every unfinished prefix, as well as complete schedules. -/
+theorem race_free {x : RankTensor n (Fin (n*rows) × Fin cols)} (initial : Initial x s)
+    (fits : n ≤ lanes) (w : CellWrites) : DRF (launch true n lanes rows cols w) s := by
+  intro cs f run
+  apply Race.noRace run
+  intro src dst b i j rd wr rd' wr' p host tile _ _ hp tp
+  exact scatterHB initial fits run src dst b i j rd wr rd' wr' p host tile hp tp
+
+/-- One actual launch from the input shards and zeroed control words, with stale
+scatter allowed. Every complete run has S7's ordered output and at least one
+complete, race-free run exists. -/
+theorem t05 {x : RankTensor n (Fin (n*rows) × Fin cols)} (initial : Initial x s)
+    (fits : n ≤ lanes) (w : CellWrites) :
+    ImplementsAll (launch true n lanes rows cols w) s (fun final => Output x final.mem) ∧
+    Completes (launch true n lanes rows cols w) s := by
+  have safe := race_free initial fits w
+  refine ⟨⟨⟨sound ..,safe,?_⟩,?_⟩,ScheduleProof.completes fits w initial safe⟩
+  · intro cs f run
+    exact Progress.noFault initial (fun prev => copyBeforeTile initial fits prev) run
+  · intro cs f run done
+    apply output_of_classified_run initial.inputs _ run done
+    intro before after choice prior prev st
+    exact classifyValueStep (reachableShape prev) st (copyBeforeTile initial fits prev)
+
+open VeriTile.Tests.FetchAddObservation (putCellWrites) in
+/-- Keep inputs, initialization, dimensions and lane count fixed while removing
+only the receive CAS group. With that group every run is race free; without it
+one actual schedule reads the peer slot before the peer writes it. -/
+theorem acquire_matters : ∃ (x : RankTensor 2 (Fin (2*1) × Fin 1)) (s : DistState)
+    (cs : Schedule) (f : Config Nat), Initial x s ∧ DRF (launch true 2 2 1 1 putCellWrites) s ∧
+    Run (launch false 2 2 1 1 putCellWrites) ((launch false 2 2 1 1 putCellWrites).initial s) cs f ∧
+    DataRace (launch false 2 2 1 1 putCellWrites) f.history := by
+  obtain ⟨x,s,cs,f,initial,run,race⟩ := NoAcquire.reachable_race
+  exact ⟨x,s,cs,f,initial,race_free initial (by decide) putCellWrites,run,race⟩
+
+#print axioms acquire_matters
+#print axioms race_free
+#print axioms t05
+end Whole
+
 /-- The composed stages use the actual memory after K11 as the initial memory
 of K10. The phase order is a host handoff, not a new synchronization event. -/
 theorem t05_stages {n rows cols : Nat} (x : RankTensor n (Fin (n*rows) × Fin cols))
@@ -148,6 +187,67 @@ theorem early_read_different_complete_outputs :
     norm_num at bad
 #print axioms early_read_different_complete_outputs
 end Early
+
+/-- Three ranks, two rows and columns per shard. Sender 2's row 1/column 1
+is physically at offset 7 for destination 1 in its input and at offset 11 in
+the destination scatter; sender 1's corresponding slot remains unchanged. -/
+theorem Whole.threeRankShards (s : DistState) :
+    ∃ f, (hostCopySeg 2 2 (2 : Fin 3)).run s = some f ∧
+      f.cell ⟨.global 1,"scatter",11⟩ = s.cell ⟨.global 2,"input",7⟩ ∧
+      f.cell ⟨.global 1,"scatter",7⟩ = s.cell ⟨.global 1,"scatter",7⟩ := by
+  obtain ⟨f,run⟩ := hostCopy_runs 2 2 (2 : Fin 3) s
+  refine ⟨f,run,hostCopy_at (2 : Fin 3) (1 : Fin 3) ((1 : Fin 2),(1 : Fin 2)) run,?_⟩
+  exact hostCopy_other ((1 : Fin 2),(1 : Fin 2)) (src := (2 : Fin 3))
+    (peer := (1 : Fin 3)) (by decide : (1 : Fin 3) ≠ 2) run
+
+#print axioms Whole.threeRankShards
+
+namespace Whole.TwoRank128
+open VeriTile.Tests.FetchAddObservation (putCellWrites)
+
+/-- On entry only the physical input shards have their intended values.
+Every scatter cell starts at zero. The two destination outputs differ. -/
+noncomputable def sources (src : Fin 2) (i : Fin (2*1) × Fin 1) : ℝ :=
+  if src.val = 0 then 1/2 else if i.1.val = 0 then 1/4 else 1/8
+
+noncomputable def initial : DistState :=
+  { numRanks := 2, context := (DistState.single default).context,
+    cell := fun p => if p.region = "input" then match p.space with
+      | .global 0 => finiteCell (1/2) | _ => finiteCell (if p.offset = 0 then 1/4 else 1/8)
+      else if p.region = "scatter" then finiteCell 0 else VeriTile.Triton.MemCell.of .nat 0 }
+
+theorem initial_data : @Initial 2 1 1 sources initial := by
+  refine ⟨?_,?_,?_⟩
+  · rintro src dst ⟨row,col⟩
+    fin_cases src <;> fin_cases dst <;> fin_cases row <;> fin_cases col <;> rfl
+  · intro r t; rfl
+  · intro r stage; rfl
+
+theorem initially_stale : ¬ @Placed 2 1 1 sources initial := by
+  intro h
+  have z := h (0 : Fin 2) (0,0) (0 : Fin 2)
+  change some ((0 : ℝ) : WithBot ℝ) = some ((↑((1/2):ℝ)) : WithBot ℝ) at z
+  norm_num at z
+
+/-- The physical CTA has 128 participants. Only lanes 0 and 1 run the CAS;
+all lanes participate in CO:168 before either real-valued result is read. -/
+theorem witnessed :
+    ∃ cs f, Run (launch true 2 128 1 1 putCellWrites)
+      ((launch true 2 128 1 1 putCellWrites).initial initial) cs f ∧ Complete f ∧
+      ¬ DataRace (launch true 2 128 1 1 putCellWrites) f.history ∧
+      f.mem.cell (outputSlot (0 : Fin 2) (0 : Fin 1) (0 : Fin 1)) = finiteCell (3/4) ∧
+      f.mem.cell (outputSlot (1 : Fin 2) (0 : Fin 1) (0 : Fin 1)) = finiteCell (5/8) := by
+  obtain ⟨verified,cs,f,run,complete,drf⟩ := t05 initial_data (by decide : 2 ≤ 128) putCellWrites
+  have out := verified.2 cs f run complete
+  refine ⟨cs,f,run,complete,drf,?_,?_⟩
+  · rw [out (0 : Fin 2) (0,0)]
+    congr 1; change (1:ℝ)/4+1/2 = _; norm_num
+  · rw [out (1 : Fin 2) (0,0)]
+    congr 1; change (1:ℝ)/2+1/8 = _; norm_num
+
+#print axioms initially_stale
+#print axioms witnessed
+end Whole.TwoRank128
 
 namespace TwoRank
 open VeriTile.Tests.FetchAddObservation (putCellWrites)
