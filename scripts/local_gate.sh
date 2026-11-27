@@ -45,7 +45,11 @@ commands=("python3 scripts/check_docs.py"
           "python3 scripts/check_test_sorry.py --sources"
           "python3 scripts/test_trust_kernel_labels.py DocumentedLabels"
           "python3 scripts/check_forbidden_references.py"
-          "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py")
+          "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py"
+          "python3 scripts/check_bench_staging_imports.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_bench_staging_imports.py"
+          "python3 scripts/check_import_paths.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_import_paths.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done
