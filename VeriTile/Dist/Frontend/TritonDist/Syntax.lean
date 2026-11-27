@@ -54,6 +54,7 @@ scoped syntax lookahead(ident) &"atomic_cas" "(" tritonExpr "," tritonExpr "," t
 scoped syntax lookahead(ident) &"laneid" "(" ")" : extraCallExpr
 scoped syntax lookahead(ident) &"ld" "(" tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"ld" "(" tritonExpr "," &"scope" "=" tritonExpr "," &"semantic" "=" tritonExpr ")" : extraCallExpr
+scoped syntax lookahead(ident) &"ld" "(" tritonExpr "," &"semantic" "=" tritonExpr "," &"scope" "=" tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"ld_acquire" "(" tritonExpr "," tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"tid" "(" tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"tid" "(" &"axis" "=" tritonExpr ")" : extraCallExpr
@@ -72,6 +73,10 @@ scoped syntax lookahead(ident) &"st" "(" tritonExpr "," tritonExpr "," &"semanti
 scoped syntax "tl.atomic_add(" tritonExpr "," tritonExpr "," &"mask" "=" tritonExpr "," &"sem" "=" tritonExpr "," &"scope" "=" tritonExpr ")" : extraCallStmt
 scoped syntax "tl.atomic_add(" tritonExpr "," tritonExpr "," &"sem" "=" tritonExpr "," &"scope" "=" tritonExpr ")" : extraCallStmt
 scoped syntax (name := pendingExtraStmt) (priority := high) extraCallStmt : tritonStmt
+
+-- An empty polling loop is lowered by the A3 call frontend.
+scoped syntax (name := extraSpinStmt) (priority := high)
+  "while" tritonExpr "{" (&"pass")? "}" : tritonStmt
 
 declare_syntax_cat commonCallStmt
 scoped syntax lookahead(ident) &"barrier_all_intra_node_atomic_cas_block" "(" tritonExpr "," tritonExpr "," tritonExpr "," tritonExpr ")" : commonCallStmt

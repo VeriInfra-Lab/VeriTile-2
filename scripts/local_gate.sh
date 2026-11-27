@@ -99,6 +99,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.UnguardedShared"
              "lake build tests.lean.dist.Location"
              "lake build tests.lean.dist.TritonDistShmem"
+             "lake build tests.lean.dist.TritonDistLanguageExtra"
              "lake build tests.lean.dist.SegmentFootprint"
              "python3 scripts/check_trust_kernel_labels.py"
              "python3 scripts/test_trust_kernel_labels.py ElaboratedLabels"
