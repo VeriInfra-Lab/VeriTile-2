@@ -1225,9 +1225,13 @@ atomics), and `t05_current_stream_order`. The underlying machine theorem
 `Whole.model_t05` proves the ordered S7 result for every complete execution and
 exhibits a complete race-free execution whenever the CTA has at least as many
 physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
-scatter cells and reads back 3/4 and 5/8. With only the receive CAS group
-removed, a two-rank execution reads a peer shard before its sender writes it.
-The failed hypothesis is the inter-rank ordering of that cell. [Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Acquire-deleted execution](../../tests/lean/dist/Tutorial05NoAcquire.lean)
+scatter cells and reads back 3/4 and 5/8. The two-rank counterexample deletes
+the whole receive CAS loop, including the system-acquire wait `w1` and the
+relaxed reset `s0`. A K10 tile can then read a peer shard before its sender
+writes it. Separately, `Stream.relaxedCASNoDirect` retains the receive loop
+in its local event trace and weakens only the wait to relaxed. The release
+and that wait then have no direct happens-before edge on the payload.
+[Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Whole-loop deletion](../../tests/lean/dist/Tutorial05NoAcquire.lean) · [Relaxed-wait endpoint proof](../../tests/lean/dist/Tutorial05Stream.lean)
 
 ### A1 `undocumented_scope_order_vocabulary`
 

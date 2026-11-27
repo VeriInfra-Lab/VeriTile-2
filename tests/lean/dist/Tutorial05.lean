@@ -9,8 +9,10 @@ import VeriTile.Dist.Meta.PrintTrustAssumptions
 The main result `Whole.t05` schedules the physical host copies (192–200),
 both CAS groups including the system acquire and CO:168, and the K10 tiles
 in a single launch (207–220). The two outer barriers (267,273) bracket the call.
-`Whole.NoAcquire.reachable_race` removes the receive group from that same
-transcription. The review probe `no_barrier_needed` starts K10 with `Placed`.
+`Whole.NoAcquire.reachable_race` removes the whole receive CAS loop, both the acquire wait
+`w1` and the relaxed reset `s0`, from that transcription. `Stream.relaxedCASNoDirect`
+retains the receive loop and weakens the wait in the local endpoint trace.
+The review probe `no_barrier_needed` starts K10 with `Placed`.
 The initial contract here permits stale scatter, as `Whole.TwoRank128.initially_stale`
 demonstrates. `Whole.acquire_matters` witnesses the race on the same inputs.
 
