@@ -1363,6 +1363,54 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Beyond documentation | That documentation written for another commit, on another branch, describes the calls of the port |
 | Event interface | None of its own: each call has the event of its row |
 
+### Atomic updates (N5′)
+
+The translation-correctness entry `documented_atomic_update_lowering` (#43,
+#608) separates the source operation from the function-valued payload of an
+S3 emission. The inventory below is of the actual front ends at main
+`14a1f4d33` (the merge of #81). `LanguageExtra.Call.lower` retains the
+evaluated operands in an `AccessPlan`; `AccessPlan.observe` projects the
+access kind, the optional new value and the optional observed return. The
+only direct constructors of `Event.access .update` under
+`VeriTile/Dist/Frontend/` are the add branch and the successful
+compare-exchange branch in `LanguageExtra.lean:69–78`.
+
+| Accepted source operation | Current lowering and value/return behaviour | Pinned source and admitted reading |
+| --- | --- | --- |
+| `atomic_add` (`language_extra`) | [`LanguageExtra.quoteAdd` (204–208) and `AccessPlan.observe` (69–78)](../../VeriTile/Dist/Frontend/TritonDist/LanguageExtra.lean): per evaluated lane, RMW of the old cell with the evaluated operand using addition at the source dtype; return the observed old value, whether bound or discarded. | TD-API, TD-LEC at `7908e4e` (E-TD8, E-TD14); D5 and A1(a,b). The documentation does not state the returned value; that reading is A1(b). |
+| Scoped `tl.atomic_add`, with or without mask | The same add-plan constructor, with the accepted source scope/order and only mask-true lanes. The return for each active lane is its own old value. Inactive lanes evaluate neither address nor operand. | TR-CORE at Triton `v3.5.1` (E-TR1), TD-T08 (E-TD18); A1(d) for the scope/order vocabulary. |
+| `atomic_cas` (`language_extra`) | [`LanguageExtra.quoteExpr` (230–260), `Call.lower` (114–151), `AccessPlan.observe` (69–78)](../../VeriTile/Dist/Frontend/TritonDist/LanguageExtra.lean): if old equals expected, one update writes the replacement and returns old; otherwise one load returns old and does not write. The empty CAS spin is separately a grouped wait and successful set, not a function-valued RMW plan. | TD-API at `7908e4e` (E-TD8), D5 and A1(b); A3 for the accepted empty spin. The strong compare-exchange and return interpretation is an admitted reading, not a documented return guarantee. |
+| `dl.notify`, `sig_op="add"` or `"set"` | [`DL.notify` (59–64), `DL.Call.lower` (106–126)](../../VeriTile/Dist/Frontend/TritonDist/DL.lean): pattern-b `Event.bump` on the remote word, with `SignalOp.add` or `SignalOp.set` and the release mode selected by the accepted scope. ADD computes `old + amount`; SET writes `amount`. Neither is an `AccessPlan` nor a function-valued S3 payload. | TD-PRIM and TD-API at `7908e4e` (E-TD2, E-TD3); A2 is the named atomicity, scope, ordering and value assumption, not a documented guarantee. |
+| `libshmem_device.signal_op`, `NVSHMEM_SIGNAL_ADD` or `NVSHMEM_SIGNAL_SET` | [`Shmem.signalOpTerm` (167–172), `Shmem.Call.lower` (134–154)](../../VeriTile/Dist/Frontend/TritonDist/Shmem.lean): pattern-b signal bump with shmem release mode. ADD computes `old + amount`; SET replaces the word. | NVSHMEM 3.6.5 NV-SIG (E-NV10, E-NV12), TD-SH and TD-SHC at `7908e4e`. |
+| `libshmem_device.putmem_signal_block`, `putmem_signal_nbi_block`, `putmem_signal_nbi_warp` | [`Shmem.lowerCopy` (103–130)](../../VeriTile/Dist/Frontend/TritonDist/Shmem.lean) retains the signal bump in the transfer completion. ADD/SET use the same counter operations. The transfer payload accesses remain plain reads/stores; the signal is not an RMW of the payload. | NVSHMEM 3.6.5 NV-SIG (E-NV8, E-NV9, E-NV12, E-NV16), TD-API/TD-PRIM at `7908e4e`. |
+
+The signed S2 `SignalOp.apply`, `SignalOp.kind`, `Bump.accesses` and
+`Event.accesses` in [`Event.lean`](../../VeriTile/Dist/Event.lean) distinguish
+the ADD counter's memory update from SET's store. The internal delivery,
+phase and rendezvous counter increments in `Shmem.lean` and
+`LanguageExtra.lean` have no memory-word access. They are not additional
+source atomic primitives. Base Triton `tl.load`, arithmetic and `tl.store`
+lower to distinct core statements, and a scoped load, independent compute
+and scoped store lower to separate access plans, not one RMW. The other
+base Triton atomics (exchange, max/min, and/or/xor, etc.) do not have a
+distributed access-plan producer in this inventory. The TileLang DSL's
+`Statement.update` denotes an augmented assignment in its syntax, not an
+S2 atomic event or S3 memory payload; its current core lowerer does not
+provide an atomic event bridge.
+
+The [source-to-S2 regressions](../../tests/lean/dist/AtomicUpdateBoundary.lean)
+quantify over the evaluator-supplied old values, operands and addition;
+they check active and inactive lanes, both CAS outcomes, the separate
+load/store path and the counter mappings. They validate the executable
+translation under the readings above, not the arithmetic implementation or
+hardware behaviour of the pinned primitives. As the coordinator clarified
+on #608 (2026-11-27), there are still **zero** producers of
+`AccessValue.update` or `Emission` in the public front ends. The signed type
+remains in [`SegmentSpec.lean`](../../VeriTile/Staging/Dist/SegmentSpec.lean);
+the source-to-S3 bridge and its corresponding regression belong to #82.
+N5′ remains an open translation-correctness assumption until that bridge
+is discharged. No S3 payload is constructed by these tests.
+
 ## 8. Counts
 
 | Section | Rows | documented | named assumption | weakest | out of scope |

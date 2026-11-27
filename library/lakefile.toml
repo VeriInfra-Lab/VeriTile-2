@@ -518,6 +518,7 @@ globs = [
   "tests.lean.dist.Location",
   "tests.lean.dist.TritonDistShmem",
   "tests.lean.dist.TritonDistLanguageExtra",
+  "tests.lean.dist.AtomicUpdateBoundary",
   "tests.lean.dist.SegmentFootprint",
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
