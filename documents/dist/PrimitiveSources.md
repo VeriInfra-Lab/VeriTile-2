@@ -1232,7 +1232,7 @@ out is said in the statement, and what follows when two entries meet is in
 section 6 (I7 to I11). The names were chosen in this revision (ticket S2.7);
 the freeze ticket S5.1 fixes them. A9, A10 and the present form of A5 come
 from the user's decisions of 2026-11-21 and have the same form; A5 was renamed
-then. Two fields are added: what goes beyond
+then. On 2026-11-27 the user registered A11 for CTA-scoped accesses in the pinned DeepEP intranode port. Two fields are added: what goes beyond
 documentation, in one sentence, and the constructor of the signed event
 interface (`VeriTile/Dist/Event.lean`) that carries the reading;
 ticket S2.6 fixes the map from primitives to events.
@@ -1370,8 +1370,8 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Name | `deepep_v1_cta_scope_is_block` |
 | Class | semantic source |
 | Status | Registered by the user's decision of 2026-11-27. [Decision on #636](https://github.com/VeriInfra-Lab/VeriTile-2/issues/636#issuecomment-7206156826) |
-| Statement | Within TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`, directory `examples/distributed/deepseek_deepep/intranode/`, including the #636 variant of that port, the `cta` scope argument of a port `T.ld` or `T.st` denotes `cuda::thread_scope_block`. Each covered call is one atomic load or store at block scope. A1(c) supplies the order from the operation’s semantics argument: acquire for these loads and release for these stores. |
-| Source or rationale | Not stated: the pinned port documentation gives no block-scope atomic meaning to the string `cta`. Why the kernels need it: receiver warps publish and read shared state in K28. With W1 these accesses would be plain and would supply no release/acquire synchronization. The [compilation record](../../experiments/interp_gpu/deepep_v1/CombineVariant.md) shows the instructions emitted for the variant. |
+| Statement | Within TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`, directory `examples/distributed/deepseek_deepep/intranode/`, including the #636 variant of that port, the `cta` scope argument of a port `T.ld` or `T.st` denotes `cuda::thread_scope_block`. Each covered call is one atomic load or store at block scope. A1(c) supplies the order from the operation’s semantics argument: acquire for these loads and release for these stores. A11 excludes all other semantics strings with `scope="cta"`. |
+| Source or rationale | Not stated: E-TS13 records that the source accepts `cta`, but the documentation gives it no block-scope atomic meaning. Why the kernels need it: under W1 and I1, conflicting accesses to K28’s three CTA-shared arrays can race. In particular, no happens-before edge (`HB`) runs from warp 0’s publication of `shared_channel_tail_idx` to the reduction warps’ reads of the published slots. The [compilation record](../../experiments/interp_gpu/deepep_v1/CombineVariant.md) shows the instructions emitted for the variant. |
 | Affected kernels | K28, `combine_main` (text search). The original calls are DC 255, 284 and 286. The variant also spells out the acquire loads at DC 247/261/262 and the release stores at DC 343–345/350. |
 | Beyond documentation | The scope mapping is an assumption restricted to this port directory and pin. A1 retains its existing domain. |
 | Event interface | A covered load at `p` yields `Event.access .load p (.atomic .cta .acquire)`; a covered store yields `Event.access .store p (.atomic .cta .release)`. This scope mapping supplies no ordering edge between distinct blocks and no DRF conclusion. |
