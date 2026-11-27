@@ -2,6 +2,7 @@ import tests.lean.dist.Tutorial05WholeOrder
 import tests.lean.dist.Tutorial05Race
 import tests.lean.dist.Tutorial05Fault
 import tests.lean.dist.Tutorial05NoAcquire
+import VeriTile.Dist.Meta.PrintTrustAssumptions
 
 /-! T05, Route B (#664), at Triton-distributed
 7908e4ea9010bb2238f9f05b28c904fd4b71c60a, tutorials/05-intra-node-reduce-scatter.py.
@@ -32,7 +33,7 @@ theorem race_free {x : RankTensor n (Fin (n*rows) × Fin cols)} (initial : Initi
 /-- One actual launch from the input shards and zeroed control words, with stale
 scatter allowed. Every complete run has S7's ordered output and at least one
 complete, race-free run exists. -/
-theorem t05 {x : RankTensor n (Fin (n*rows) × Fin cols)} (initial : Initial x s)
+theorem model_t05 {x : RankTensor n (Fin (n*rows) × Fin cols)} (initial : Initial x s)
     (fits : n ≤ lanes) (w : CellWrites) :
     ImplementsAll (launch true n lanes rows cols w) s (fun final => Output x final.mem) ∧
     Completes (launch true n lanes rows cols w) s := by
@@ -44,6 +45,33 @@ theorem t05 {x : RankTensor n (Fin (n*rows) × Fin cols)} (initial : Initial x s
     apply output_of_classified_run initial.inputs _ run done
     intro before after choice prior prev st
     exact classifyValueStep (reachableShape prev) st (copyBeforeTile initial fits prev)
+
+/-- Source interpretation of the ordinary pinned invocation: spin loops become
+blocking waits, peer native CAS is supported, and the rank-local stream orders
+its copy, K11 and K10. The constructor selects the hand-transcribed launch.
+The front-end correspondence and physical BF16 agreement belong to #157/#158. -/
+inductive OrdinaryInvocation (n lanes rows cols : Nat) (w : CellWrites) : Launch Nat → Prop where
+  | pinned (spin : Assumption.spin_wait_one_blocking_event) (peer : Assumption.p2p_native_atomic_supported)
+      (stream : Assumption.t05_current_stream_order) :
+      OrdinaryInvocation n lanes rows cols w (launch true n lanes rows cols w)
+
+/-- The source-facing judgment for every ordinary T05 invocation admitted by
+the registered interpretation. The machine-level theorem also serves clients
+that run the transcription directly on mathematical data. -/
+theorem t05 {x : RankTensor n (Fin (n*rows) × Fin cols)} {w : CellWrites}
+    (source : OrdinaryInvocation n lanes rows cols w program) (initial : Initial x s) (fits : n ≤ lanes) :
+    ImplementsAll program s (fun final => Output x final.mem) ∧ Completes program s := by
+  cases source
+  exact model_t05 initial fits w
+
+/--
+info: Trust assumptions used by t05:
+  p2p_native_atomic_supported (semantic source)
+  spin_wait_one_blocking_event (semantic source)
+  t05_current_stream_order (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions t05
 
 open VeriTile.Tests.FetchAddObservation (putCellWrites) in
 /-- Keep inputs, initialization, dimensions and lane count fixed while removing
@@ -58,6 +86,7 @@ theorem acquire_matters : ∃ (x : RankTensor 2 (Fin (2*1) × Fin 1)) (s : DistS
 
 #print axioms acquire_matters
 #print axioms race_free
+#print axioms model_t05
 #print axioms t05
 end Whole
 
@@ -110,7 +139,7 @@ theorem witnessed :
       ¬ DataRace (launch true 2 128 1 1 putCellWrites) f.history ∧
       f.mem.cell (outputSlot (0 : Fin 2) (0 : Fin 1) (0 : Fin 1)) = finiteCell (3/4) ∧
       f.mem.cell (outputSlot (1 : Fin 2) (0 : Fin 1) (0 : Fin 1)) = finiteCell (5/8) := by
-  obtain ⟨verified,cs,f,run,complete,drf⟩ := t05 initial_data (by decide : 2 ≤ 128) putCellWrites
+  obtain ⟨verified,cs,f,run,complete,drf⟩ := model_t05 initial_data (by decide : 2 ≤ 128) putCellWrites
   have out := verified.2 cs f run complete
   refine ⟨cs,f,run,complete,drf,?_,?_⟩
   · rw [out (0 : Fin 2) (0,0)]

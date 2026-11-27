@@ -1219,7 +1219,10 @@ and visits every sender once. The initial state supplies the input shards,
 zero CAS flags and zero stream words. The proof permits arbitrary initial
 scatter contents. [Copy addresses and frames](../../tests/lean/dist/Tutorial05HostCopy.lean) · [K10 indexing and reduction order](../../tests/lean/dist/Tutorial05K10.lean)
 
-`Whole.t05` proves the ordered S7 result for every complete execution and
+The source-facing theorem `Whole.t05` takes an ordinary invocation of the
+pinned program. Its trust report lists A3 (spin loops), A8 (native peer
+atomics), and `t05_current_stream_order`. The underlying machine theorem
+`Whole.model_t05` proves the ordered S7 result for every complete execution and
 exhibits a complete race-free execution whenever the CTA has at least as many
 physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
 scatter cells and reads back 3/4 and 5/8. With only the receive CAS group
