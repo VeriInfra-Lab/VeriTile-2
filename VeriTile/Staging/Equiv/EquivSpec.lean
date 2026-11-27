@@ -3,9 +3,10 @@ import VeriTile.Triton.Float.StructuralIO
 import VeriTile.Triton.Launch.Grid
 
 /-! #236 / V0.1. The two pointwise consistency judgments chosen in U1–U4
-(user decision lists n and q of 2026-11-27). Every declaration below is
-marked "Signed (#236, V0.1)" and recorded in the frozen tables; the marker
-is provisional until the user confirms the signature. "Proof:" names the
+(user decision lists n and q of 2026-11-27). Every declaration below except
+`PairwiseOutputs` and `pairwise_iff_distEquiv_unique` is marked
+"Signed (#236, V0.1)" and recorded in the frozen tables. Those two stay
+unsigned until #48 and #49 settle `Completes` and `DataRace`. "Proof:" names the
 ticket that replaces a `sorry`; "Used by:" names the consuming tickets.
 
 Both judgments use sets of reachable output observations from the given
@@ -75,11 +76,13 @@ the empty set. Safety and existence of a complete run are separate predicates. -
 def DistEquiv (x : Launch P) (y : Launch Q) (s : DistState) (observe : (Addr → MemCell) → O) : Prop :=
   ∀ out, CompleteOutput x s observe out ↔ CompleteOutput y s observe out
 
-/-- Signed (#236, V0.1). Used by: #244. U3(b)'s stronger pairwise comparison, for the counterexample client. -/
+/-- Unsigned (#236): to be signed once Completes and DataRace are settled by #48 and #49.
+Used by: #244. U3(b)'s stronger pairwise comparison, for the counterexample client. -/
 def PairwiseOutputs (x : Launch P) (y : Launch Q) (s : DistState) (observe : (Addr → MemCell) → O) : Prop :=
   ∀ a b, CompleteOutput x s observe a → CompleteOutput y s observe b → a = b
 
-/-- Signed (#236, V0.1). Used by: #244. When each launch can complete, universal pairwise
+/-- Unsigned (#236): to be signed once Completes and DataRace are settled by #48 and #49.
+Used by: #244. When each launch can complete, universal pairwise
 agreement is precisely equal result sets with a unique output. Set equality
 makes the choice of the left set in the uniqueness clause immaterial. -/
 theorem pairwise_iff_distEquiv_unique (x : Launch P) (y : Launch Q) (s : DistState)
