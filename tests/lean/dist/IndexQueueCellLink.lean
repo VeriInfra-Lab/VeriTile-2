@@ -19,7 +19,7 @@ def IndexQueue.cellView (Q : IndexQueue) : View where
 private theorem mem_cellView {Q : IndexQueue} {p k} :
     p ∈ Q.cellView.slotOf k ↔ p = Q.slotOf k := Finset.mem_singleton
 
-private theorem ordinal_lt {f h k m i j} (a : Boundary f h k i) (b : Boundary f h m j) :
+theorem NthAt.ordinal_lt {f h k m i j} (a : NthAt f h k i) (b : NthAt f h m j) :
     i < j ↔ k < m := by
   have forward : ∀ {k m i j}, Boundary f h k i → Boundary f h m j → i < j → k < m := by
     intro k m i j first second lt
@@ -38,13 +38,13 @@ private theorem ordinal_lt {f h k m i j} (a : Boundary f h k i) (b : Boundary f 
 
 private theorem componentAt {v : View} {f h k stop p} (mark : Boundary f h k stop) :
     v.Component f h k stop p stop :=
-  ⟨le_rfl, fun _ _ lt _ old => (ordinal_lt old mark).2 lt⟩
+  ⟨le_rfl, fun _ _ lt _ old => (NthAt.ordinal_lt old mark).2 lt⟩
 
 private theorem uniqueComponent {v : View} {f h k stop p i t}
     (stopMark : Boundary f h k stop) (mark : Boundary f h t i)
     (same : p ∈ v.slotOf t) (part : v.Component f h k stop p i) : i = stop := by
   by_contra neq
-  have lt := (ordinal_lt mark stopMark).1 (Nat.lt_of_le_of_ne part.1 neq)
+  have lt := (NthAt.ordinal_lt mark stopMark).1 (Nat.lt_of_le_of_ne part.1 neq)
   exact Nat.lt_irrefl i (part.2 t i lt same mark)
 
 private theorem putAt {Q : IndexQueue} (sh : Q.Shaped l s) (run : Run l (l.initial s) cs c)
