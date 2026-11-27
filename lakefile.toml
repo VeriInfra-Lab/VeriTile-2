@@ -148,6 +148,8 @@ globs = [
   "bench.examples.StableLogSumExp.+",
   "bench.examples.VectorAdd.+",
   "bench.examples.Welford.+",
+  "tests.interp.TensorExamples",
+  "tests.interp.HyperConnections",
 ]
 
 # Full target: Lite + Math + ApproxGeLU. Build this when working on the

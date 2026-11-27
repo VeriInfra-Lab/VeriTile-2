@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "RowWiseSum",
+    "lean": "VeriTile.Bench.Examples.RowWiseSum.Kernels.rowWiseSumKernel",
+    "source": "bench/examples/RowWiseSum/RowWiseSum.py::row_wise_sum"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "nCol": 4,
+    "blockSize": 4
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "yReg",
+      "buffer": "yReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/row-matrix.tensor"
+        }
+      },
+      "expected": {
+        "yReg": "tests/interp/fixtures/tensor_examples/RowWiseSum.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "yReg",
+      "dtype": "fp32",
+      "shape": [
+        2
+      ]
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "AdamUpdateGridLaunch",
+    "lean": "VeriTile.Bench.Examples.AdamUpdateGridLaunch.Kernels.update_fn_kernel",
+    "source": "bench/examples/AdamUpdateGridLaunch/AdamUpdateGridLaunch.py::update_fn_kernel"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "BLOCK_SIZE": 4
+  },
+  "arguments": [
+    {
+      "parameter": "p_ptr",
+      "buffer": "p_ptr"
+    },
+    {
+      "parameter": "grad_ptr",
+      "buffer": "grad_ptr"
+    },
+    {
+      "parameter": "exp_avg_ptr",
+      "buffer": "exp_avg_ptr"
+    },
+    {
+      "parameter": "lr",
+      "value": 0.25
+    },
+    {
+      "parameter": "wd",
+      "value": 0.125
+    },
+    {
+      "parameter": "beta1",
+      "value": 0.5
+    },
+    {
+      "parameter": "beta2",
+      "value": 0.75
+    },
+    {
+      "parameter": "n_elements",
+      "value": 5
+    },
+    {
+      "parameter": "chunk_elements",
+      "value": 5
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "p_ptr": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/adam-p_ptr.tensor"
+        },
+        "grad_ptr": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/adam-grad_ptr.tensor"
+        },
+        "exp_avg_ptr": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/adam-exp_avg_ptr.tensor"
+        }
+      },
+      "expected": {
+        "p_ptr": "tests/interp/fixtures/tensor_examples/adam-params.tensor",
+        "exp_avg_ptr": "tests/interp/fixtures/tensor_examples/adam-momentum.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "p_ptr",
+      "dtype": "fp32",
+      "shape": [
+        5
+      ]
+    },
+    {
+      "name": "exp_avg_ptr",
+      "dtype": "fp32",
+      "shape": [
+        5
+      ]
+    }
+  ]
+}

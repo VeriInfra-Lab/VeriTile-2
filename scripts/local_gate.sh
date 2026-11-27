@@ -60,7 +60,7 @@ if [ "$lean" = 1 ]; then
              "uv run --no-project --python 3.11 --script experiments/interp_gpu/specs/examples/run.py"
              "lake env lean --run tests/interp/ReshapeOrder.lean"
              "python3 tests/interp/fixtures/vector_add_cases.py --check"
-             "uv run --no-project --python 3.11 --with jsonschema --script experiments/interp_gpu/specs/examples/run.py experiments/interp_gpu/specs/examples/FlatVectorAdd.json experiments/interp_gpu/specs/examples/FloatDTypeAdd.json"
+             "python3 tests/interp/fixtures/tensor_examples.py --check"
              "lake build tests.lean.InterpReflectSmoke"
              "lake build tests.lean.InterpReflectBench"
              "lake build tests.lean.InterpEvalSmoke"
