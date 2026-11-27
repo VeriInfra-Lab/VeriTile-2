@@ -231,6 +231,18 @@ info: Trust assumptions used by usingDocumentedAtomicUpdate:
 #guard_msgs in
 #print_trust_assumptions usingDocumentedAtomicUpdate
 
+example : VeriTile.Dist.TrustAssumptions.deepep_v1_cta_scope_is_block.affectedKernels = ["K28"] := rfl
+
+theorem usingDeepEPCtaScope (h : Assumption.deepep_v1_cta_scope_is_block) :
+    Assumption.deepep_v1_cta_scope_is_block := h
+
+/--
+info: Trust assumptions used by usingDeepEPCtaScope:
+  deepep_v1_cta_scope_is_block (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions usingDeepEPCtaScope
+
 theorem usingUnregistered (h : Assumption.unregisteredFixture) : True := h
 
 /-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredFixture' -/

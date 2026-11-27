@@ -18,14 +18,14 @@ KERNELS = {
 }
 
 
-def materialize(checkout, destination):
+def materialize(checkout, destination, *, combine=False):
     """Read tracked objects at the pin, including all the port's imported modules."""
     checkout, destination = Path(checkout), Path(destination)
     git = ['git', '-C', str(checkout)]
     head = subprocess.check_output([*git, 'rev-parse', 'HEAD'], text=True).strip()
     if head != PIN:
         raise ValueError(f'TileScale checkout is {head}, expected {PIN}')
-    src, patched = destination / 'original', destination / 'dispatch-release'
+    src, patched = destination / 'original', destination / ('combine-cta' if combine else 'dispatch-release')
     src.mkdir(parents=True)
     tree = f'{PIN}:{PORT}'
     paths = subprocess.check_output([*git, 'ls-tree', '-r', '--name-only', tree], text=True).splitlines()
@@ -34,13 +34,24 @@ def materialize(checkout, destination):
         out.parent.mkdir(exist_ok=True, parents=True)
         out.write_bytes(subprocess.check_output([*git, 'show', f'{tree}/{name}']))
     shutil.copytree(src, patched)
-    # --no-index also works when the caller chooses a destination inside another checkout.
-    subprocess.run(['git', 'apply', '--no-index', str(HERE / 'dispatch-release.patch')], cwd=patched, check=True,
-                   env={**os.environ, 'GIT_CEILING_DIRECTORIES': str(patched.resolve().parent)})
+    patches = ['dispatch-release.patch']
+    if combine:
+        patches.append('combine-cta.patch')
+    for patch in patches:
+        subprocess.run(['git', 'apply', '--no-index', str(HERE / patch)], cwd=patched, check=True,
+                       env={**os.environ, 'GIT_CEILING_DIRECTORIES': str(patched.resolve().parent)})
     return src, patched
 
 
 def run(rank, ranks, inputs, outputs, launch):
+    run_variant(rank, ranks, inputs, outputs, launch, combine=False)
+
+
+def run_combine(rank, ranks, inputs, outputs, launch):
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+
+
+def run_variant(rank, ranks, inputs, outputs, launch, *, combine):
     """GPU rank entry; resolve the import root once per fresh gpurun rank process."""
     from gpurun import dist
     from gpurun.run import load_entry
@@ -53,7 +64,7 @@ def run(rank, ranks, inputs, outputs, launch):
         raise ValueError('DeepEP modules already loaded before variant selection')
     run_port = load_entry('experiments/interp_gpu/deepep_v1/harness.py::run_port', HERE.parents[2])
     with tempfile.TemporaryDirectory(prefix='deepep-rank-') as tmp:
-        _, patched = materialize(port.parents[2], tmp)
+        _, patched = materialize(port.parents[2], tmp, combine=combine)
         run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
 
 
@@ -76,13 +87,14 @@ if __name__ == '__main__':
     build = commands.add_parser('materialize')
     build.add_argument('checkout', type=Path)
     build.add_argument('destination', type=Path)
+    build.add_argument('--combine', action='store_true', help='also apply the CTA-shared combine changes')
     compile_cli = commands.add_parser('compile')
     compile_cli.add_argument('port', type=Path)
     compile_cli.add_argument('kernel', choices=KERNELS)
     compile_cli.add_argument('cuda_output', type=Path)
     args = cli.parse_args()
     if args.action == 'materialize':
-        for path in materialize(args.checkout, args.destination):
+        for path in materialize(args.checkout, args.destination, combine=args.combine):
             print(path)
     else:
         compile_device(args.port, args.kernel, args.cuda_output)

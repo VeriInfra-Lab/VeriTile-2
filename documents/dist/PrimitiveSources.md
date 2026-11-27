@@ -50,8 +50,8 @@ bundles Triton at another commit, `f797708`; the one Triton passage that is
 cited here has the same text at both (E-TR1). The DeepEP version 1 port is
 read at TileScale `9ba8a605` (full hash
 `9ba8a605d347f600a95d0275e2639cb00122c084`, branch `wt/deepep-internode`),
-directory `examples/distributed/deepseek_deepep/intranode/`. Only A3 to A8 and A10 of
-section 7 and their evidence (E-TS15 to E-TS19) cite that commit; every row of
+directory `examples/distributed/deepseek_deepep/intranode/`. A3 to A8, A10 and A11 of
+section 7 and the earlier evidence (E-TS15 to E-TS19) cite that commit; every row of
 section 5.5 is at `71e7145`, and A10 says how such a row reads a call of the
 port.
 
@@ -1356,6 +1356,19 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Affected kernels | Every kernel of the port that calls a name with a row: K23 to K28. The names are `T.st`, `T.ld`, `T.put_warp`, `T.wait_ge`, `T.wait_ne`, `T.sync_blocks` and `T.barrier_blocks`; the lines are in section 5 of `EventControlFlow.md`, for example `DD:61`, `DD:66`, `DD:68`, `DD:70` and `DD:99` in K23, `DD:201` and `DD:208` in K24, `DC:36` and `DC:39` in K27. For `st`, `ld`, `put_warp`, `sync_blocks` and `barrier_blocks` the fit of parameters and defaults was read on 2026-11-21. Names of the port without a row: `T.sync_threads` and `T.sync_warp` (A4, A5), `T.shuffle_elect`, `T.warp_any`, `T.tvm_warp_shuffle`, `T.warp_reduce_sum`, `T.thread_return` and the other base TileLang names; `T.copy` and `T.clear` are called without a PE argument, for which the row `copy` is not written |
 | Beyond documentation | That documentation written for another commit, on another branch, describes the calls of the port |
 | Event interface | None of its own: each call has the event of its row |
+
+### A11 `deepep_v1_cta_scope_is_block`
+
+| Field | Value |
+| --- | --- |
+| Name | `deepep_v1_cta_scope_is_block` |
+| Class | semantic source |
+| Status | Registered for coordinator review under the [user's 2026-11-27 decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/636#issuecomment-7206156826). |
+| Statement | Within TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`, directory `examples/distributed/deepseek_deepep/intranode/`, including the #636 variant of that port, the `cta` scope argument of a port `T.ld` or `T.st` denotes `cuda::thread_scope_block`. Participating threads belong to the same CUDA thread block. |
+| Source or rationale | The user selected this narrow reading for the three CTA-shared arrays in `combine_main`. The [compilation record](../../experiments/interp_gpu/deepep_v1/CombineVariant.md) records the observed implementation for the variant. The scope interpretation remains an explicit premise for a proof. |
+| Affected kernels | K28, `combine_main`. The original calls are DC 255, 284 and 286. The variant also spells out the acquire loads at DC 247/261/262 and the release stores at DC 343–345/350. |
+| Beyond documentation | The scope mapping is an assumption restricted to this port directory and pin. A1 retains its existing domain. |
+| Event interface | This scope mapping supplies no ordering edge between distinct blocks and no DRF conclusion. |
 
 ## 8. Counts
 

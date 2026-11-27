@@ -91,6 +91,7 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
 | `b09` | [example_allgather_gemm_overlapped.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/examples/distributed/allgather_gemm/example_allgather_gemm_overlapped.py) |
 | `b11` | [sync.py](https://github.com/tile-ai/tilescale/blob/71e71457d40ed6e6a2dad297936bfdbff21d104b/tilelang/language/distributed/sync.py) |
 | `experiments/interp_gpu/deepep_v1/dispatch-release.patch` | [dispatch.py](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/dispatch.py), [combine.py](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/combine.py) |
+| `experiments/interp_gpu/deepep_v1/combine-cta.patch`, `experiments/interp_gpu/deepep_v1/combine-cta.cu` | [combine.py](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/combine.py) |
 
 ## TileLang
 
