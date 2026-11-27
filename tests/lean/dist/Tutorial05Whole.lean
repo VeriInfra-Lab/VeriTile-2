@@ -321,6 +321,218 @@ theorem sound (on n lanes rows cols w) : SoundLaunch (launch on n lanes rows col
     rw [H.programs x hx] at px; rw [H.programs y hy] at py
     exact (Option.some.inj px).symm.trans (ox.trans (oy.symm.trans (Option.some.inj py)))
 
+/-- Independent zero-based interpretation of the relevant counter in an
+actual signed history. Ordinary segments never write these locations. -/
+def recorded (c : Counter) (h : History) : Nat :=
+  Counter.value (fun _ => 0) (h.filterMap Occurrence.event?) c
+
+def tracked (l : Launch P) (m : Machine) (c : Counter) := m.count? l.initialCount c = some (recorded c m.history)
+
+def ReadyAt (c : Counter) (h : History) : Prop :=
+  ∀ (j : Nat) (prog : Agent) (e : Emission) (cmp : Cmp) (target : Nat) (mode : Mode), h[j]? = some (.issued prog e) → e.event = .wait c cmp target mode →
+    cmp.holds (recorded c (h.take j)) target
+
+theorem recorded_seg (c a reads writes h) :
+    recorded c (h ++ [.segment a reads writes]) = recorded c h := by
+  simp [recorded,Occurrence.event?]
+
+theorem recorded_wait (c d cmp target mode a e h) (ev : e.event = .wait d cmp target mode) :
+    recorded c (h ++ [.issued a e]) = recorded c h := by
+  simp [recorded,Occurrence.event?,Counter.value,ev,Event.bump?]
+
+theorem recorded_bump (c bump a e h) (ev : e.event = .bump bump) :
+    recorded c (h ++ [.issued a e]) =
+      if bump.counter = c then bump.op.apply (recorded c h) bump.amount else recorded c h := by
+  by_cases b : bump.counter = c <;> simp [recorded,Occurrence.event?,Counter.value,ev,Event.bump?,b]
+
+theorem controlFrame (role : Role n lanes rows cols) (pc : Nat) (p : Addr) (hp : Control p)
+    (run : (role.segment pc).run s = some f) : f.cell p = s.cell p := by
+  apply Segment.frame (role.segSound pc) run
+  cases role with
+  | lane r t => cases pc <;> exact Set.notMem_empty _
+  | copy r =>
+    cases pc with
+    | zero =>
+      rintro ⟨_,_,eq⟩; rw [eq] at hp; rcases hp with h|h
+      all_goals first | exact (by decide : ("scatter" : VeriTile.Triton.RegionName) ≠ "flag") h | exact (by decide : ("scatter" : VeriTile.Triton.RegionName) ≠ "T05.stream.shadow") h
+    | succ => exact Set.notMem_empty _
+  | tile r b =>
+    cases pc with
+    | zero => exact Set.notMem_empty _
+    | succ pc =>
+      cases pc with
+      | zero =>
+        rintro ⟨_,_,eq⟩; rw [eq] at hp; rcases hp with h|h
+        all_goals first | exact (by decide : ("output" : VeriTile.Triton.RegionName) ≠ "flag") h | exact (by decide : ("output" : VeriTile.Triton.RegionName) ≠ "T05.stream.shadow") h
+      | succ => exact Set.notMem_empty _
+
+theorem zeroInit (c : Counter) : (launch on n lanes rows cols w).initialCount c = 0 := by
+  cases c <;> rfl
+
+theorem nonwordTracked {M : Machine} (h : ∀ p, c ≠ .word p) :
+    tracked (launch on n lanes rows cols w) M c := by
+  have hz : (launch on n lanes rows cols w).initialCount = fun _ => 0 := funext zeroInit
+  cases c with
+  | word p => exact False.elim (h p rfl)
+  | phase | rendezvous | delivered => simp [tracked,Machine.count?,Machine.trace,recorded,hz]
+
+theorem fireTracked {M : Machine} (fr : Fire (launch on n lanes rows cols w) M e mem pending value)
+    (good : SyncEmission a e) (ready : tracked (launch on n lanes rows cols w) M c) :
+    tracked (launch on n lanes rows cols w) ⟨mem,M.history ++ [.issued a e],pending⟩ c := by
+  cases c with
+  | phase | rendezvous | delivered => exact nonwordTracked (by intro p h; cases h)
+  | word p =>
+    change (mem.cell p).readAs .nat = some (recorded (.word p) (M.history ++ [.issued a e]))
+    change (M.mem.cell p).readAs .nat = some (recorded (.word p) M.history) at ready
+    obtain ⟨actor,event,data⟩ := e
+    obtain ⟨rfl,rfl,⟨d,cmp,n,mode,he,_⟩|⟨b,he,_⟩⟩ := good
+    · cases he; cases fr; rw [recorded_wait _ _ _ _ _ _ _ _ rfl]; exact ready
+    · cases he; cases fr with
+      | bump _ _ old read =>
+        rw [recorded_bump _ _ _ _ _ rfl]
+        cases b with
+        | mk d op amount mode =>
+          cases d with
+          | phase | rendezvous | delivered => simpa using ready
+          | word q =>
+            by_cases eq : q = p
+            · subst q; simp only [↓reduceIte]
+              change ((w.put M.mem p (.of .nat (op.apply old amount))).cell p).readAs .nat = _
+              rw [w.read_same,VeriTile.Triton.MemCell.readAs_of_same]
+              cases op with
+              | set => rfl
+              | add =>
+                have hh : old = recorded (.word p) M.history :=
+                  Option.some.inj ((read rfl).symm.trans ready)
+                rw [hh]
+            · simp [eq]
+              change ((w.put M.mem q _).cell p).readAs .nat = _
+              rw [w.read_other _ _ _ _ (Ne.symm eq)]; exact ready
+
+theorem groupTracked {M f : Machine} (g : FireGroup (launch on n lanes rows cols w) a M es f vals)
+    (allowed : ∀ x ∈ es, SyncEmission a x) (track : tracked (launch on n lanes rows cols w) M c) :
+    tracked (launch on n lanes rows cols w) f c ∧
+    ∀ (i : Nat) (e : Emission), es[i]? = some e → ∀ (cmp : Cmp) (target : Nat) (mode : Mode), e.event = .wait c cmp target mode →
+        cmp.holds (recorded c (M.history ++ (es.take i).map (.issued a))) target := by
+  induction g with
+  | nil => exact ⟨track,by simp⟩
+  | @cons M e mem pending v xs final vs accessible available ordered fire rest ih =>
+    have h := fireTracked fire (allowed e (by simp)) track
+    obtain ⟨ht,next⟩ := ih (fun x hx => allowed _ (by simp [hx])) h
+    refine ⟨ht,?_⟩
+    intro i x atX cmp target mode ev
+    cases i with
+    | zero =>
+      simp only [List.getElem?_cons_zero,Option.some.injEq] at atX
+      subst x
+      simp only [List.take_zero,List.map_nil,List.append_nil]
+      cases fire <;> cases ev
+      rename_i old read enabled
+      have eq := Option.some.inj (read.symm.trans track)
+      exact eq ▸ enabled
+    | succ i => simpa using next i x (by simpa using atX) cmp target mode ev
+
+theorem ready_append {xs : History} (old : ReadyAt c h)
+    (next : ∀ (j : Nat) (a : Agent) (e : Emission) (cmp : Cmp) (target : Nat) (mode : Mode), xs[j]? = some (.issued a e) → e.event = .wait c cmp target mode →
+        cmp.holds (recorded c (h ++ xs.take j)) target) : ReadyAt c (h ++ xs) := by
+  intro j a e cmp target mode atE ev
+  by_cases left : j < h.length
+  · rw [List.getElem?_append_left left] at atE
+    rw [take_snoc_of_lt xs left.le]; exact old _ _ _ _ _ _ atE ev
+  · rw [List.getElem?_append_right (by omega)] at atE
+    rw [List.take_append,List.take_of_length_le (by omega)]
+    exact next _ _ _ _ _ _ atE ev
+
+structure Clock (on : Bool) (n lanes rows cols : Nat) (w : CellWrites) (c : Counter)
+    (s : Config Nat) : Prop where
+  now : tracked (launch on n lanes rows cols w) s.toMachine c
+  waits : ReadyAt c s.history
+
+theorem clock_step {s f : Config Nat} (shape : Shape on n lanes rows cols s) (hc : ControlCounter c)
+    (H : Clock on n lanes rows cols w c s) (st : step (launch on n lanes rows cols w) s ch f) :
+    Clock on n lanes rows cols w c f := by
+  cases st with
+  | @segment a pc seg mem atPC code owner access success =>
+    have atRole := shape.log a
+    rw [atPC] at atRole
+    obtain ⟨_,hs,_,_⟩ := atRole
+    obtain ⟨r,hd,rfl⟩ := Option.map_eq_some_iff.mp hs
+    subst code
+    have run : (r.segment pc).run s.mem = some mem := by simpa [launch,agentProgram,hd] using success
+    refine ⟨?_,ready_append H.waits ?_⟩
+    · cases c with
+      | phase | rendezvous | delivered => exact nonwordTracked (by intro p h; cases h)
+      | word p =>
+        change (mem.cell p).readAs .nat = some (recorded (.word p) (s.history ++ [.segment a _ _]))
+        rw [recorded_seg,controlFrame r pc p hc run]
+        exact H.now
+    · intro j a' e cmp target mode atE
+      cases j <;> simp at atE
+  | @fire a h tl k final values atPC own events =>
+    have atRole := shape.log a
+    rw [atPC] at atRole
+    obtain ⟨_,_,hs,atG,_,_⟩ := atRole
+    obtain ⟨r,hd,rfl⟩ := Option.map_eq_some_iff.mp hs
+    have good := fun x hx => allowed hd (List.mem_of_getElem? atG) (x := x) hx
+    obtain ⟨hist,_⟩ := groupTrace events good
+    obtain ⟨now,ok⟩ := groupTracked events good H.now
+    refine ⟨now,?_⟩
+    change ReadyAt c final.history
+    rw [hist]
+    apply ready_append H.waits
+    intro j a' e cmp target mode atE ev
+    rw [List.getElem?_map] at atE
+    cases atJ : (h::tl)[j]? with
+    | none => simp [atJ] at atE
+    | some e' =>
+      simp [atJ] at atE
+      obtain ⟨rfl,rfl⟩ := atE
+      rw [← List.map_take]
+      exact ok j e' atJ cmp target mode ev
+  | @deliver pre post o b old outstanding bound counter ordered disjoint access free =>
+    rw [shape.pending] at outstanding; simp at outstanding
+
+theorem history_clock {s : DistState} {sched f} {c : Counter} (run : Run (launch on n lanes rows cols w)
+    ((launch on n lanes rows cols w).initial s) sched f) (hc : ControlCounter c)
+    (zero : ∀ p, c = .word p → (s.cell p).readAs .nat = some 0) : Clock on n lanes rows cols w c f := by
+  have start : Clock on n lanes rows cols w c ((launch on n lanes rows cols w).initial s) := by
+    refine ⟨?_,by intro j a e cmp target mode atE; simp [Launch.initial] at atE⟩
+    cases c with
+    | word p => exact zero p rfl
+    | phase | rendezvous | delivered => exact nonwordTracked (by intro p h; cases h)
+  have walk {a b : Config Nat} {cs} (r : Run (launch on n lanes rows cols w) a cs b)
+      (shape : Shape on n lanes rows cols a) (cnt : Clock on n lanes rows cols w c a) :
+      Clock on n lanes rows cols w c b := by
+    induction r with
+    | nil => exact cnt
+    | cons st _ ih => exact ih (step_shape shape st) (clock_step shape hc cnt st)
+  exact walk run (shape_initial _ _ _ _ _ _ _) start
+
+theorem role_prefix (H : Shape on n lanes rows cols s) (r : Role n lanes rows cols) :
+    filterA r.owner (s.history.map erase) <+: fullLog r.owner (r.groups on) := by
+  have hlog := H.log r.owner
+  simp only [script,decode_owner,Option.map_some] at hlog
+  exact agentLog_prefix hlog
+
+theorem history_ready {s : DistState} {sched f} {c : Counter} (run : Run (launch on n lanes rows cols w)
+    ((launch on n lanes rows cols w).initial s) sched f) (hc : ControlCounter c)
+    (zero : ∀ p, c = .word p → (s.cell p).readAs .nat = some 0) : ReadyAt c f.history :=
+  (history_clock run hc zero).waits
+
+/-- Every issued occurrence in every reachable prefix has an actual owner,
+group and member of the source program for that role. -/
+theorem issued_group {i : Nat} {a : Agent} {e : Emission} (H : Shape on n lanes rows cols s) (hx : s.history[i]? = some (Occurrence.issued a e)) :
+    ∃ (r : Role n lanes rows cols) (g : Group), r.owner = a ∧ g ∈ r.groups on ∧ e ∈ g.1 :: g.2 := by
+  have elem : erase (.issued a e) ∈ filterA a (s.history.map erase) := by
+    apply List.mem_filter.mpr
+    exact ⟨List.mem_map.mpr ⟨_,List.mem_of_getElem? hx,rfl⟩,by simp [erase,Occurrence.program?]⟩
+  obtain bad|⟨gs,hs,g,hg,x,hx',eq⟩ := agentLog_mem (H.log a) elem
+  · cases bad
+  · obtain ⟨r,hd,rfl⟩ := Option.map_eq_some_iff.mp hs
+    cases eq; exact ⟨r,g,owner_of_decode hd,hg,hx'⟩
+
+#print axioms history_clock
+#print axioms role_prefix
 #print axioms reachableShape
 #print axioms reachableQuiet
 #print axioms sound
