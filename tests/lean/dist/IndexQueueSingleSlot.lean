@@ -3,6 +3,8 @@ import tests.lean.dist.IndexQueueSingleSlotShape
 import tests.lean.dist.IndexQueueSingleSlotRefines
 import tests.lean.dist.IndexQueueSingleSlotNegative
 import tests.lean.dist.IndexQueueSingleSlotWitness
+import tests.lean.dist.IndexQueueSound
+import tests.lean.dist.IndexQueueHiddenWrite
 
 /-! Deliverable 1 of #651. The scheduler chooses each segment or group independently.
 Both index words are initially zero; the initial data slot is unconstrained. -/
@@ -16,6 +18,15 @@ theorem Dispatch.shaped (w : CellWrites) (s : DistState)
     (Q1 rel).Shaped (launch rel w) s :=
   shaped_of_prefix (fun _ _ => runPrefix w s tail0 head0)
     (fun _ _ => completePrefix w s tail0 head0)
+
+theorem Dispatch.put_bound (w : CellWrites) (s : DistState)
+    (tail0 : (s.cell tail).readAs .nat = some 0) (head0 : (s.cell head).readAs .nat = some 0)
+    (run : Run (launch rel w) ((launch rel w).initial s) sched final) :
+    final.history.countP (Q1 rel).isPut ≤ (Q1 rel).items := by
+  obtain ⟨_, trace⟩ := runPrefix w s tail0 head0 run
+  exact prefix_put_bound trace
+
+#print axioms Dispatch.put_bound
 
 /-- Handoff and reuse for this concrete launch, including every prefix of a complete run. -/
 theorem IndexQueue.refines_singleSlot (w : CellWrites) (s : DistState)
