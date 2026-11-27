@@ -540,6 +540,8 @@ globs = [
   "tests.lean.dist.IndexQueueTwoCellRefines",
   "tests.lean.dist.IndexQueueCellLink",
   "tests.lean.dist.IndexQueueHandoff",
+  "tests.lean.dist.IndexQueueRoomWait",
+  "tests.lean.dist.IndexQueueGeneral",
   "tests.lean.dist.Tutorial01",
   "tests.lean.dist.StorePublication",
   "tests.lean.dist.E2ReadsFromDetermined",

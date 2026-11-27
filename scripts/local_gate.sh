@@ -139,6 +139,8 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.IndexQueueTwoCellRefines"
              "lake build tests.lean.dist.IndexQueueCellLink"
              "lake build tests.lean.dist.IndexQueueHandoff"
+             "lake build tests.lean.dist.IndexQueueRoomWait"
+             "lake build tests.lean.dist.IndexQueueGeneral"
              "lake build tests.lean.dist.Tutorial01"
              "lake build tests.lean.dist.E2ReadsFromDetermined"
              "lake build tests.lean.dist.StorePublication")
