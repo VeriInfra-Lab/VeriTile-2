@@ -11,7 +11,7 @@ SPECS = ROOT / "experiments/interp_gpu/specs/examples"
 def main():
     for path in sorted(SPECS.glob("*.json")):
         original = json.loads(path.read_text())
-        if original["launch"]["carrier"] != "binary64":
+        if original["launch"]["carrier"] not in ("binary64", "source-rounded"):
             continue
         for index, case in enumerate(original["input_classes"]):
             for port, fixture in case["expected"].items():

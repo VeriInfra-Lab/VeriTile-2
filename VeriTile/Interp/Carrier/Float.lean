@@ -1,5 +1,6 @@
 import Batteries.Data.Rat.Float
 import VeriTile.Interp.Algebra
+import VeriTile.Triton.Float.BitValue
 
 namespace VeriTile.Interp.Binary64
 open VeriTile.Triton FP
@@ -119,5 +120,78 @@ def algebra : CAlgebra Float where
     guard (ieeeDot o)
     return fun i => Structural.ofFloat out (dot batch (fun j => Structural.toFloat l (a j))
       (fun j => Structural.toFloat r (b j)) (fun j => Structural.toFloat out (acc j)) i)
+
+/-- Direct BF16 encoding of a host value, including the sign of zero. -/
+def bf16Bits (x : Float) : Nat :=
+  if x.isNaN then (FP.Value.qNaN .bf16).raw
+  else if x.isInf then (FP.Value.infinity .bf16 (x < 0)).raw
+  else (FP.round .bf16 .ieeeValue x.toRat0 (x.toBits == 0x8000000000000000)).raw
+
+private def sourceFormat (p : Option ComputeDType) : FloatDType → Option FP.Format
+  | .bf16 => some .bf16
+  | .fp32 => some .fp32
+  | .real => if p == some .fp32 then some .fp32 else none
+  | _ => none
+
+private def encodedFloat (f : FP.Format) (bits : Nat) : Float :=
+  (Float32.ofBits (if f == .bf16 then (bits <<< 16).toUInt32 else bits.toUInt32)).toFloat
+
+private def roundSource (p : Option ComputeDType) (d : FloatDType) (x : Float) : Float :=
+  match sourceFormat p d with
+  | some .fp32 => x.toFloat32.toFloat
+  | some .bf16 => encodedFloat .bf16 (bf16Bits x)
+  | none => x
+
+private def sourceLiteral (p : Option ComputeDType) (d : FloatDType) (q : ℚ) : Float :=
+  match sourceFormat p d with
+  | some f => encodedFloat f (FP.round f .ieeeValue q).raw
+  | none => roundRat q
+
+private def sourceBinary (p : Option ComputeDType) (d : FloatDType)
+    (op : Structural.Binary) (x y : Float) : Float :=
+  if sourceFormat p d == some .fp32 then
+    let a := x.toFloat32
+    let b := y.toFloat32
+    match op with
+    | .add => (a + b).toFloat | .sub => (a - b).toFloat
+    | .mul => (a * b).toFloat | .div => (a / b).toFloat
+    | .max => (max a b).toFloat
+    | .pow => roundSource p d (x ^ y)
+  else roundSource p d (algebra.binary p d op x y)
+
+private def unaryDType : Structural.Unary → FloatDType
+  | .neg d | .abs d => d
+  | _ => .real
+
+/-- CPU reference for the source-rounded FP32/FP64 scalar, reduction and BF16
+cast fragment. The host transcendental functions are evaluated in binary64
+and rounded at the source precision; reductions accumulate in lane order.
+This is not a GPU/libdevice bit-equivalence claim. The original `algebra`
+remains the binary64 approximation for existing registrations. -/
+def sourceRoundedAlgebra : CAlgebra Float := { algebra with
+  literal := sourceLiteral
+  binary := sourceBinary
+  unary := fun p op x => roundSource p (unaryDType op) (unary op x)
+  cast := fun p _ dst => roundSource p dst
+  fromNat := fun p n => sourceLiteral p .real n
+  fromInt := fun p i => sourceLiteral p .real i
+  fp32Load := fun x => x.toFloat32.toFloat
+  reduceMax := fun p _ => reduce (sourceBinary p .real .max) (-Float.inf)
+  reduceSum := fun p _ => reduce (sourceBinary p .real .add) 0
+  reduceSumTyped := fun p d _ axis keep xs => some fun i =>
+    Structural.ofFloat d (reduce (sourceBinary p d .add) 0 axis keep (fun j => Structural.toFloat d (xs j)) i)
+  reduceMaxTyped := fun p d _ axis keep xs => some fun i =>
+    Structural.ofFloat d (reduce (sourceBinary p d .max) (-Float.inf) axis keep (fun j => Structural.toFloat d (xs j)) i)
+}
+
+#guard sourceRoundedAlgebra.binary (some .fp32) .real .add 1 (1 / 16777216) == 1
+#guard sourceRoundedAlgebra.binary (some .fp64) .real .add 1 (1 / 16777216) > 1
+#guard sourceRoundedAlgebra.cast (some .fp32) .real .real (1 + 1 / 16777216) == 1
+#guard sourceRoundedAlgebra.reduceSum (some .fp32) (shape := [2]) ⟨0, by decide⟩ false
+  (fun i => if i.1.val == 0 then 1 else 1 / 16777216) PUnit.unit == 1
+#guard sourceRoundedAlgebra.reduceSum (some .fp64) (shape := [2]) ⟨0, by decide⟩ false
+  (fun i => if i.1.val == 0 then 1 else 1 / 16777216) PUnit.unit > 1
+#guard sourceRoundedAlgebra.cast none .real .bf16 1.00390625 == 1
+#guard sourceRoundedAlgebra.cast none .real .bf16 (1.00390625 + 1 / 1073741824) == 1.0078125
 
 end VeriTile.Interp.Binary64

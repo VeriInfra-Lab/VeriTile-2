@@ -45,10 +45,13 @@ def check_kernel(kernel, arguments):
     name = kernel["lean"]
     prefix = "VeriTile.Bench.Examples."
     parts = name.removeprefix(prefix).split(".")
-    if not name.startswith(prefix) or len(parts) < 3 or not all(
+    if not name.startswith(prefix) or len(parts) < 2 or not all(
             re.fullmatch(r"[A-Za-z_][A-Za-z0-9_']*", part) for part in parts):
         raise ValueError(f"{kernel['name']}: invalid qualified kernel.lean example name: {name}")
-    module_path = Path("bench", "examples", *parts[:-1])
+    # Kernel definitions may live directly in the family's namespace even
+    # though the actual module is the family's Kernels.lean (e.g. LogExp).
+    module_path = Path("bench", "examples", *parts[:-1]) if len(parts) > 2 else Path(
+        "bench", "examples", parts[0], "Kernels")
     if not (ROOT / module_path.with_suffix(".lean")).is_file():
         raise ValueError(f"{kernel['name']}: kernel.lean file does not exist: {module_path}.lean")
     if path.parent != module_path.parent:
