@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "HyperConnectionsDepthScalar",
+    "lean": "VeriTile.Bench.Examples.HyperConnectionsDepth.Kernels.scalarKernel",
+    "source": "bench/examples/HyperConnectionsDepth/HyperConnectionsDepth.py::scalarKernel"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {},
+  "arguments": [
+    {
+      "parameter": "resMixReg",
+      "buffer": "resMixReg"
+    },
+    {
+      "parameter": "branchOutReg",
+      "buffer": "branchOutReg"
+    },
+    {
+      "parameter": "hPostReg",
+      "buffer": "hPostReg"
+    },
+    {
+      "parameter": "outReg",
+      "buffer": "outReg"
+    },
+    {
+      "parameter": "tau",
+      "value": 2
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "resMixReg": {
+          "dtype": "fp32",
+          "shape": [
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-scalar-res.tensor"
+        },
+        "branchOutReg": {
+          "dtype": "fp32",
+          "shape": [
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-scalar-branch.tensor"
+        },
+        "hPostReg": {
+          "dtype": "fp32",
+          "shape": [
+            1
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-scalar-post.tensor"
+        }
+      },
+      "expected": {
+        "outReg": "tests/interp/fixtures/tensor_examples/hyper-scalar.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "outReg",
+      "dtype": "fp32",
+      "shape": [
+        2
+      ]
+    }
+  ]
+}

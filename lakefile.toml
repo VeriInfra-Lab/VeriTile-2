@@ -590,6 +590,10 @@ globs = ["VeriTile.Equiv", "VeriTile.Equiv.+"]
 name = "VeriTileStaging"
 globs = ["VeriTile.Staging.+"]
 
+[[lean_lib]]
+name = "FileRunnerExamples"
+globs = ["tests.interp.TensorExamples", "tests.interp.HyperConnections"]
+
 [[lean_exe]]
 name = "veritile-run"
 root = "tests.interp.Main"
