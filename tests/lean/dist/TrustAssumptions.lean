@@ -37,6 +37,27 @@ def rewriteFixture.unregistered : Prop := True
 opaque notify_atomic_release.match_9 : Prop
 def translationFixture.match_9 : Prop := unregisteredFixture
 
+-- The namespace check depends on declaration kind, not just reserved names.
+opaque forwardOpaque.eq_2 : Prop := True
+def forwardOpaque : Nat → Prop
+  | 0 => True
+  | _ + 1 => False
+
+inductive forwardInductive.eq_2 : Prop
+def forwardInductive : Nat → Prop
+  | 0 => True
+  | _ + 1 => False
+
+opaque forwardCongruence.congr_simp : Prop := True
+def forwardCongruence : Nat → Prop
+  | 0 => True
+  | _ + 1 => False
+
+opaque forwardData.eq_2 : Nat := 0
+def forwardData : Nat → Prop
+  | 0 => True
+  | _ + 1 => False
+
 theorem ordinaryProof : True := True.intro
 
 def proofFixture : Prop :=
@@ -223,6 +244,30 @@ theorem usingFakeMatcherDefinition (h : Assumption.translationFixture.match_9) :
 /-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.translationFixture.match_9' -/
 #guard_msgs (error) in
 #print_trust_assumptions usingFakeMatcherDefinition
+
+theorem usingForwardOpaque (_h : Assumption.forwardOpaque.eq_2) : True := True.intro
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardOpaque.eq_2' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingForwardOpaque
+
+theorem usingForwardInductive (_h : Assumption.forwardInductive.eq_2) : True := True.intro
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardInductive.eq_2' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingForwardInductive
+
+theorem usingForwardCongruence (_h : Assumption.forwardCongruence.congr_simp) : True := True.intro
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardCongruence.congr_simp' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingForwardCongruence
+
+theorem usingForwardData (_h : Assumption.forwardData.eq_2 = 0) : True := True.intro
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardData.eq_2' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingForwardData
 
 theorem usingGeneratedProof (_h : Assumption.badProofFixture) : True := True.intro
 

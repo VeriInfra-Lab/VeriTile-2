@@ -66,6 +66,34 @@ theorem usingImportedFakeMatcherDefinition (h : Assumption.translationFixture.ma
 #guard_msgs (error) in
 #print_trust_assumptions usingImportedFakeMatcherDefinition
 
+theorem usingImportedForwardOpaque (h : Assumption.forwardOpaque.eq_2) : True :=
+  TrustAssumptions.usingForwardOpaque h
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardOpaque.eq_2' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingImportedForwardOpaque
+
+theorem usingImportedForwardInductive (h : Assumption.forwardInductive.eq_2) : True :=
+  TrustAssumptions.usingForwardInductive h
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardInductive.eq_2' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingImportedForwardInductive
+
+theorem usingImportedForwardCongruence (h : Assumption.forwardCongruence.congr_simp) : True :=
+  TrustAssumptions.usingForwardCongruence h
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardCongruence.congr_simp' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingImportedForwardCongruence
+
+theorem usingImportedForwardData (h : Assumption.forwardData.eq_2 = 0) : True :=
+  TrustAssumptions.usingForwardData h
+
+/-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.forwardData.eq_2' -/
+#guard_msgs (error) in
+#print_trust_assumptions usingImportedForwardData
+
 theorem usingProofWithUnregisteredType : True := Assumption.proofWithUnregisteredType
 
 /-- error: unregistered trust assumption 'VeriTile.Dist.Assumption.unregisteredFixture' -/

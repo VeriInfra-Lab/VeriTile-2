@@ -1186,8 +1186,10 @@ These entries and the separate translation-correctness entry N5′
 to see the names and classes of the registered assumptions reached from
 the type and proof of theorem `T` through their Lean dependencies. An
 unregistered declaration reached in `VeriTile.Dist.Assumption` is an error
-unless it is a theorem or a Lean-generated auxiliary. The types and bodies
-of proofs and auxiliaries are still inspected, including across imports.
+unless it is a theorem, a matcher or sparse-cases auxiliary recorded by Lean,
+or a definition with a Lean-reserved name. A reserved name alone does not
+exempt opaque or inductive declarations. Every reached type and available
+body is still inspected, including across imports.
 
 Each entry has the fields of the registry of ticket S5.3 as the map states
 them: name, statement, source or rationale, affected kernels. The class of

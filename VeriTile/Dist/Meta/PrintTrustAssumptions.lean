@@ -84,14 +84,15 @@ private def classLabel : TrustAssumptionClass → String
 
 -- Theorems (including equation lemmas and abstracted proofs) are proofs, not
 -- premise declarations. For other auxiliaries use Lean's environment facts,
--- including reserved names of existing constants such as generated splitters.
+-- including reserved names of definitions such as generated splitters.
+-- A reserved name alone does not classify an opaque or an inductive declaration.
 -- These do not depend on the elaboration-local equation/aux-lemma tables.
 -- A matcher may be shared: its name does not identify an assumption owner.
 private def isProofOrGeneratedAuxiliary (env : Environment) (info : ConstantInfo) : Bool :=
   match info with
   | .thmInfo _ => true
   | _ => isMatcherCore env info.name || isSparseCasesOn env info.name ||
-      isReservedName env info.name
+      ((info matches .defnInfo _) && isReservedName env info.name)
 
 /-- Follow kernel dependencies as in `Lean.CollectAxioms.collect`. Constructors
 carry the fields of classes and structures that their type constants name. -/
@@ -117,9 +118,10 @@ private partial def visitDependencies (env : Environment) (registered : NameSet)
 proof and the declarations they reference transitively. The report can include
 assumptions mentioned in a dependency even when its full interface is unused
 by the proof. A reached declaration in the reserved
-`VeriTile.Dist.Assumption` namespace must be registered unless it is a theorem
-or Lean identifies it as a generated auxiliary, including through imports.
-The types and bodies of proofs and auxiliaries are inspected too. -/
+`VeriTile.Dist.Assumption` namespace must be registered unless it is a theorem,
+a matcher or sparse-cases auxiliary recorded by Lean, or a definition with a
+Lean-reserved name. These checks also apply through imports. Every reached
+type and available body is inspected, including those of exempt declarations. -/
 elab "#print_trust_assumptions " id:ident : command => do
   let name ← liftCoreM <| realizeGlobalConstNoOverload id
   let .thmInfo _ ← getConstInfo name | throwError "'{name}' is not a theorem"
