@@ -18,10 +18,6 @@ literal, and followed by `.field`; not with an extra prefix or suffix
 namespace is flagged on purpose.
 
 The check is textual. Known blind spots:
-- a raw string `r#"..."#` (or `r"\"`): views does not know raw strings, so a
-  `"` or `\` inside one puts it out of step and code after it is blanked;
-- a `«»` name containing `--`, `/-` or `"`, which views reads as a comment or
-  a string opening;
 - a name inside `s!"{...}"` interpolation (string contents are blanked);
 - a name built from strings, e.g. with `mkConst` in an `elab`;
 - a use by automation that does not name the theorem;

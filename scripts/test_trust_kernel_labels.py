@@ -1,9 +1,10 @@
 """Regression oracles for the documented label set and elaborated registry."""
 import io
 import unittest
+from unittest.mock import patch
 from contextlib import redirect_stderr, redirect_stdout
 
-from check_trust_kernel_labels import ROOT, check_registry, documented_labels
+from check_trust_kernel_labels import REGISTRY, ROOT, check_registry, documented_labels
 
 
 # The 51 label occurrences on the ten nonempty production registrations in #550.
@@ -48,6 +49,17 @@ class DocumentedLabels(unittest.TestCase):
 
 
 class ElaboratedLabels(unittest.TestCase):
+    def test_dropped_registrations(self):
+        fixture = ROOT / "tests/lean/dist/UnknownTrustKernelLabels.lean"
+        for name in ("undocumented_scope_order_vocabulary", "fixture"):
+            with self.subTest(name=name):
+                probe = REGISTRY.replace("for entry in entries do",
+                                         f"for entry in entries.filter (·.name != `{name}) do")
+                errors = io.StringIO()
+                with patch("check_trust_kernel_labels.REGISTRY", probe), redirect_stderr(errors):
+                    self.assertEqual(check_registry(fixture.read_text()), 1, errors.getvalue())
+                self.assertRegex(errors.getvalue(), rf"missing trust registration: .*\.{name}\n")
+
     def test_literal_and_computed_diagnostics(self):
         fixture = ROOT / "tests/lean/dist/UnknownTrustKernelLabels.lean"
         errors = io.StringIO()

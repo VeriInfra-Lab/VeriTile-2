@@ -4,6 +4,7 @@
 Labels from §7 and the census are pooled across entries. Membership does not
 establish that a label belongs to a particular assumption's §7 row.
 """
+from collections import Counter
 import csv
 import json
 from pathlib import Path
@@ -16,10 +17,14 @@ from check_fork_target import ROOT, TARGETS, sources
 
 REGISTRY = '''
 open Lean Meta Elab Command VeriTile.Dist
+open private trustAssumptionRegistry from VeriTile.Dist.Meta.PrintTrustAssumptions
 
 -- Read the actual registry, including persistent attribute registrations. Open
 -- metadata parameters symbolically so inspecting a label needs no sample input.
 run_cmd do
+  let builtins := TrustAssumptions.builtinTrustAssumptionDeclarations.map Prod.fst
+  let attributed := (trustAssumptionRegistry.getState (← getEnv)).map (·.declaration)
+  IO.println ("EXPECTED-REGISTRATIONS " ++ (toJson ((builtins ++ attributed).map Name.toString)).compress)
   let entries ← liftCoreM registeredTrustAssumptions
   for entry in entries do
     let labels ← liftTermElabM <| withTransparency .all do
@@ -45,7 +50,7 @@ run_cmd do
           labels := labels.push label
           xs := fields[2]!
         return labels
-    IO.println ("KERNEL-LABELS " ++ (toJson (entry.name.toString, labels)).compress)
+    IO.println ("KERNEL-LABELS " ++ (Json.arr #[toJson entry.declaration.toString, toJson entry.name.toString, toJson labels]).compress)
 '''
 
 
@@ -93,21 +98,32 @@ def documented_labels():
 
 def check_registry(source):
     known = documented_labels()
-    process = subprocess.run(["lake", "env", "lean", "--stdin"], input=source + "\n" + REGISTRY,
+    probe = "import Batteries.Tactic.OpenPrivate\n" + source + "\n" + REGISTRY
+    process = subprocess.run(["lake", "env", "lean", "--stdin"], input=probe,
                              cwd=ROOT, capture_output=True, text=True)
     if process.returncode:
         sys.stderr.write(process.stdout + process.stderr)
         return process.returncode
     entries = [json.loads(line.removeprefix("KERNEL-LABELS ")) for line in process.stdout.splitlines()
                if line.startswith("KERNEL-LABELS ")]
+    expected, = [json.loads(line.removeprefix("EXPECTED-REGISTRATIONS "))
+                 for line in process.stdout.splitlines() if line.startswith("EXPECTED-REGISTRATIONS ")]
+    wanted = Counter(expected)
+    seen = Counter(declaration for declaration, _, _ in entries)
+    if seen != wanted:
+        for declaration in sorted((wanted - seen).elements()):
+            print(f"missing trust registration: {declaration}", file=sys.stderr)
+        for declaration in sorted((seen - wanted).elements()):
+            print(f"unexpected trust registration: {declaration}", file=sys.stderr)
+        return 1
     if not entries:
         raise ValueError("no trust registrations returned")
-    missing = [(entry, label) for entry, labels in entries for label in labels if label not in known]
+    missing = [(entry, label) for _, entry, labels in entries for label in labels if label not in known]
     for entry, label in missing:
         print(f"{entry}: unknown affected kernel {label!r}", file=sys.stderr)
     if missing:
         return 1
-    print(f"Checked {sum(len(labels) for _, labels in entries)} kernel labels in {len(entries)} trust registrations.")
+    print(f"Checked {sum(len(labels) for _, _, labels in entries)} kernel labels in {len(entries)} trust registrations.")
     return 0
 
 
