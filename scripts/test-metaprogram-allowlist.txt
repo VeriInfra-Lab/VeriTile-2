@@ -33,6 +33,17 @@ tests/lean/ScalarPrecision.lean	macro_rules	expands scalarMultiply% into its tri
 tests/lean/StaticConditions.lean	static_run_simp	tactic macro: the shared simp set of the static-condition runs
 tests/lean/dist/DeepEPChannel.lean	noTransfer	tactic macro: the shared simp set showing no transfer is in flight
 tests/lean/dist/DeepEPChannel.lean	atPC	tactic macro: the shared simp set reading an agent's program counter
+tests/lean/dist/E2ReadsFromDetermined.lean	k11_pos	tactic macro: the case split locating a k11 event in its program log
+tests/lean/dist/E2ReadsFromDetermined.lean	bar_pos	tactic macro: the case split locating a barrier event in its program log
+tests/lean/dist/E2ReadsFromDetermined.lean	bar_posA	tactic macro: bar_pos for the first barrier agent's log
+tests/lean/dist/E2ReadsFromDetermined.lean	bar_posB	tactic macro: bar_pos for the second barrier agent's log
+tests/lean/dist/E2ReadsFromDetermined.lean	no_x_write	tactic macro: the case split showing a lock event does not write x
+tests/lean/dist/E2ReadsFromDetermined.lean	k11_pc	tactic macro: the shared simp set reading a k11 agent's program counter
+tests/lean/dist/E2ReadsFromDetermined.lean	k11_reach	tactic macro: the pending or quiet step of a reachable k11 run
+tests/lean/dist/E2ReadsFromDetermined.lean	bar_pc	tactic macro: the shared simp set reading a barrier agent's program counter
+tests/lean/dist/E2ReadsFromDetermined.lean	bar_reach	tactic macro: the pending or quiet step of a reachable barrier run
+tests/lean/dist/E2ReadsFromDetermined.lean	t01_pos	tactic macro: the case split locating a tutorial 01 event in its program log
+tests/lean/dist/E2ReadsFromDetermined.lean	t01_reach	tactic macro: the pending or quiet step of a reachable tutorial 01 run
 tests/lean/dist/FetchAddObservation.lean	noTransfer	tactic macro: the shared simp set showing no transfer is in flight
 tests/lean/dist/FetchAddObservation.lean	atStart	tactic macro: the shared simp set reading an agent's program counter
 tests/lean/dist/FetchAddObservation.lean	counterValue	tactic macro: the shared simp set reading the counter word

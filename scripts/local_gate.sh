@@ -125,6 +125,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.IndexQueueSingleSlotWitness"
              "lake build tests.lean.dist.IndexQueueSingleSlot"
              "lake build tests.lean.dist.Tutorial01"
+             "lake build tests.lean.dist.E2ReadsFromDetermined"
              "lake build tests.lean.dist.StorePublication")
 fi
 
