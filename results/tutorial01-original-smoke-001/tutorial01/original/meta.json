@@ -1,0 +1,55 @@
+{
+  "distinct": {
+    "rank0/received": {
+      "75daf0d35df379c6a38bc8ecbf097903dd59cf96cb7aac60d866f5f4a8d875d6": 2
+    },
+    "rank1/received": {
+      "beb2bbb411abfaa949f2aa284f5b2a8abdcdc985013e5faee762151d288410b5": 2
+    }
+  },
+  "inputs": {
+    "send0": {
+      "expected_sha256": "beb2bbb411abfaa949f2aa284f5b2a8abdcdc985013e5faee762151d288410b5",
+      "match": true,
+      "sha256": "beb2bbb411abfaa949f2aa284f5b2a8abdcdc985013e5faee762151d288410b5"
+    },
+    "send1": {
+      "expected_sha256": "75daf0d35df379c6a38bc8ecbf097903dd59cf96cb7aac60d866f5f4a8d875d6",
+      "match": true,
+      "sha256": "75daf0d35df379c6a38bc8ecbf097903dd59cf96cb7aac60d866f5f4a8d875d6"
+    }
+  },
+  "launcher": "triton-dist",
+  "ranks": 2,
+  "repeats": 2,
+  "runs": [
+    {
+      "exit_code": 0,
+      "outputs": {
+        "rank0/received": "75daf0d35df379c6a38bc8ecbf097903dd59cf96cb7aac60d866f5f4a8d875d6",
+        "rank1/received": "beb2bbb411abfaa949f2aa284f5b2a8abdcdc985013e5faee762151d288410b5"
+      },
+      "rank_status": [
+        "ok",
+        "ok"
+      ],
+      "status": "ok",
+      "wall_time_s": 19.455
+    },
+    {
+      "exit_code": 0,
+      "outputs": {
+        "rank0/received": "75daf0d35df379c6a38bc8ecbf097903dd59cf96cb7aac60d866f5f4a8d875d6",
+        "rank1/received": "beb2bbb411abfaa949f2aa284f5b2a8abdcdc985013e5faee762151d288410b5"
+      },
+      "rank_status": [
+        "ok",
+        "ok"
+      ],
+      "status": "ok",
+      "wall_time_s": 14.245
+    }
+  ],
+  "status": "ok",
+  "wall_time_s": 33.7
+}

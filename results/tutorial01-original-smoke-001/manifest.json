@@ -1,0 +1,13 @@
+{
+  "batch_id": "tutorial01-original-smoke-001",
+  "env_mismatch": [],
+  "finished": "2026-11-27T00:47:59Z",
+  "limits_exceeded": [],
+  "mode": "dist",
+  "protocol": 1,
+  "request_commit": "ecabcd164037b5b3911c32eb062bbd0c36f3c1b3",
+  "started": "2026-11-27T00:47:24Z",
+  "tests": {
+    "tutorial01/original": "ok"
+  }
+}
