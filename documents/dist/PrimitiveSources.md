@@ -1198,48 +1198,6 @@ For A1 and A2, affected kernels were found by text search at the pins;
 reachability from each kernel entry point was not traced. A3 to A8 say before
 A3 how theirs were found.
 
-### T05 `t05_current_stream_order`
-
-| Field | Value |
-| --- | --- |
-| Name | `t05_current_stream_order` |
-| Class | semantic source |
-| Status | Registered under the [T05 single-launch decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/664#issuecomment-7215198422). |
-| Statement | In the ordinary T05 path at Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`, each rank submits its peer copies, K11, and K10 to the same local CUDA stream. Every one of its copies completes before its own K11 lanes start. All of those lanes return from the final CTA barrier before its own K10 tiles start. |
-| Source or rationale | The host selects its current stream and issues the three operations in sequence. The copy loop selects each peer and writes the sender's slice into that peer's scatter buffer. K10 uses the same stream. [T05 copy loop and host calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L175-L221) · [K10 stream context](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L136-L141) · [K11 CAS and CTA barrier](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168) · [CUDA stream ordering](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#cuda-stream-ordering) |
-| Affected kernels | K11, `barrier_all_intra_node_atomic_cas_block`, and K10, `kernel_ring_reduce`, in this T05 host invocation. |
-| Event interface | Each rank has two model-private words, initially zero and disjoint from the input, scatter buffer, CAS flags and output. After the last copy, its copy engine adds one with GPU release to the first word. K11 lanes wait for one with GPU acquire. Each K11 lane adds one with GPU release to the second word after its CTA wait; local K10 tiles wait with GPU acquire for the full lane count. The two words are disjoint from all source cells. No source segment or K11 operation reads or writes either word, and `Output` reads only output cells. It orders nothing between ranks: the two words of rank r are private to rank r, and the only inter-rank ordering in T05 is the K11 system-scope CAS release/acquire pair. |
-| Beyond documentation | The named premise covers the representation of same-stream completion by these local operations. The one-CTA K11 uses model PID `[0]`, the copy engine uses a distinct local proxy `[1]`, and K10 block `b` uses `[b+2]`. Each rank has its own stream and words. The inter-rank payload path also requires the original system release/acquire CAS pair. Physical BF16 agreement with the real-valued S7 result remains an unproved obligation of [#157](https://github.com/VeriInfra-Lab/VeriTile-2/issues/157) and [#158](https://github.com/VeriInfra-Lab/VeriTile-2/issues/158). |
-
-The T05 pilot represents each sender's copy loop by one physical segment. It reads
-that sender's input for each destination and writes the corresponding disjoint
-scatter shard. In the default K10 grid, one CTA reduces each 256-by-64 tile.
-For destination rank `r`, the left fold starts with sender `(r + 1) mod n`
-and visits every sender once. The initial state supplies the input shards,
-zero CAS flags and zero stream words. The proof permits arbitrary initial
-scatter contents. [Copy addresses and frames](../../tests/lean/dist/Tutorial05HostCopy.lean) · [K10 indexing and reduction order](../../tests/lean/dist/Tutorial05K10.lean)
-
-The source-facing theorem `Whole.t05` takes an ordinary invocation of the
-pinned program. Its trust report lists A3 (spin loops), A8 (native peer
-atomics), and `t05_current_stream_order`. The underlying machine theorem
-`Whole.model_t05` proves the ordered S7 result for every complete execution and
-exhibits a complete race-free execution whenever the CTA has at least as many
-physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
-scatter cells and reads back 3/4 and 5/8. The two-rank counterexample deletes
-the whole receive CAS loop, including the system-acquire wait `w1` and the
-relaxed reset `s0`. A K10 tile can then read a peer shard before its sender
-writes it. Separately, `Stream.relaxedCASNoDirect` retains the receive loop
-in its local event trace and weakens only the wait to relaxed. The release
-and that wait then have no direct happens-before edge on the payload.
-[Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Whole-loop deletion](../../tests/lean/dist/Tutorial05NoAcquire.lean) · [Relaxed-wait endpoint proof](../../tests/lean/dist/Tutorial05Stream.lean)
-
-A second control keeps both CAS loops and skips just the copy-completion wait
-for K11 lane zero of rank one. That lane publishes its flag before rank one's
-copy, so rank zero can observe it, complete its CTA barrier and stream wait,
-and read the stale peer shard. Rank one's first copy then conflicts with the
-read. `Whole.copy_wait_matters` checks all 32 steps and the original launch's
-race freedom on the same inputs. [Copy-wait schedule](../../tests/lean/dist/Tutorial05NoAcquire.lean)
-
 ### A1 `undocumented_scope_order_vocabulary`
 
 A1 is the remainder of the former `scope_order_vocabulary` after the user's
@@ -1274,7 +1232,7 @@ out is said in the statement, and what follows when two entries meet is in
 section 6 (I7 to I11). The names were chosen in this revision (ticket S2.7);
 the freeze ticket S5.1 fixes them. A9, A10 and the present form of A5 come
 from the user's decisions of 2026-11-21 and have the same form; A5 was renamed
-then. On 2026-11-27 the user registered A11 for CTA-scoped accesses in the pinned DeepEP intranode port. Two fields are added: what goes beyond
+then. On 2026-11-27 the user registered A11 for CTA-scoped accesses in the pinned DeepEP intranode port and A12 for the two rank-local stream handoffs in ordinary T05. Two fields are added: what goes beyond
 documentation, in one sentence, and the constructor of the signed event
 interface (`VeriTile/Dist/Event.lean`) that carries the reading;
 ticket S2.6 fixes the map from primitives to events.
@@ -1418,6 +1376,48 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Beyond documentation | The scope mapping is an assumption restricted to this port directory and pin. A1 retains its existing domain. |
 | Event interface | A covered load at `p` yields `Event.access .load p (.atomic .cta .acquire)`; a covered store yields `Event.access .store p (.atomic .cta .release)`. This scope mapping supplies no ordering edge between distinct blocks and no DRF conclusion. |
 
+### A12 `t05_current_stream_order`
+
+| Field | Value |
+| --- | --- |
+| Name | `t05_current_stream_order` |
+| Class | semantic source |
+| Status | Accepted by the user on 2026-11-27. [T05 single-launch decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/664#issuecomment-7215198422) · [Decision on rank-local scope and the counterexample](https://github.com/VeriInfra-Lab/VeriTile-2/pull/675#issuecomment-7219845498) |
+| Statement | In the ordinary T05 path at Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`, each rank submits its peer copies, K11, and K10 to the same local CUDA stream. Every one of its copies completes before its own K11 lanes start. All of those lanes return from the final CTA barrier before its own K10 tiles start. |
+| Source or rationale | The host selects its current stream and issues the three operations in sequence. The copy loop selects each peer and writes the sender's slice into that peer's scatter buffer. K10 uses the same stream. [T05 copy loop and host calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L175-L221) · [K10 stream context](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L136-L141) · [K11 CAS and CTA barrier](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168) · [CUDA stream ordering](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#cuda-stream-ordering) |
+| Affected kernels | K11, `barrier_all_intra_node_atomic_cas_block`, and K10, `kernel_ring_reduce`, in this T05 host invocation. |
+| Event interface | Each rank has two model-private words, initially zero and disjoint from the input, scatter buffer, CAS flags and output. After the last copy, its copy engine adds one with GPU release to the first word. K11 lanes wait for one with GPU acquire. Each K11 lane adds one with GPU release to the second word after its CTA wait; local K10 tiles wait with GPU acquire for the full lane count. The two words are disjoint from all source cells. No source segment or K11 operation reads or writes either word, and `Output` reads only output cells. It orders nothing between ranks: the two words of rank r are private to rank r, and the only inter-rank ordering in T05 is the K11 system-scope CAS release/acquire pair. |
+| Beyond documentation | The named premise covers the representation of same-stream completion by these local operations. The one-CTA K11 uses model PID `[0]`, the copy engine uses a distinct local proxy `[1]`, and K10 block `b` uses `[b+2]`. Each rank has its own stream and words. The inter-rank payload path also requires the original system release/acquire CAS pair. Physical BF16 agreement with the real-valued S7 result remains an unproved obligation of [#157](https://github.com/VeriInfra-Lab/VeriTile-2/issues/157) and [#158](https://github.com/VeriInfra-Lab/VeriTile-2/issues/158). |
+
+The T05 pilot represents each sender's copy loop by one physical segment. It reads
+that sender's input for each destination and writes the corresponding disjoint
+scatter shard. In the default K10 grid, one CTA reduces each 256-by-64 tile.
+For destination rank `r`, the left fold starts with sender `(r + 1) mod n`
+and visits every sender once. The initial state supplies the input shards,
+zero CAS flags and zero stream words. The proof permits arbitrary initial
+scatter contents. [Copy addresses and frames](../../tests/lean/dist/Tutorial05HostCopy.lean) · [K10 indexing and reduction order](../../tests/lean/dist/Tutorial05K10.lean)
+
+The source-facing theorem `Whole.t05` takes an ordinary invocation of the
+pinned program. Its trust report lists A3 (spin loops), A8 (native peer
+atomics), and `t05_current_stream_order`. The underlying machine theorem
+`Whole.model_t05` proves the ordered S7 result for every complete execution and
+exhibits a complete race-free execution whenever the CTA has at least as many
+physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
+scatter cells and reads back 3/4 and 5/8. The two-rank counterexample deletes
+the whole receive CAS loop, including the system-acquire wait `w1` and the
+relaxed reset `s0`. A K10 tile can then read a peer shard before its sender
+writes it. Separately, `Stream.relaxedCASNoDirect` retains the receive loop
+in its local event trace and weakens only the wait to relaxed. The release
+and that wait then have no direct happens-before edge on the payload.
+[Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Whole-loop deletion](../../tests/lean/dist/Tutorial05NoAcquire.lean) · [Relaxed-wait endpoint proof](../../tests/lean/dist/Tutorial05Stream.lean)
+
+A second control keeps both CAS loops and skips just the copy-completion wait
+for K11 lane zero of rank one. That lane publishes its flag before rank one's
+copy, so rank zero can observe it, complete its CTA barrier and stream wait,
+and read the stale peer shard. Rank one's first copy then conflicts with the
+read. `Whole.copy_wait_matters` checks all 32 steps and the original launch's
+race freedom on the same inputs. [Copy-wait schedule](../../tests/lean/dist/Tutorial05NoAcquire.lean)
+
 ## 8. Counts
 
 | Section | Rows | documented | named assumption | weakest | out of scope |
@@ -1435,7 +1435,7 @@ warp barriers, so the entry now holds three TileScale barriers.
 By pattern: a 52, b 47, c 60, none 51.
 
 Of the 14 rows under a named assumption, 12 are under A1, one (`dl.notify`)
-is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9. A11 adds no row and moves no row between treatments: it qualifies the existing A1 entries for `ld` and `st` in §5.5.
+is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9. A11 adds no row and moves no row between treatments: it qualifies the existing A1 entries for `ld` and `st` in §5.5. A12 records the two local stream handoffs in the T05 host; it adds no primitive row.
 
 Before the decisions of 2026-11-12 the table had 202 rows: 79 documented, 19
 under a named assumption, 79 weakest and 25 out of scope. Seven rows moved

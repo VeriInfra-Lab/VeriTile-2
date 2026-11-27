@@ -25,9 +25,6 @@ namespace Assumption
 semantics can state each guarantee in the main target. Proofs that cite
 an entry must supply it as a hypothesis. -/
 
-/-- T05's ordinary current stream orders the local copy engine, K11 and K10. -/
-opaque t05_current_stream_order : Prop
-
 /-- A1. Opaque pending the scoped primitive semantics for undocumented vocabulary. -/
 opaque undocumented_scope_order_vocabulary : Prop
 
@@ -65,6 +62,9 @@ opaque documented_atomic_update_lowering : Prop
 /-- A11. The `cta` scope of DeepEP v1's intranode TileScale port denotes one CUDA thread block. -/
 opaque deepep_v1_cta_scope_is_block : Prop
 
+/-- A12. T05's ordinary current stream orders the local copy engine, K11 and K10. -/
+opaque t05_current_stream_order : Prop
+
 end Assumption
 
 namespace TrustAssumptions
@@ -76,11 +76,6 @@ private def semantic (name : Name) (statement : Prop) (source : String)
   sourceOrRationale := source
   affectedKernels := affected
   assumptionClass := .semanticSource
-
-def t05_current_stream_order : TrustAssumption :=
-  semantic `t05_current_stream_order Assumption.t05_current_stream_order
-    "PrimitiveSources.md §7 T05; Triton-distributed 7908e4ea, ordinary current stream."
-    ["K10", "K11"]
 
 def undocumented_scope_order_vocabulary : TrustAssumption :=
   semantic `undocumented_scope_order_vocabulary
@@ -145,6 +140,11 @@ def deepep_v1_cta_scope_is_block : TrustAssumption :=
     "PrimitiveSources.md §7 A11; TileScale 9ba8a605, examples/distributed/deepseek_deepep/intranode only."
     ["K28"]
 
+def t05_current_stream_order : TrustAssumption :=
+  semantic `t05_current_stream_order Assumption.t05_current_stream_order
+    "PrimitiveSources.md §7 A12; Triton-distributed 7908e4ea, ordinary current stream."
+    ["K10", "K11"]
+
 def documented_atomic_update_lowering : TrustAssumption where
   name := `documented_atomic_update_lowering
   statement := Assumption.documented_atomic_update_lowering
@@ -161,7 +161,6 @@ def documented_atomic_update_lowering : TrustAssumption where
 /-- The built-in registry entries, pairing each statement and its metadata. -/
 def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
   #[(``Assumption.undocumented_scope_order_vocabulary, ``undocumented_scope_order_vocabulary),
-      (``Assumption.t05_current_stream_order, ``t05_current_stream_order),
       (``Assumption.notify_atomic_release, ``notify_atomic_release),
       (``Assumption.spin_wait_one_blocking_event, ``spin_wait_one_blocking_event),
       (``Assumption.sync_threads_group_barrier, ``sync_threads_group_barrier),
@@ -172,6 +171,7 @@ def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
       (``Assumption.grid_barrier_cooperative_sync, ``grid_barrier_cooperative_sync),
       (``Assumption.deepep_v1_calls_read_by_main_rows, ``deepep_v1_calls_read_by_main_rows),
       (``Assumption.deepep_v1_cta_scope_is_block, ``deepep_v1_cta_scope_is_block),
+      (``Assumption.t05_current_stream_order, ``t05_current_stream_order),
       (``Assumption.documented_atomic_update_lowering, ``documented_atomic_update_lowering)]
 
 end TrustAssumptions
