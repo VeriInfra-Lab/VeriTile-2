@@ -118,6 +118,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TrustAssumptions"
              "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
              "lake build tests.lean.dist.TrustAssumptionImports"
+             "lake build tests.lean.dist.ScopeCheck"
              "lake build tests.lean.TileLangSyntax"
              "lake env lean tests/lean/TileLangSyntax.lean"
              "lake build tests.lean.TileLangManualAcceptance"

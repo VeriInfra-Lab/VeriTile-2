@@ -577,6 +577,7 @@ globs = [
   "tests.lean.dist.Tutorial01",
   "tests.lean.dist.StorePublication",
   "tests.lean.dist.E2ReadsFromDetermined",
+  "tests.lean.dist.ScopeCheck",
   # Also run directly by the gate; built here so that its compiled axiom audit imports them.
   "tests.lean.InterpBridgeCensus",
   "tests.lean.dist.P2PTransferViews",
