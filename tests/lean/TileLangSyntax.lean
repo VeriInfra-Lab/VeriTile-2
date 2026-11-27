@@ -126,14 +126,21 @@ run_cmd
 
 -- For every exported spelling, check the real parser, including the classes and
 -- double-underscore exports. A bare, zero-argument value call has no admitted row.
+-- The excluded names come from `explicitInstruction`, the rule whose 27 exports the signed
+-- `syntacticCall_tileLang_excluded` lists. Each fails in TileLang mode as a statement call,
+-- a value call and a value, and parses in TileScale mode.
 run_cmd
   let env ← getEnv
+  let excluded := exportedNames.filter explicitInstruction
+  unless excluded.length == 27 do throwError "the exclusion list has {excluded.length} names"
   for n in exportedNames do
     let src := eager ("X = T." ++ n ++ "()")
-    let low := ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
-      (fun opcode => n == opcode || n.startsWith (opcode ++ "_")) ||
-      ["wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait"].contains n
-    if low then parseFails src else
+    if explicitInstruction n then
+      for body in ["T." ++ n ++ "()", "X = T." ++ n ++ "()", "X = T." ++ n] do
+        parseFails (eager body)
+        unless (Parser.runParserCategory env `term ((eager body).replace "tilelang {" "tilescale {")).isOk do
+          throwError "tilescale rejects {body}"
+    else
       unless (Parser.runParserCategory env `term src).isOk do throwError "missing exported spelling: {n}"
       checkAdmission src false
 

@@ -4,7 +4,14 @@ import VeriTile.TileLang.DSL.Transfer
 
 /-! Executable admission of a manually constructed or quoted source Program. It checks
 the source subset only; type/shape specialization and target-specific contracts
-are separate from admission. -/
+are separate from admission.
+
+The A3.1 signature (#83) covers the shapes of the typed source types in `Ast.lean` and
+the exclusion list: `syntacticCall_tileLang_excluded` and `syntacticCall_tileLang_closed`
+state which `T.` names the TileLang classifier rejects. That a quotation naming one of
+them fails to parse is established by the parser tests in tests/lean/TileLangSyntax.lean,
+which run every listed name through the real parser; it is not a signed theorem.
+`Program.accepted` is not signed. -/
 namespace VeriTile.TileLang
 open Lean
 
@@ -17,17 +24,22 @@ def sourceIdentifier : Name → Bool
         "async","await","del","is","raise"].contains s
   | _ => false
 
-/-- A name that issues an explicit WGMMA, TCGen05 or proxy-fence instruction: one of six
-opcode prefixes, or one of four exports whose device code issues a WGMMA fence,
-commit or wait. At tile-ai/tilelang@35850c06, `tilelang/language/builtin.py`
-L540 `warpgroup_arrive`, L549 `warpgroup_commit_batch`, L558 `warpgroup_wait` and
-L872 `wait_wgmma` call the device functions of `src/tl_templates/cuda/intrin.h`
-L70–99, which call CUTLASS `cute::warpgroup_arrive`, `warpgroup_commit_batch` and
-`warpgroup_wait`. -/
+/-- A name of an explicit WGMMA, TCGen05 or proxy-fence instruction: one of six opcode
+prefixes, or one of six exports named below. At tile-ai/tilelang@35850c06:
+- `tilelang/language/builtin.py` L540 `warpgroup_arrive`, L549 `warpgroup_commit_batch`,
+  L558 `warpgroup_wait` and L872 `wait_wgmma` call the device functions of
+  `src/tl_templates/cuda/intrin.h` L70–99, which call CUTLASS `cute::warpgroup_arrive`,
+  `warpgroup_commit_batch` and `warpgroup_wait` (`wgmma.fence`, `wgmma.commit_group`,
+  `wgmma.wait_group`);
+- `tilelang/language/allocate.py` L253 `alloc_tmem` and `builtin.py` L277 `deallocate_tmem`
+  are lowered by `src/cuda/transform/lower_shared_tmem.cc` to the device functions of
+  `src/tl_templates/cuda/tcgen_05.h` L15–58, `tcgen05.alloc` and `tcgen05.dealloc`.
+The method and the names kept are in documents/TileLangSubset.md (Explicit exclusions). -/
 def explicitInstruction (field : String) : Bool :=
   ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
     (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) ||
-  ["wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait"].contains field
+  ["wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait",
+   "alloc_tmem", "deallocate_tmem"].contains field
 
 def syntacticCall (mode : Mode) (name : Name) : Bool :=
   match name with
@@ -37,13 +49,13 @@ def syntacticCall (mode : Mode) (name : Name) : Bool :=
       (mode == .tileScale && (low || ["copy", "atomic_add", "tma_copy", "alloc_shared"].contains field)))
   | _ => name == `math.ceil || sourceIdentifier name
 
-/-- Signed (#83, A3.1). The pinned exports that are not TileLang calls or values, so a
-quotation naming one fails to parse: exactly these 25, the exports that satisfy
-`explicitInstruction`. The parser applies `syntacticCall` in `validateUnit`
-(tests/lean/TileLangSyntax.lean). -/
+/-- Signed (#83, A3.1). The exclusion list: the pinned exports that the TileLang
+classifier rejects as calls and values, exactly these 27, the exports that satisfy
+`explicitInstruction`. The parser applies `syntacticCall` in `validateUnit`; the parse
+failures are tested, not proved (tests/lean/TileLangSyntax.lean). -/
 theorem syntacticCall_tileLang_excluded :
     exportedNames.filter (fun field => !syntacticCall .tileLang (.str `T field)) =
-      ["fence_proxy_async", "ptx_tcgen05_mma_blockscaled_ss", "ptx_tcgen05_mma_ss",
+      ["alloc_tmem", "deallocate_tmem", "fence_proxy_async", "ptx_tcgen05_mma_blockscaled_ss", "ptx_tcgen05_mma_ss",
        "ptx_tcgen05_mma_ts", "ptx_wgmma_rs", "ptx_wgmma_sp_rs", "ptx_wgmma_sp_ss", "ptx_wgmma_ss",
        "tcgen05_after_thread_sync", "tcgen05_before_thread_sync", "tcgen05_cp_warpx4",
        "tcgen05_gemm", "tcgen05_gemm_blockscaled", "tcgen05_gemm_sp", "tcgen05_mma",
@@ -52,9 +64,9 @@ theorem syntacticCall_tileLang_excluded :
        "wgmma_gemm", "wgmma_gemm_sp", "wgmma_mma"] := by
   decide +kernel
 
-/-- Signed (#83, A3.1). In TileLang mode a call name is a pinned export that issues no
-explicit instruction, `math.ceil` or an unqualified source identifier. Any other
-qualified name fails to parse. -/
+/-- Signed (#83, A3.1). In TileLang mode the classifier accepts as a call name only a
+pinned export outside `explicitInstruction`, `math.ceil` or an unqualified source
+identifier. It rejects every other qualified name. -/
 theorem syntacticCall_tileLang_closed (n : Name) (h : syntacticCall .tileLang n = true) :
     (∃ field, n = .str `T field ∧ exportedNames.contains field = true ∧
       explicitInstruction field = false) ∨

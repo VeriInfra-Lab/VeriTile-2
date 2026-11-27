@@ -42,6 +42,8 @@
     "ws"
   ],
   "never": [
+    "alloc_tmem",
+    "deallocate_tmem",
     "fence_proxy_async",
     "ptx_tcgen05_mma_blockscaled_ss",
     "ptx_tcgen05_mma_ss",

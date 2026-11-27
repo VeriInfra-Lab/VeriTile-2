@@ -23,6 +23,7 @@ DRIVER = ROOT / "tests/lean/TileLangAcceptanceSurface.lean"
 MANUAL = ROOT / "tests/lean/TileLangManualAcceptance.lean"
 # Excluded by name in `explicitInstruction`, not by opcode prefix; sources in TileLangSubset.md.
 WGMMA_SYNC = {"wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait"}
+TMEM = {"alloc_tmem", "deallocate_tmem"}
 LEAN = ROOT / "VeriTile/TileLang/DSL/Exports.lean"
 FACADE = "tilelang.language"
 PARSER = "tvm.tirx.script.parser"
@@ -302,6 +303,8 @@ def render(rows, admissions):
         status = "partial" if name in partial else "never" if name in never else "unadmitted"
         if status == "never" and name in WGMMA_SYNC:
             reason = "Issues a WGMMA fence, commit or wait. See [explicit exclusions](../TileLangSubset.md#explicit-exclusions)."
+        elif status == "never" and name in TMEM:
+            reason = "Lowered to TCGen05 TMEM allocation. See [explicit exclusions](../TileLangSubset.md#explicit-exclusions)."
         elif status == "never":
             reason = "Explicit instruction family or proxy fence."
         elif status == "unadmitted":

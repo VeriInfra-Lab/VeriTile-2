@@ -26,9 +26,9 @@ class TileLangSurfaceTests(unittest.TestCase):
         self.assertIn("bfloat16x64", rows)
         self.assertNotIn("tvm_rdna_wmma", rows)
         admission = json.loads(surface.ADMISSIONS.read_text())
-        for name in ("wgmma_gemm", "ptx_wgmma_ss", "tcgen05_gemm", "fence_proxy_async", *surface.WGMMA_SYNC):
+        for name in ("wgmma_gemm", "ptx_wgmma_ss", "tcgen05_gemm", "fence_proxy_async", *surface.WGMMA_SYNC, *surface.TMEM):
             self.assertTrue(name in admission["never"], name)
-        self.assertEqual(len(admission["never"]), 25)
+        self.assertEqual(len(admission["never"]), 27)
         for name in ("WGMMATensorCoreIntrinEmitter", "ptx_commit_group", "gemm"):
             self.assertFalse(name in admission["never"], name)
         self.assertIn("tma_copy", surface.census_descriptions())
