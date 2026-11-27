@@ -1,10 +1,16 @@
 import VeriTile.Interp.Reflect
 import VeriTile.Interp.Run.FileProgram
 import bench.examples.AdamUpdateGridLaunch.Kernels
+import bench.examples.FloatDTypeSoftmax.Kernels
 import bench.examples.FusedLayerNorm.Kernels
 import bench.examples.FusedSiLU.Kernels
+import bench.examples.FusedSwiglu.Kernels
+import bench.examples.LogExp.Kernels
 import bench.examples.RowWiseMax.Kernels
 import bench.examples.RowWiseSum.Kernels
+import bench.examples.SoftmaxReciprocal.Kernels
+import bench.examples.SoftmaxStable.Kernels
+import bench.examples.StableLogSumExp.Kernels
 import bench.examples.Welford.Kernels
 
 namespace VeriTile.Interp.Run.Examples
@@ -22,6 +28,13 @@ def fused (b : Nat) := FusedSiLU.Kernels.fusedSiLUKernel "xReg" "gateReg" "resid
 def gate (b : Nat) := FusedSiLU.Kernels.siluStepGateKernel "xReg" "gateReg" "zReg" b
 def activation (b : Nat) := FusedSiLU.Kernels.siluStepSiluKernel "zReg" "siluReg" b
 def residual (b : Nat) := FusedSiLU.Kernels.siluStepResidualKernel "siluReg" "residualReg" "outReg" b
+def fp64Softmax (b : Nat) := FloatDTypeSoftmax.Kernels.floatStableSoftmaxKernel "xReg" "yReg" b
+def swiglu (n b : Nat) := FusedSwiglu.Kernels.swiglu_fused_kernel "X" "Y" "OUT" n b
+def logExp (b : Nat) := LogExp.originalKernel "xReg" "yReg" b
+def logExpGuarded (b : Nat) := LogExp.optimizedKernel "xReg" "yReg" b
+def reciprocalSoftmax (b : Nat) := SoftmaxReciprocal.Kernels.softmaxRecipKernel "xReg" "yReg" b
+def stableSoftmax (b : Nat) := SoftmaxStable.Kernels.stableSoftmaxKernel "xReg" "yReg" b
+def stableLSE (b : Nat) := StableLogSumExp.Kernels.optimizedLSEKernel "xReg" "yReg" b
 
 reflect_kernel adam
 reflect_kernel norm
@@ -32,6 +45,13 @@ reflect_kernel fused
 reflect_kernel gate
 reflect_kernel activation
 reflect_kernel residual
+reflect_kernel fp64Softmax
+reflect_kernel swiglu
+reflect_kernel logExp
+reflect_kernel logExpGuarded
+reflect_kernel reciprocalSoftmax
+reflect_kernel stableSoftmax
+reflect_kernel stableLSE
 
 def gridX (grid : List Nat) : Except String Nat := do
   let x := grid.headD 0
@@ -113,6 +133,51 @@ private def siluEntry (inputs : List RegionName) (out : RegionName) (dtype : DTy
     for t in ts do checkInput t .fp64 shape
     runBinary64Files dims (kernel b) (inputs.zip ts) [⟨out,dtype,shape,none⟩]
 
+private def roundedRowEntry (widthKey : String) (dtype : DType) (scalarPerRow : Bool)
+    (kernel : Nat → QKernel) : FileEntry where
+  inputs := ["xReg"]
+  outputs := ["yReg"]
+  carrier := "source-rounded"
+  run cfg dims ts := do
+    cfg.check [widthKey] []
+    let rows ← gridX dims
+    let width ← naturalSetting cfg.constants widthKey
+    unless width > 0 do throw "row width must be positive"
+    let [t] := ts | throw "expected one matrix"
+    checkInput t .fp32 [rows,width]
+    let shape := if scalarPerRow then [rows] else [rows,width]
+    runFloatFiles Binary64.sourceRoundedAlgebra dims (kernel width) [("xReg",t)]
+      [⟨"yReg",dtype,shape,none⟩]
+
+private def logExpEntry (kernel : Nat → QKernel) : FileEntry where
+  inputs := ["xReg"]
+  outputs := ["yReg"]
+  carrier := "source-rounded"
+  run cfg dims ts := do
+    cfg.check ["blockSize"] []
+    let b ← naturalSetting cfg.constants "blockSize"
+    unless b > 0 do throw "blockSize must be positive"
+    let shape := [(← gridX dims) * b]
+    let [t] := ts | throw "expected one vector"
+    checkInput t .fp32 shape
+    runFloatFiles Binary64.sourceRoundedAlgebra dims (kernel b) [("xReg",t)]
+      [⟨"yReg",.fp32,shape,none⟩]
+
+private def swigluEntry : FileEntry where
+  inputs := ["X","Y"]
+  outputs := ["OUT"]
+  carrier := "source-rounded"
+  run cfg dims ts := do
+    cfg.check ["ncols","BLOCK_N"] []
+    let n ← naturalSetting cfg.constants "ncols"
+    let b ← naturalSetting cfg.constants "BLOCK_N"
+    let grid ← gridX dims
+    unless n > 0 && b > 0 && grid == (n + b - 1) / b do
+      throw "SwiGLU expects ceil(ncols/BLOCK_N) programs over nonempty vectors"
+    for t in ts do checkInput t .fp32 [n]
+    runFloatFiles Binary64.sourceRoundedAlgebra dims (swiglu.mirror n b)
+      ((["X","Y"] : List RegionName).zip ts) [⟨"OUT",.bf16,[n],none⟩]
+
 def tensorExamples : List (String × FileEntry) := [
   ("AdamUpdateGridLaunch",adamEntry), ("FusedLayerNorm",layerNormEntry),
   ("RowWiseMax",rowEntry maximum.mirror), ("RowWiseSum",rowEntry sumRows.mirror),
@@ -120,6 +185,12 @@ def tensorExamples : List (String × FileEntry) := [
   ("FusedSiLU",siluEntry ["xReg","gateReg","residualReg"] "outReg" .bf16 fused.mirror),
   ("FusedSiLUGate",siluEntry ["xReg","gateReg"] "zReg" .fp64 gate.mirror),
   ("FusedSiLUActivation",siluEntry ["zReg"] "siluReg" .fp64 activation.mirror),
-  ("FusedSiLUResidual",siluEntry ["siluReg","residualReg"] "outReg" .bf16 residual.mirror)]
+  ("FusedSiLUResidual",siluEntry ["siluReg","residualReg"] "outReg" .bf16 residual.mirror),
+  ("FloatDTypeSoftmax",roundedRowEntry "blockSize" .fp32 Bool.false fp64Softmax.mirror),
+  ("FusedSwiglu",swigluEntry), ("LogExp",logExpEntry logExp.mirror),
+  ("LogExpOptimized",logExpEntry logExpGuarded.mirror),
+  ("SoftmaxReciprocal",roundedRowEntry "blockSize" .bf16 Bool.false reciprocalSoftmax.mirror),
+  ("SoftmaxStable",roundedRowEntry "B" .bf16 Bool.false stableSoftmax.mirror),
+  ("StableLogSumExp",roundedRowEntry "blockSize" .bf16 Bool.true stableLSE.mirror)]
 
 end VeriTile.Interp.Run.Examples

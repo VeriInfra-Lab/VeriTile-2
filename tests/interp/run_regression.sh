@@ -85,3 +85,16 @@ cmp "$work/stats/varReg.tensor" "$mixed/welford-var.tensor"
 test ! -e "$work/invalid-stats"
 leftovers=("$work"/stats.tmp.*)
 (( ${#leftovers[@]} == 0 ))
+
+# Source-rounded bindings enforce the actual launch extent, shapes and dtypes.
+reject --carrier source-rounded --grid 1 --constexpr ncols=5 --constexpr BLOCK_N=4 \
+  FusedSwiglu "$mixed/swiglu-x.tensor" "$mixed/swiglu-y.tensor" "$work/invalid-rounded.tensor"
+reject --carrier source-rounded --grid 2 --constexpr ncols=6 --constexpr BLOCK_N=4 \
+  FusedSwiglu "$mixed/swiglu-x.tensor" "$mixed/swiglu-y.tensor" "$work/invalid-rounded.tensor"
+reject --carrier source-rounded --grid 2 --constexpr blockSize=4 \
+  FloatDTypeSoftmax "$mixed/SoftmaxStable-output.tensor" "$work/invalid-rounded.tensor"
+reject --carrier source-rounded --grid 2 --constexpr blockSize=4 \
+  FloatDTypeSoftmax "$mixed/log-exp-input.tensor" "$work/invalid-rounded.tensor"
+reject --carrier source-rounded --grid 2 --constexpr blockSize=4 \
+  StableLogSumExp "$mixed/StableLogSumExp-input.tensor" "$work/invalid-rounded.tensor"
+test ! -e "$work/invalid-rounded.tensor"
