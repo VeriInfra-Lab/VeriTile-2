@@ -557,6 +557,8 @@ globs = [
   "tests.lean.dist.IndexQueueSingleSlotModel",
   "tests.lean.dist.IndexQueueSingleSlotRuns",
   "tests.lean.dist.IndexQueueSingleSlotShape",
+  "tests.lean.dist.IndexQueueSound",
+  "tests.lean.dist.IndexQueueHiddenWrite",
   "tests.lean.dist.IndexQueueSingleSlotRefines",
   "tests.lean.dist.IndexQueueSingleSlotNegative",
   "tests.lean.dist.IndexQueueSingleSlotWitness",
