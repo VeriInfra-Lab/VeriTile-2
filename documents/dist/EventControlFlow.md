@@ -630,7 +630,8 @@ not called from `reduce_scatter_2d_op` or below (`RS:793-831`).
 4. **Ordinary accesses to CTA-shared memory in the receiver of K28**
    (`DC:247`, `DC:261-262`, `DC:343-345`, `DC:350`) are made by different
    warps with no barrier between them. Under W1 and I1 of
-   `PrimitiveSources.md` such a pair conflicts (I).
+   `PrimitiveSources.md` such a pair conflicts (I). The [#636 combine variant](../../experiments/interp_gpu/deepep_v1/CombineVariant.md)
+   uses CTA-scoped release stores and acquire loads for these accesses.
 5. **Tutorial 03, signal buffer.** Each signal tensor is created with shape
    `(1, )` (`T03:276-278`) and one of them is passed as `symm_flag`
    (`T03:103`, `T03:185`). The kernels index `symm_flag + peer`, `symm_flag +
