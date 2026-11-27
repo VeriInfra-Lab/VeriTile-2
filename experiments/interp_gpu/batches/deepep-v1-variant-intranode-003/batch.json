@@ -21,7 +21,8 @@
         ],
         "ring": {
           "num_sms": 2,
-          "recv_tokens": 24
+          "recv_tokens": 24,
+          "combine_send_tokens": 8
         }
       },
       "inputs": [

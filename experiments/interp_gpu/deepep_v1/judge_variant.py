@@ -55,7 +55,7 @@ def source_error(folder, test, original, changed):
     if 'ring' in test.get('launch', {}):
         ring = test['launch']['ring']
         expected_lines = sorted(f'deepep-ring rank={r} channels={ring["num_sms"] // 2} '
-                                f'dispatch=24/{ring["recv_tokens"]} combine=10/{ring["recv_tokens"]}' for r in ranks)
+                                f'dispatch=24/{ring["recv_tokens"]} combine={ring["combine_send_tokens"]}/{ring["recv_tokens"]}' for r in ranks)
         if any(sorted(group) != expected_lines for group in rings):
             return 'missing or incorrect executed ring configuration'
     return None
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         cli.exit(1, f'Missing result data: {exc}\n')
     except (OSError, ValueError) as exc:
         cli.exit(1, f'Cannot judge result bundle: {exc}\n')
-    if args.batch != SMALL_RING:
+    if args.batch == NAME:
         print(RECORDED_LIMIT)
     print(judge.render(results))
     raise SystemExit(0 if all(r['verdict'] == 'equal' for r in results) else 1)

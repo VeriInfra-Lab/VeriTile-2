@@ -47,7 +47,9 @@ def make_buffer(buffer_class, group, num_topk, hidden, launch):
     ring = launch['ring']
     config = dict(num_sms=ring['num_sms'], num_max_nvl_chunked_recv_tokens=ring['recv_tokens'])
     dispatch = replace(Config.get_dispatch_config(group.size()), **config)
-    combine = replace(Config.get_combine_config(group.size()), **config)
+    combine = replace(Config.get_combine_config(group.size()),
+                      num_max_nvl_chunked_send_tokens=ring['combine_send_tokens'], **config)
+    # gpurun creates a fresh process per rank, so this class-level setting is local to this run.
     buffer_class.set_num_sms(ring['num_sms'])
     buf = buffer_class(*args, dispatch_cfg=dispatch, combine_cfg=combine)
     def sizes(cfg):
