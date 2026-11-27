@@ -58,6 +58,18 @@ namespace VeriTile.Tests.TrustAssumptions
 
 open VeriTile.Dist
 
+example : TrustAssumptions.t05_current_stream_order.affectedKernels = ["K10", "K11"] := rfl
+
+theorem usingT05CurrentStream (h : Assumption.t05_current_stream_order) :
+    Assumption.t05_current_stream_order := h
+
+/--
+info: Trust assumptions used by usingT05CurrentStream:
+  t05_current_stream_order (semantic source)
+-/
+#guard_msgs in
+#print_trust_assumptions usingT05CurrentStream
+
 theorem usingA2 (h : Assumption.notify_atomic_release) :
     Assumption.notify_atomic_release := h
 

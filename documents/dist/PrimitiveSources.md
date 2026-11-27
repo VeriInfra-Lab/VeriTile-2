@@ -1192,6 +1192,19 @@ For A1 and A2, affected kernels were found by text search at the pins;
 reachability from each kernel entry point was not traced. A3 to A8 say before
 A3 how theirs were found.
 
+### T05 `t05_current_stream_order`
+
+| Field | Value |
+| --- | --- |
+| Name | `t05_current_stream_order` |
+| Class | semantic source |
+| Status | Registered under the [T05 single-launch decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/664#issuecomment-7215198422). |
+| Statement | In the ordinary T05 path at Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`, each rank submits its peer copies, K11, and K10 to the same local CUDA stream. Every one of its copies completes before its own K11 lanes start. All of those lanes return from the final CTA barrier before its own K10 tiles start. |
+| Source or rationale | The host selects its current stream and issues the three operations in sequence. The copy loop selects each peer and writes the sender's slice into that peer's scatter buffer. K10 uses the same stream. [T05 copy loop and host calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L175-L221) · [K10 stream context](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L136-L141) · [K11 CAS and CTA barrier](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168) · [CUDA stream ordering](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#cuda-stream-ordering) |
+| Affected kernels | K11, `barrier_all_intra_node_atomic_cas_block`, and K10, `kernel_ring_reduce`, in this T05 host invocation. |
+| Event interface | Each rank has two model-private words, initially zero and disjoint from the input, scatter buffer, CAS flags and output. After the last copy, its copy engine adds one with GPU release to the first word. K11 lanes wait for one with GPU acquire. Each K11 lane adds one with GPU release to the second word after its CTA wait; local K10 tiles wait with GPU acquire for the full lane count. The source projection erases these words and their operations. |
+| Beyond documentation | The named premise covers the representation of same-stream completion by these local operations. The one-CTA K11 uses model PID `[0]`, the copy engine uses a distinct local proxy `[1]`, and K10 block `b` uses `[b+2]`. Each rank has its own stream and words. The inter-rank payload path also requires the original system release/acquire CAS pair. Physical BF16 agreement with the real-valued S7 result remains an unproved obligation of [#157](https://github.com/VeriInfra-Lab/VeriTile-2/issues/157) and [#158](https://github.com/VeriInfra-Lab/VeriTile-2/issues/158). |
+
 ### A1 `undocumented_scope_order_vocabulary`
 
 A1 is the remainder of the former `scope_order_vocabulary` after the user's
