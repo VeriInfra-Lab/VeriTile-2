@@ -126,6 +126,16 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.IndexQueueSingleSlot"
              "lake build tests.lean.dist.Tutorial01"
              "lake build tests.lean.dist.StorePublication")
+  # Audit the compiled objects just built, including test modules imported by a root.
+  test_modules=()
+  for command in "${commands[@]}"; do
+    if [[ $command == "lake build "* ]]; then
+      for module in ${command#lake build }; do
+        [[ $module == tests.lean.* ]] && test_modules+=("$module")
+      done
+    fi
+  done
+  commands+=("python3 scripts/check_test_sorry.py --compiled ${test_modules[*]}")
 fi
 
 log=$(mktemp -d)
