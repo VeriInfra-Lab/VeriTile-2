@@ -1,7 +1,7 @@
 """Judge a dispatch-variant result against the original two-rank GPU run (#457)."""
+import argparse
 import json
 from pathlib import Path
-import sys
 
 from dispatch_variant import SOURCE_RECORD
 import judge
@@ -76,6 +76,10 @@ def compare_recorded(bundle, batch_dir=judge.BATCHES / NAME):
 
 
 if __name__ == '__main__':
-    results = compare_recorded(Path(sys.argv[1]))
+    cli = argparse.ArgumentParser(description=__doc__)
+    cli.add_argument('bundle', type=Path)
+    cli.add_argument('--batch', choices=[NAME, 'deepep-v1-variant-intranode-002'], default=NAME)
+    args = cli.parse_args()
+    results = compare_recorded(args.bundle, judge.BATCHES / args.batch)
     print(judge.render(results))
     raise SystemExit(0 if all(r['verdict'] == 'equal' for r in results) else 1)

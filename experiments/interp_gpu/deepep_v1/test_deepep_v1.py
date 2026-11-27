@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -88,6 +89,24 @@ class Batch(unittest.TestCase):
             with mock.patch('gpurun.dist.deepep_port', return_value=ROOT / dispatch_variant.PORT), \
                     self.assertRaisesRegex(ValueError, 'expected ' + dispatch_variant.PIN):
                 entry(0, 2, {}, {}, after['launch'])
+
+    def test_combine_request_uses_both_stages_on_the_same_cases(self):
+        dispatch = run.load_batch(judge.BATCHES / judge_variant.NAME)
+        combined = run.load_batch(judge.BATCHES / 'deepep-v1-variant-intranode-002')
+        self.assertEqual(dispatch['requires'], combined['requires'])
+        self.assertEqual(len(combined['tests']), 2)
+        for left, right in zip(dispatch['tests'], combined['tests']):
+            self.assertEqual({**left, 'entry': left['entry'] + '_combine'}, right)
+            self.assertTrue(callable(run.load_entry(right['entry'], ROOT)))
+
+    def test_saved_cuda_orders_each_shared_object_at_each_observed_site(self):
+        cuda = Path(__file__).with_name('combine-cta.cu').read_text()
+        access = re.compile(r'tl::(ld|st)<Semantic::(\w+), Scope::(\w+), [^>]+>\(\(&\((\w+)\[')
+        for name, size, loads, stores in [('warp_retired', 24, 2, 1), ('warp_channel_head_idx', 48, 1, 1),
+                                          ('shared_channel_tail_idx', 32, 2, 1)]:
+            self.assertIn(f'__shared__ int {name}[{size}];', cuda)
+            actual = [(op, sem, scope) for op, sem, scope, operand in access.findall(cuda) if operand == name]
+            self.assertCountEqual(actual, [('ld', 'ACQUIRE', 'CTA')] * loads + [('st', 'RELEASE', 'CTA')] * stores)
 
     def test_rank_hashes_the_files_materialized_by_git_apply(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -271,6 +290,21 @@ class Judge(unittest.TestCase):
         self.assertEqual(judge.judge(judge.BATCHES / judge_variant.NAME, self.bundle)[1]['verdict'], 'equal')
         result = judge_variant.compare_recorded(self.bundle)[1]
         self.assertEqual((result['verdict'], result['differences'][0]['output']), ('different', key))
+
+    def test_combined_request_replays_the_same_recorded_tensors(self):
+        name = 'deepep-v1-variant-intranode-002'
+        self.candidate(name)
+        results = judge_variant.compare_recorded(self.bundle, judge.BATCHES / name)
+        self.assertEqual([r['verdict'] for r in results], ['equal', 'equal'])
+
+    def test_combined_request_rejects_dispatch_only_sources(self):
+        self.candidate()
+        name = 'deepep-v1-variant-intranode-002'
+        self.edit('manifest.json', lambda m: m.update(batch_id=name))
+        results = judge_variant.compare_recorded(self.bundle, judge.BATCHES / name)
+        for result in results:
+            self.assertEqual(result['verdict'], 'different')
+            self.assertEqual([d['output'] for d in result['differences']], ['source hashes'])
 
     def test_recorded_comparison_detects_one_wrong_rank_output(self):
         self.candidate()

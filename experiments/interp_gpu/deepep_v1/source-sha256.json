@@ -12,5 +12,9 @@
   "deepep-v1-variant-intranode-001": {
     "intranode/combine.py": "1119b0f643bc667f026ad56290f56b944940ac44d74ac46996da653dba615df9",
     "intranode/dispatch.py": "702ab6eea39a1888f34bee2134641e4dbf3fe659a710820634c62361b7897cd4"
+  },
+  "deepep-v1-variant-intranode-002": {
+    "intranode/combine.py": "83efd6d7c0077b1bf77025326c9ad91e356448b7a85a8b772011e7108a91067a",
+    "intranode/dispatch.py": "702ab6eea39a1888f34bee2134641e4dbf3fe659a710820634c62361b7897cd4"
   }
 }

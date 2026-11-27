@@ -50,8 +50,8 @@ bundles Triton at another commit, `f797708`; the one Triton passage that is
 cited here has the same text at both (E-TR1). The DeepEP version 1 port is
 read at TileScale `9ba8a605` (full hash
 `9ba8a605d347f600a95d0275e2639cb00122c084`, branch `wt/deepep-internode`),
-directory `examples/distributed/deepseek_deepep/intranode/`. Only A3 to A8 and A10 of
-section 7 and their evidence (E-TS15 to E-TS19) cite that commit; every row of
+directory `examples/distributed/deepseek_deepep/intranode/`. A3 to A8, A10 and A11 of
+section 7 and the earlier evidence (E-TS15 to E-TS19) cite that commit; every row of
 section 5.5 is at `71e7145`, and A10 says how such a row reads a call of the
 port.
 
@@ -914,8 +914,8 @@ version 1 port at `9ba8a605` is read by the row of the same name through A10.
 | `get_warp` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
 | `put_block` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
 | `get_block` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
-| `ld` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`, `relaxed`. With `weak` (the default), `volatile`, `cta` or `nc=True`: W1. With `volatile` in the DeepEP version 1 port only: A7 |
-| `st` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `release`, `relaxed`. With `weak` (the default), `volatile` or `cta`: W1 |
+| `ld` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`, `relaxed`. With `weak` (the default), `volatile`, `cta` or `nc=True`: W1. In the DeepEP version 1 port, A7 covers `volatile`; in the pinned intranode directory, A11 covers `scope="cta"` with `sem="acquire"`. |
+| `st` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `release`, `relaxed`. With `weak` (the default), `volatile` or `cta`: W1, except for the A11 release stores with `scope="cta"` in the pinned DeepEP version 1 intranode directory. |
 | `atom_add` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `relaxed`, `acquire`, `release`, `acq_rel`. The return value is documented (docstring at the pinned commit) |
 | `wait_eq` | b | E-TS6, E-TS13 | TS-API, TS-SYNC | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`. With `volatile`: a poll by plain loads (W1) |
 | `wait_ne` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above. The call of the DeepEP version 1 port at `9ba8a605`, which has no scope and no semantics: A6; its `peer` argument: A10 |
@@ -1363,6 +1363,19 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Beyond documentation | That documentation written for another commit, on another branch, describes the calls of the port |
 | Event interface | None of its own: each call has the event of its row |
 
+### A11 `deepep_v1_cta_scope_is_block`
+
+| Field | Value |
+| --- | --- |
+| Name | `deepep_v1_cta_scope_is_block` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-27. [Decision on #636](https://github.com/VeriInfra-Lab/VeriTile-2/issues/636#issuecomment-7206156826) |
+| Statement | Within TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`, directory `examples/distributed/deepseek_deepep/intranode/`, including the #636 variant of that port, the `cta` scope argument of a port `T.ld` or `T.st` denotes `cuda::thread_scope_block`. Each covered call is one atomic load or store at block scope. A1(c) supplies the order from the operation’s semantics argument: acquire for these loads and release for these stores. |
+| Source or rationale | Not stated: the pinned port documentation gives no block-scope atomic meaning to the string `cta`. Why the kernels need it: receiver warps publish and read shared state in K28. With W1 these accesses would be plain and would supply no release/acquire synchronization. The [compilation record](../../experiments/interp_gpu/deepep_v1/CombineVariant.md) shows the instructions emitted for the variant. |
+| Affected kernels | K28, `combine_main` (text search). The original calls are DC 255, 284 and 286. The variant also spells out the acquire loads at DC 247/261/262 and the release stores at DC 343–345/350. |
+| Beyond documentation | The scope mapping is an assumption restricted to this port directory and pin. A1 retains its existing domain. |
+| Event interface | A covered load at `p` yields `Event.access .load p (.atomic .cta .acquire)`; a covered store yields `Event.access .store p (.atomic .cta .release)`. This scope mapping supplies no ordering edge between distinct blocks and no DRF conclusion. |
+
 ## 8. Counts
 
 | Section | Rows | documented | named assumption | weakest | out of scope |
@@ -1380,7 +1393,7 @@ warp barriers, so the entry now holds three TileScale barriers.
 By pattern: a 52, b 47, c 60, none 51.
 
 Of the 14 rows under a named assumption, 12 are under A1, one (`dl.notify`)
-is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9.
+is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9. A11 adds no row and moves no row between treatments: it qualifies the existing A1 entries for `ld` and `st` in §5.5.
 
 Before the decisions of 2026-11-12 the table had 202 rows: 79 documented, 19
 under a named assumption, 79 weakest and 25 out of scope. Seven rows moved
