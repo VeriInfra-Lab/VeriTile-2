@@ -6,6 +6,7 @@ removes them again; do not run it while another build uses this checkout.
 """
 import hashlib
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -90,7 +91,7 @@ class ForkTargetGates(unittest.TestCase):
             root = Path(temp)
             probe, allow = root / relative, root / 'allowed'
             probe.parent.mkdir(parents=True)
-            args = ['--sources', '--root', str(root), '--allowlist', str(allow)]
+            args = ['--sources', '--root', str(root), '--axiom-allowlist', str(allow)]
             for label, code in (
                 ('plain', 'axiom plain : True'),
                 ('hidden', 'private axiom hidden : True'),
@@ -124,6 +125,69 @@ class ForkTargetGates(unittest.TestCase):
             result = run('check_test_sorry.py', *args)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('axiom ?', result.stderr)
+
+    def test_axiom_and_sorry_exceptions_are_independent(self):
+        relative = 'tests/lean/Certificate.lean'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / relative
+            source.parent.mkdir(parents=True)
+            axioms, sorries = root / 'axioms', root / 'sorries'
+            entry = f'{relative}\tcertificate\tfixture assumption\n'
+            command = ['--sources', '--root', str(root), '--axiom-allowlist', str(axioms),
+                       '--allowlist', str(sorries)]
+            axioms.write_text(entry)
+            sorries.write_text('')
+            source.write_text('axiom certificate : True\n')
+            self.assertEqual(run('check_test_sorry.py', *command).returncode, 0)
+            source.write_text('theorem certificate : True := sorry\n')
+            result = run('check_test_sorry.py', *command)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f'{relative}:1: sorry', result.stderr)
+            source.write_text('def certificate := 1\n#guard_msgs (drop warning) in #check certificate\n')
+            result = run('check_test_sorry.py', *command)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f'{relative}:2: drop warning', result.stderr)
+            axioms.write_text('')
+            sorries.write_text(entry)
+            source.write_text('axiom certificate : True\n')
+            result = run('check_test_sorry.py', *command)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f'{relative}:1: axiom certificate', result.stderr)
+
+    def test_compiled_test_axioms_include_transitive_imports(self):
+        with tempfile.TemporaryDirectory(prefix='GateAxiom', dir=ROOT / 'tests/lean') as temp:
+            source = Path(temp)
+            package = source.relative_to(ROOT)
+            module = '.'.join(package.parts)
+            leaf = (package / 'Leaf.lean').as_posix()
+            root = (package / 'Root.lean').as_posix()
+            (source / 'Leaf.lean').write_text('namespace GateFixture\nprivate axiom witness : True\n'
+                                              'theorem valid : True := witness\nend GateFixture\n')
+            (source / 'Root.lean').write_text(f'import {module}.Leaf\n')
+            build = ROOT / '.lake/build/lib/lean' / package
+            build.mkdir(parents=True)
+            self.addCleanup(shutil.rmtree, build)
+            for file in (leaf, root):
+                output = (build / Path(file).name).with_suffix('.olean')
+                result = subprocess.run(['lake', 'env', 'lean', '-o', str(output), file],
+                                        cwd=ROOT, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            # An ordinary successful import need not print the leaf's assumptions.
+            log = source / 'root-build.log'
+            log.write_text(result.stdout + result.stderr)
+            self.assertEqual(run('check_test_sorry.py', str(log)).returncode, 0)
+            allow = source / 'axioms.txt'
+            command = ['--axiom-allowlist', str(allow), '--compiled', f'{module}.Root']
+            for wrong in ['', f'{root}\tGateFixture.witness\twrong origin\n',
+                          f'{leaf}\twitness\twrong name\n']:
+                allow.write_text(wrong)
+                rejected = run('check_test_sorry.py', *command)
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn(f'{leaf}\tGateFixture.witness', rejected.stderr)
+            allow.write_text(f'{leaf}\tGateFixture.witness\tfixture assumption\n')
+            accepted = run('check_test_sorry.py', *command)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
 
     def test_test_axiom_output(self):
         relative = 'tests/lean/GateAxiomPrint.lean'
