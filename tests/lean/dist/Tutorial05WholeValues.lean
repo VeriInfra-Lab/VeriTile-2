@@ -160,6 +160,137 @@ theorem output_of_classified_run {x : RankTensor n (Fin (n*rows) × Fin cols)} {
   have v := values_of_classified_run inputs classify run
   exact fun r u => v.output r u (complete.1 _)
 
+
+private theorem data_ne_control {p q : Addr} (data : DataRegion p) (ctrl : Control q) : p ≠ q := by
+  rintro rfl
+  rcases data with h|h|h <;> rcases ctrl with k|k <;> rw [h] at k <;> revert k <;> decide
+
+private theorem groupDataFrame {l : Launch P} {s f : Machine} (g : FireGroup l a s es f vs)
+    (good : ∀ x ∈ es, SyncEmission a x) (p : Addr) (data : DataRegion p) : f.mem.cell p = s.mem.cell p := by
+  induction g with
+  | nil => rfl
+  | @cons s x mem pending v xs final vs access available ordered fire rest ih =>
+    refine (ih (fun y hy => good _ (by simp [hy]))).trans ?_
+    have gx := good x (by simp)
+    obtain ⟨actor,evt,tag⟩ := x
+    obtain ⟨rfl,rfl,⟨d,cmp,n,mode,h,_⟩|⟨b,h,ctrl⟩⟩ := gx
+    · cases h; cases fire; rfl
+    · cases h; cases fire with
+      | bump _ _ old read =>
+        obtain ⟨c,op,amount,mode⟩ := b
+        cases c with
+        | word q => exact l.cells.read_other _ _ _ _ (data_ne_control data ctrl)
+        | phase | rendezvous | delivered => rfl
+
+private def operation (role : Role n lanes rows cols) (pc : Nat) : ValueOp n :=
+  match role,pc with
+  | .copy src,0 => .copy src
+  | .tile r b,1 => .tile r b
+  | _,_ => .sync
+
+private theorem sameRole {r s : Role n lanes rows cols} (eq : r.owner = s.owner) : r = s :=
+  Option.some.inj ((decode_owner r).symm.trans ((congrArg (decode n lanes rows cols) eq).trans (decode_owner s)))
+
+open VeriTile.Tests.E2ReadsFromDetermined (lineNext)
+private theorem segmentValueStep (role : Role n lanes rows cols) {s f : Config Nat} (pc : Nat)
+    (atPC : s.pc role.owner = some (.ready pc)) (bound : pc ≤ (role.groups on).length)
+    (nextPC : f.pc = Function.update s.pc role.owner ((lineNext (role.groups on) pc).cursor))
+    (exec : (role.segment pc).run s.mem = some f.mem)
+    (ordered : ∀ (r : Fin n) (b : Fin (tiles rows cols)),
+      s.pc (Stream.tile r b) = some (.ready 1) → ∀ src : Fin n, CopyDone s src) :
+    ValueStep rows cols s f (operation role pc) := by
+  constructor
+  · cases role with
+    | copy src =>
+      cases pc with
+      | zero => exact exec
+      | succ k =>
+        have eq : s.mem = f.mem := Option.some.inj exec
+        exact fun _ _ => congrArg (fun mem : DistState => mem.cell _) eq.symm
+    | lane r t =>
+      cases pc <;> have eq : s.mem = f.mem := Option.some.inj exec <;>
+        exact fun _ _ => congrArg (fun mem : DistState => mem.cell _) eq.symm
+    | tile r b =>
+      cases pc with
+      | zero =>
+        have eq : s.mem = f.mem := Option.some.inj exec
+        exact fun _ _ => congrArg (fun mem : DistState => mem.cell _) eq.symm
+      | succ k =>
+        cases k with
+        | zero => exact ⟨exec,ordered r b atPC⟩
+        | succ k => simp [Role.groups] at bound
+  · intro src done
+    by_cases eq : (Role.copy src : Role n lanes rows cols).owner = role.owner
+    · obtain rfl := sameRole eq
+      cases pc with
+      | zero => exact .inr rfl
+      | succ k =>
+        left; intro before
+        rw [show Stream.host src = (Role.copy src : Role n lanes rows cols).owner from rfl,atPC] at before
+        cases before
+    · left; intro before; apply done
+      change f.pc (Role.copy src : Role n lanes rows cols).owner = _
+      rw [nextPC,Function.update_of_ne eq]
+      exact before
+  · intro r b done
+    by_cases eq : (Role.tile r b : Role n lanes rows cols).owner = role.owner
+    · obtain rfl := sameRole eq
+      cases pc with
+      | zero =>
+        change f.pc (Role.tile r b : Role n lanes rows cols).owner = none at done
+        rw [nextPC,Function.update_self] at done
+        cases done
+      | succ k =>
+        cases k with
+        | zero => exact .inr rfl
+        | succ k => simp [Role.groups] at bound
+    · left
+      change f.pc (Role.tile r b : Role n lanes rows cols).owner = none at done
+      rwa [nextPC,Function.update_of_ne eq] at done
+
+/-- The counters and cursor history supply a single ordering fact. All memory
+updates and cursor transitions below are those of the signed small-step machine. -/
+theorem classifyValueStep {s f : Config Nat} (shape : Shape on n lanes rows cols s)
+    (st : step (launch on n lanes rows cols w) s ch f)
+    (ordered : ∀ (r : Fin n) (b : Fin (tiles rows cols)),
+      s.pc (Stream.tile r b) = some (.ready 1) → ∀ src : Fin n, CopyDone s src) :
+    ∃ op : ValueOp n, ValueStep rows cols s f op := by
+  cases st with
+  | @segment a pc seg mem atPC code owner access success =>
+    have alog := shape.log a
+    rw [atPC] at alog
+    obtain ⟨gs,scriptA,le,hl⟩ := alog
+    obtain ⟨role,hd,rfl⟩ := Option.map_eq_some_iff.mp scriptA
+    obtain rfl := owner_of_decode hd
+    refine ⟨_,segmentValueStep role pc atPC le ?_ ?_ ordered⟩
+    · simp [launch,agentProgram,hd]
+    · simpa [code,launch,agentProgram,hd] using success
+  | @fire a x xs cont final vs atPC own events =>
+    have alog := shape.log a
+    rw [atPC] at alog
+    obtain ⟨gs,pc,scriptA,atG,rfl,hl⟩ := alog
+    obtain ⟨role,hd,rfl⟩ := Option.map_eq_some_iff.mp scriptA
+    have good := fun e he => allowed hd (List.mem_of_getElem? atG) (x := e) he
+    refine ⟨.sync,⟨groupDataFrame events good,?_,?_⟩⟩
+    · intro src after
+      left; intro before
+      by_cases eq : Stream.host src = a
+      · rw [eq,atPC] at before; cases before
+      · apply after
+        change Function.update s.pc a _ (Stream.host src) = _
+        rw [Function.update_of_ne eq]; exact before
+    · intro r b done
+      left
+      change Function.update s.pc a _ (Stream.tile r b) = none at done
+      by_cases eq : Stream.tile r b = a
+      · rw [eq,Function.update_self] at done; cases done
+      · rwa [Function.update_of_ne eq] at done
+  | @deliver pre post o b old outstanding bound counter ordered disjoint access free =>
+    rw [shape.pending] at outstanding
+    simp at outstanding
+
+#print axioms classifyValueStep
+
 #print axioms values_next
 #print axioms output_of_classified_run
 end
