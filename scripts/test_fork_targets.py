@@ -189,6 +189,23 @@ class ForkTargetGates(unittest.TestCase):
             accepted = run('check_test_sorry.py', *command)
             self.assertEqual(accepted.returncode, 0, accepted.stderr)
 
+    def test_gate_audits_every_test_module_it_builds_or_runs(self):
+        commands = subprocess.run(['bash', str(ROOT / 'scripts/local_gate.sh'), '--list'], cwd=ROOT,
+                                  text=True, capture_output=True, check=True).stdout.splitlines()
+        audits = [index for index, command in enumerate(commands)
+                  if command.startswith('python3 scripts/check_test_sorry.py --compiled ')]
+        self.assertEqual(len(audits), 1, audits)
+        audited = commands[audits[0]].split()[3:]
+        built = [module for command in commands[:audits[0]] if command.startswith('lake build ')
+                 for module in command.split()[2:] if module.startswith('tests.lean.')]
+        self.assertEqual(sorted(audited), sorted(built))
+        later = [command for command in commands[audits[0] + 1:] if command.startswith('lake ')]
+        self.assertEqual(later, [])
+        direct = ['.'.join(Path(command.split()[3]).with_suffix('').parts) for command in commands
+                  if command.startswith('lake env lean tests/lean/')]
+        self.assertIn('tests.lean.TileLangLower', direct)
+        self.assertEqual([module for module in direct if module not in audited], [])
+
     def test_test_axiom_output(self):
         relative = 'tests/lean/GateAxiomPrint.lean'
         self.probe(relative, 'axiom localWitness : True\n'
