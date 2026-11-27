@@ -9,7 +9,7 @@ synchronization or communication event, the control flow that encloses it and
 the sequential agents that execute it. It is the evidence for two open choices
 of `VeriTile/Staging/Dist/SegmentSpec.lean`: who owns a segment (choice 5) and
 what slicing returns (choices 6 and 7). It also says which `Event`
-constructors of `VeriTile/Staging/Dist/EventSpec.lean` each kernel needs. It
+constructors of `VeriTile/Dist/Event.lean` each kernel needs. It
 states facts and no recommendation.
 
 Each claim carries one of three marks, as in `DeepEPInventory.md`:
