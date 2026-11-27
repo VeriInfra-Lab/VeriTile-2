@@ -35,7 +35,7 @@ The generated CUDA selects `VOLATILE, SYS` on the four offset reads and `RELEASE
 
 ## Compare on the recorded inputs
 
-Use the [variant request](../batches/deepep-v1-variant-intranode-001/batch.json) through the project's distributed GPU runner. The original identity and rank-weighted cases, input generators and hashes, launch parameters, output schemas, two ranks and two repeats are preserved. The coordinator owns the GPU request and judgment. The ordinary path exercises DD 432/434/511 and DC 265. DD 674/676/740 have compilation coverage.
+Use the [variant request](../batches/deepep-v1-variant-intranode-001/batch.json) through the project's distributed GPU runner. The original identity and rank-weighted cases, input generators and hashes, launch parameters, output schemas, two ranks and two repeats are preserved. The coordinator owns the GPU request and judgment. The ordinary path executes DD 432/434/511 and DC 265. With these inputs the head stores at DD 511 and DC 265 are never waited on (thresholds are negative). `equal` shows that the patched source compiles and completes; the memory-order change cannot be confirmed by comparing outputs. DD 674/676/740 have compilation coverage.
 
 Each rank hashes all eight Python files in its private materialized directory before passing that directory to the origin-checked harness. The runner saves the resulting `deepep-source-sha256` JSON line in the test's `stdout.log` under its repeat header. For both repeats, the judge requires exactly one complete record per rank. The [source hash table](source-sha256.json) pins the SHA-256 of the eight original files read from Git at the TileScale revision and of the two patched files for this batch. The patched values were independently reproduced from those blobs using the seven edits listed above. Both changed file hashes must match the patched values and differ from the originals. The other six must match their originals. Missing evidence, including from an older result bundle, yields a difference.
 
@@ -45,3 +45,25 @@ python3 experiments/interp_gpu/deepep_v1/judge_variant.py "$VARIANT_RESULT_BUNDL
 ```
 
 The [recorded output hashes](recorded-002.json) come from [the judged #457 bundle at 017d5ca6](https://github.com/VeriInfra-Lab/VeriTile-2/tree/017d5ca63a89cf82ac575efb5cb530e50297ff40/results/deepep-v1-intranode-002). Each original rank produced a single tensor for each output digest across its two repeats. The judge reads the candidate tensor files, verifies their full-file SHA-256 and original value oracle, and checks the two occurrences of every recorded digest. This gives 36 distinct test/rank/output comparisons covering all 72 output observations, including sentinel bytes and tensor headers. Equality on these inputs is an experimental result. The combine shared-memory variant and its scoped trust assumption are a separate stage.
+
+## Compare with head-dependent ring reuse
+
+The [small-ring request](../batches/deepep-v1-variant-intranode-003/batch.json) uses the same two ranks, 40 input tokens per rank, 8 experts, rank weights `[1, -0.5]`, dispatch send block of 24 and combine send block of 10. It selects **2 SMs (one channel) and 24 receive slots** for both kernels through the port’s `EPBuffer` and `Config`. The rank entry logs the constructed configuration. The judge checks it for every rank and repeat, along with the dispatch-release source hashes and the original rank-weighted tensor hashes.
+
+In batch 001, 20 SMs divide 40 tokens across 10 channels. Each channel handles at most four tokens per source/destination. Dispatch reserves a full block on its first wait (`24 − 256 = −232`). Combine reserves the actual remaining count (`1…4 − 256 = −255…−252` for a nonempty queue). Each sends at most one round. In batch 003, one channel contains all 40 source tokens. Dispatch waits for `tail + 24 − 24` before each round. Combine sends the same routed rows back and waits for `tail + min(10, remaining) − 24`. The last combine round starts at `tail = 20` for all four pairs. The table follows the generated `topk_idx` rows, counting each destination once per token. [Dispatch lines 313–359](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/dispatch.py#L313-L359), [combine lines 149–180](https://github.com/tile-ai/tilescale/blob/9ba8a605d347f600a95d0275e2639cb00122c084/examples/distributed/deepseek_deepep/intranode/combine.py#L149-L180).
+
+| Dispatch route (combine reverses it) | Rows | Positive dispatch threshold | Positive combine threshold |
+| --- | ---: | ---: | ---: |
+| 0 → 0 | 29 | 24 | 5 |
+| 0 → 1 | 24 | none | none |
+| 1 → 0 | 29 | 24 | 5 |
+| 1 → 1 | 28 | 24 | 4 |
+
+On each positive entry a sender that reaches the wait with head zero must block. Progress requires a consumer head update at DD 511 or DC 265 respectively. For the 24-row route the final selected row is input token 39, so dispatch has no further round. A GPU receiver may already have advanced before the sender's load. The thresholds establish a dependency on head publication; output equality alone does not establish the ordering of hardware memory operations.
+
+```sh
+python3 -B -m unittest discover -s experiments/interp_gpu/deepep_v1 -p test_small_ring.py -v
+python3 experiments/interp_gpu/deepep_v1/judge_variant.py "$SMALL_RING_RESULT_BUNDLE" --batch deepep-v1-variant-intranode-003
+```
+
+The CPU test runs both ranks and both repeats through the ordinary bundle writer. It checks the sender-first thresholds on the regenerated routing input, all 18 rank/output digests against the recorded rank-weighted case and both repeats per digest. Configuration and source records in this CPU fixture are identified in its source. Actual GPU timing and completion belong to the coordinator’s experiment.

@@ -7,7 +7,12 @@ from dispatch_variant import SOURCE_RECORD
 import judge
 
 NAME = 'deepep-v1-variant-intranode-001'
+SMALL_RING = 'deepep-v1-variant-intranode-003'
 RECORDED = Path(__file__).with_name('recorded-002.json')
+RECORDED_LIMIT = (
+    'With these inputs the head stores at DD 511 and DC 265 are never waited on (thresholds are negative). '
+    '`equal` shows that the patched source compiles and completes; the memory-order change cannot be confirmed by comparing outputs.'
+)
 
 
 def source_error(folder, test, original, changed):
@@ -18,11 +23,17 @@ def source_error(folder, test, original, changed):
     expected = {**original, **changed}
     ranks = set(range(test['ranks']))
     seen = []
+    rings = []
     for line in path.read_text().splitlines():
         if line.startswith('== repeat '):
             if line != f'== repeat {len(seen)} ==':
                 return 'unexpected repeat header'
             seen.append(set())
+            rings.append([])
+        elif line.startswith('deepep-ring '):
+            if not rings:
+                return 'ring configuration outside a repeat'
+            rings[-1].append(line)
         elif line.startswith(SOURCE_RECORD):
             try:
                 record = json.loads(line[len(SOURCE_RECORD):])
@@ -41,17 +52,27 @@ def source_error(folder, test, original, changed):
             seen[-1].add(rank)
     if len(seen) != test['repeats'] or any(group != ranks for group in seen):
         return 'missing rank or repeat source hash records'
+    if 'ring' in test.get('launch', {}):
+        ring = test['launch']['ring']
+        expected_lines = sorted(f'deepep-ring rank={r} channels={ring["num_sms"] // 2} '
+                                f'dispatch=24/{ring["recv_tokens"]} combine=10/{ring["recv_tokens"]}' for r in ranks)
+        if any(sorted(group) != expected_lines for group in rings):
+            return 'missing or incorrect executed ring configuration'
     return None
 
 
 def compare_recorded(bundle, batch_dir=judge.BATCHES / NAME):
     bundle = Path(bundle)
     batch = json.loads((batch_dir / 'batch.json').read_text())
-    tests = batch['tests']
+    tests = batch.get('tests')
+    if not isinstance(tests, list) or not tests:
+        raise ValueError('no test results to judge: the batch has no tests')
     sources = json.loads(Path(__file__).with_name('source-sha256.json').read_text())
-    changed = sources[batch['batch_id']]
+    changed = sources[NAME if batch['batch_id'] == SMALL_RING else batch['batch_id']]
     recorded = json.loads(RECORDED.read_text())
     results = judge.judge(batch_dir, bundle)
+    if not results or len(results) != len(tests) or all(r['status'] == 'not_run' for r in results):
+        raise ValueError('missing test results: one judgment per batch test is required')
     for test, result in zip(tests, results):
         if result['status'] != 'ok':
             continue
@@ -78,8 +99,15 @@ def compare_recorded(bundle, batch_dir=judge.BATCHES / NAME):
 if __name__ == '__main__':
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument('bundle', type=Path)
-    cli.add_argument('--batch', choices=[NAME, 'deepep-v1-variant-intranode-002'], default=NAME)
+    cli.add_argument('--batch', choices=[NAME, 'deepep-v1-variant-intranode-002', SMALL_RING], default=NAME)
     args = cli.parse_args()
-    results = compare_recorded(args.bundle, judge.BATCHES / args.batch)
+    try:
+        results = compare_recorded(args.bundle, judge.BATCHES / args.batch)
+    except KeyError as exc:
+        cli.exit(1, f'Missing result data: {exc}\n')
+    except (OSError, ValueError) as exc:
+        cli.exit(1, f'Cannot judge result bundle: {exc}\n')
+    if args.batch != SMALL_RING:
+        print(RECORDED_LIMIT)
     print(judge.render(results))
     raise SystemExit(0 if all(r['verdict'] == 'equal' for r in results) else 1)

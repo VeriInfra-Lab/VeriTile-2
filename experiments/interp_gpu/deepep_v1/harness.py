@@ -27,6 +27,7 @@ the rows a rank did not receive keep the sentinel.
 
 `judge.py` computes what each of them must hold.
 """
+from dataclasses import replace
 import os
 from pathlib import Path
 import sys
@@ -35,6 +36,27 @@ import sys
 def run(rank, ranks, inputs, outputs, launch):
     from gpurun import dist
     return run_port(dist.deepep_port(), rank, ranks, inputs, outputs, launch)
+
+
+def make_buffer(buffer_class, group, num_topk, hidden, launch):
+    args = (group, 2**30, num_topk, launch['num_experts'], hidden)
+    if 'ring' not in launch:
+        return buffer_class(*args)
+    # EPBuffer allocates with its own SM count. Both kernel configs must agree with it.
+    from deepep_utils import Config
+    ring = launch['ring']
+    config = dict(num_sms=ring['num_sms'], num_max_nvl_chunked_recv_tokens=ring['recv_tokens'])
+    dispatch = replace(Config.get_dispatch_config(group.size()), **config)
+    combine = replace(Config.get_combine_config(group.size()), **config)
+    buffer_class.set_num_sms(ring['num_sms'])
+    buf = buffer_class(*args, dispatch_cfg=dispatch, combine_cfg=combine)
+    def sizes(cfg):
+        return f'{cfg.num_max_nvl_chunked_send_tokens}/{cfg.num_max_nvl_chunked_recv_tokens}'
+
+    sys.stdout.write(f'deepep-ring rank={group.rank()} channels={buf.num_channels} '
+                     f'dispatch={sizes(buf.dispatch_cfg)} combine={sizes(buf.combine_cfg)}\n')
+    sys.stdout.flush()
+    return buf
 
 
 def run_port(port, rank, ranks, inputs, outputs, launch, *, verify_origin=False):
@@ -67,7 +89,7 @@ def run_port(port, rank, ranks, inputs, outputs, launch, *, verify_origin=False)
 
     # A clone is an allocation of its own, as the inputs of the port's test are.
     x, topk_idx, topk_weights = (inputs[name][rank].clone() for name in ('x', 'topk_idx', 'topk_weights'))
-    buffer = EPBuffer(group, 2**30, topk_idx.shape[1], launch['num_experts'], x.shape[1])
+    buffer = make_buffer(EPBuffer, group, topk_idx.shape[1], x.shape[1], launch)
 
     num_tokens_per_rank, num_tokens_per_expert, is_token_in_rank = buffer.get_dispatch_layout(topk_idx)
     keep({'num_tokens_per_rank': num_tokens_per_rank, 'num_tokens_per_expert': num_tokens_per_expert,
