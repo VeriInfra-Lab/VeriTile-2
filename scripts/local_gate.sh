@@ -45,7 +45,11 @@ commands=("python3 scripts/check_docs.py"
           "python3 scripts/check_test_sorry.py --sources"
           "python3 scripts/test_trust_kernel_labels.py DocumentedLabels"
           "python3 scripts/check_forbidden_references.py"
-          "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py")
+          "python3 -B -m unittest discover -s scripts -p test_check_forbidden_references.py"
+          "python3 scripts/check_bench_staging_imports.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_bench_staging_imports.py"
+          "python3 scripts/check_import_paths.py"
+          "python3 -B -m unittest discover -s scripts -p test_check_import_paths.py")
 for suite in scripts/interp scripts/gpurun scripts/census experiments/interp_gpu/deepep_v1 experiments/interp_gpu/internode_logical; do
   commands+=("python3 -B -m unittest discover -s $suite -p test_*.py")
 done
@@ -114,6 +118,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.TrustAssumptions"
              "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
              "lake build tests.lean.dist.TrustAssumptionImports"
+             "lake build tests.lean.dist.ScopeCheck"
              "lake build tests.lean.TileLangSyntax"
              "lake env lean tests/lean/TileLangSyntax.lean"
              "lake build tests.lean.TileLangManualAcceptance"
@@ -141,6 +146,12 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.IndexQueueSingleSlotNegative"
              "lake build tests.lean.dist.IndexQueueSingleSlotWitness"
              "lake build tests.lean.dist.IndexQueueSingleSlot"
+             "lake build tests.lean.dist.IndexQueueTwoCellRuns"
+             "lake build tests.lean.dist.IndexQueueTwoCellRefines"
+             "lake build tests.lean.dist.IndexQueueCellLink"
+             "lake build tests.lean.dist.IndexQueueHandoff"
+             "lake build tests.lean.dist.IndexQueueRoomWait"
+             "lake build tests.lean.dist.IndexQueueGeneral"
              "lake build tests.lean.dist.Tutorial01"
              "lake build tests.lean.dist.E2ReadsFromDetermined"
              "lake build tests.lean.dist.Tutorial05CAS tests.lean.dist.Tutorial05K10 tests.lean.dist.Tutorial05Stream tests.lean.dist.Tutorial05HostCopy tests.lean.dist.Tutorial05Whole tests.lean.dist.Tutorial05WholeValues tests.lean.dist.Tutorial05Plan tests.lean.dist.Tutorial05Registers tests.lean.dist.Tutorial05NoAcquire tests.lean.dist.Tutorial05Completes tests.lean.dist.Tutorial05Positions tests.lean.dist.Tutorial05Milestones tests.lean.dist.Tutorial05Fault tests.lean.dist.Tutorial05DRF tests.lean.dist.Tutorial05AtomicAccess tests.lean.dist.Tutorial05WholeOrder tests.lean.dist.Tutorial05Flags tests.lean.dist.Tutorial05Race tests.lean.dist.Tutorial05 tests.lean.dist.Tutorial05NoStreamWait tests.lean.dist.Tutorial05Shadow"
