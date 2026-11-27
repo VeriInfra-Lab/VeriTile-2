@@ -28,14 +28,24 @@ the rows a rank did not receive keep the sentinel.
 `judge.py` computes what each of them must hold.
 """
 import os
+from pathlib import Path
 import sys
 
 
 def run(rank, ranks, inputs, outputs, launch):
-    import torch
     from gpurun import dist
-    sys.path.insert(0, str(dist.deepep_port()))  # the port's files import each other as top-level modules
+    return run_port(dist.deepep_port(), rank, ranks, inputs, outputs, launch)
+
+
+def run_port(port, rank, ranks, inputs, outputs, launch, *, verify_origin=False):
+    import torch
+    sys.path.insert(0, str(port))  # the port's files import each other as top-level modules
     from buffer import EPBuffer
+    if verify_origin:
+        for name in ('buffer', 'deepep_utils', 'intranode.get_dispatch_layout', 'intranode.dispatch', 'intranode.combine'):
+            expected = Path(port, *name.split('.')).with_suffix('.py').resolve()
+            if Path(sys.modules[name].__file__).resolve() != expected:
+                raise ValueError(f'{name} was imported outside the selected variant')
     from tilelang.distributed.utils import init_dist
 
     # init_dist reads WORLD_SIZE and RANK as the node count and this node's rank; the launcher set them per rank.
