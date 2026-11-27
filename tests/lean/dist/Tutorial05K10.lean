@@ -163,7 +163,7 @@ def readsOf {n rows cols : Nat} (r : Fin n) (pid : Nat) : Set Addr :=
 def writesOf {n rows cols : Nat} (r : Fin n) (pid : Nat) : Set Addr :=
   {p | ∃ u : Coordinate rows cols, tileIndex u = pid ∧ p = outputSlot r u.1 u.2}
 
-private theorem out_inj {n rows cols : Nat} {r s : Fin n} {u v : Coordinate rows cols}
+theorem outputSlot_injective {n rows cols : Nat} {r s : Fin n} {u v : Coordinate rows cols}
     (h : outputSlot r u.1 u.2 = outputSlot s v.1 v.2) : r = s ∧ u = v := by
   simp only [outputSlot,Addr.mk.injEq,Space.global.injEq,true_and] at h
   refine ⟨Fin.ext h.1,finProdFinEquiv.injective (Fin.ext ?_)⟩
@@ -227,7 +227,7 @@ theorem tile_run {n rows cols : Nat} (x : RankTensor n (Fin (n*rows) × Fin cols
   refine ⟨_,rfl,?_,?_⟩
   · intro u hu
     have own : outputSlot r u.1 u.2 ∈ @writesOf n rows cols r pid := ⟨u,hu,rfl⟩
-    have unique : own.choose = u := (out_inj own.choose_spec.2).2.symm
+    have unique : own.choose = u := (outputSlot_injective own.choose_spec.2).2.symm
     simp [paint,own,unique,sum u hu]
   · intro p hp; simp [paint,hp]
 #print axioms tileSeg_sound
@@ -236,7 +236,7 @@ theorem tile_run {n rows cols : Nat} (x : RankTensor n (Fin (n*rows) × Fin cols
 section K10
 open VeriTile.Tests.E2ReadsFromDetermined (emptySeg)
 private def grid (rows cols : Nat) := ((rows+255)/256) * ((cols+63)/64)
-private theorem tile_bound {rows cols : Nat} (u : Coordinate rows cols) : tileIndex u < grid rows cols := by
+theorem tileIndex_lt_grid {rows cols : Nat} (u : Coordinate rows cols) : tileIndex u < ((rows+255)/256) * ((cols+63)/64) := by
   have hr : u.1.val / 256 < (rows+255)/256 := by have := u.1.isLt; omega
   have hc : u.2.val / 64 < (cols+63)/64 := by have := u.2.isLt; omega
   calc _ < (u.1.val/256+1)*((cols+63)/64) := by unfold tileIndex; rw [Nat.add_mul,Nat.one_mul]; omega
@@ -282,7 +282,7 @@ private theorem one_writer {n rows cols : Nat} {u v : Job n rows cols} {p : Addr
     (a : p ∈ @writesOf n rows cols u.1 u.2) (b : p ∈ @writesOf n rows cols v.1 v.2) : u = v := by
   obtain ⟨i,pi,rfl⟩ := a
   obtain ⟨j,pj,eq⟩ := b
-  obtain ⟨rank,rfl⟩ := out_inj eq
+  obtain ⟨rank,rfl⟩ := outputSlot_injective eq
   exact Prod.ext rank (Fin.ext (pi.symm.trans pj))
 
 private structure Shape {n rows cols : Nat} (f : Config Unit) : Prop where
@@ -390,7 +390,7 @@ def Output {n rows cols : Nat} (x : RankTensor n (Fin (n*rows) × Fin cols)) (s 
     finiteCell (reduceScatter (fun q _ => shapeOrder (senders q)) x r u)
 
 private def ownerJob {n rows cols : Nat} (r : Fin n) (u : Coordinate rows cols) : Job n rows cols :=
-  (r,⟨tileIndex u,tile_bound u⟩)
+  (r,⟨tileIndex u,tileIndex_lt_grid u⟩)
 private structure Values {n rows cols : Nat} (x : RankTensor n (Fin (n*rows) × Fin cols))
     (s : Config Unit) : Prop where
   placed : Placed x s.mem
