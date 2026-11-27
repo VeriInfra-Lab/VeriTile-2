@@ -104,6 +104,7 @@ if [ "$lean" = 1 ]; then
              "python3 scripts/test_trust_kernel_labels.py ElaboratedLabels"
              "lake build tests.lean.dist.TrustAssumptions"
              "lake build tests.lean.dist.TrustAssumptionDuplicateImports"
+             "lake build tests.lean.dist.TrustAssumptionImports"
              "lake env lean tests/lean/TileLangSyntax.lean"
              "lake env lean tests/lean/TileLangManualAcceptance.lean"
              "python3 scripts/generate_tilelang_surface.py --check --check-accepted"

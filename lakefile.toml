@@ -549,6 +549,7 @@ globs = [
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
   "tests.lean.dist.TrustAssumptionDuplicateImports",
+  "tests.lean.dist.TrustAssumptionImports",
   "tests.lean.dist.CountMonotoneVacuous",
   "tests.lean.dist.NonWordObservation",
   "tests.lean.dist.FetchAddObservation",
