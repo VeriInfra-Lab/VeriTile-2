@@ -16,6 +16,8 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import judge
+import judge_variant
+import dispatch_variant
 from judge import ROOT
 from gpurun import run
 from interp import gen_inputs, tensorfile
@@ -71,6 +73,19 @@ class Batch(unittest.TestCase):
             self.assertTrue((ROOT / test['entry'].partition('::')[0]).is_file())
             for spec in test['inputs']:
                 self.assertEqual(gen_inputs.generate(spec['dtype'], spec['shape'], spec['gen']).sha256(), spec['sha256'])
+
+    def test_variant_request_uses_same_inputs_launch_and_outputs(self):
+        original = run.load_batch(judge.BATCHES / 'deepep-v1-intranode-002')
+        variant = run.load_batch(judge.BATCHES / judge_variant.NAME)
+        self.assertEqual(original['requires'], variant['requires'])
+        self.assertEqual(len(variant['tests']), 2)
+        for before, after in zip(original['tests'], variant['tests']):
+            self.assertEqual({**before, 'entry': after['entry']}, after)
+            self.assertEqual(after['entry'], 'experiments/interp_gpu/deepep_v1/dispatch_variant.py::run')
+            entry = run.load_entry(after['entry'], ROOT)
+            with mock.patch('gpurun.dist.deepep_port', return_value=ROOT / dispatch_variant.PORT), \
+                    self.assertRaisesRegex(ValueError, 'expected ' + dispatch_variant.PIN):
+                entry(0, 2, {}, {}, after['launch'])
 
     def test_inputs_stay_where_the_port_is_documented(self):
         for test in TESTS:
@@ -145,6 +160,24 @@ class Judge(unittest.TestCase):
 
     def test_reference_bundle_is_equal(self):
         self.assertEqual(self.verdicts(), {'intranode/identity': 'equal', 'intranode/rank_weighted': 'equal'})
+
+    def test_candidate_matches_recorded_gpu_hashes_and_repeat_counts(self):
+        self.edit('manifest.json', lambda m: m.update(batch_id=judge_variant.NAME))
+        self.assertEqual([r['verdict'] for r in judge_variant.compare_recorded(self.bundle)], ['equal', 'equal'])
+        key = 'rank1/combined_x'
+        self.edit('intranode/rank_weighted/meta.json',
+                  lambda m: m['distinct'][key].update({next(iter(m['distinct'][key])): 1}))
+        # The existing value-only oracle still accepts the bytes. The recorded-run check notices the lost repeat.
+        self.assertEqual(judge.judge(judge.BATCHES / judge_variant.NAME, self.bundle)[1]['verdict'], 'equal')
+        result = judge_variant.compare_recorded(self.bundle)[1]
+        self.assertEqual((result['verdict'], result['differences'][0]['output']), ('different', key))
+
+    def test_recorded_comparison_detects_one_wrong_rank_output(self):
+        self.edit('manifest.json', lambda m: m.update(batch_id=judge_variant.NAME))
+        self.plant(TESTS[0], 'rank0/recv_src_idx', lambda b: bytes([b[0] ^ 1]) + b[1:])
+        results = judge_variant.compare_recorded(self.bundle)
+        self.assertEqual([r['verdict'] for r in results], ['different', 'equal'])
+        self.assertTrue(any(d.get('recorded_sha256') for d in results[0]['differences']))
 
     def test_planted_wrong_sum_is_flagged(self):
         # A combine that adds a token once per rank it was sent to, whatever the ranks returned: right for the
