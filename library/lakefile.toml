@@ -487,6 +487,7 @@ globs = [
   "tests.lean.InterpAdequacyNeg",
   "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
+  "tests.lean.equiv.EquivSpecStubs",
   "tests.lean.dist.AtomicSetRuns",
   "tests.lean.dist.CountingNegatives",
   "tests.lean.dist.CountingPattern",
