@@ -1233,6 +1233,13 @@ in its local event trace and weakens only the wait to relaxed. The release
 and that wait then have no direct happens-before edge on the payload.
 [Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Whole-loop deletion](../../tests/lean/dist/Tutorial05NoAcquire.lean) · [Relaxed-wait endpoint proof](../../tests/lean/dist/Tutorial05Stream.lean)
 
+A second control keeps both CAS loops and skips just the copy-completion wait
+for K11 lane zero of rank one. That lane publishes its flag before rank one's
+copy, so rank zero can observe it, complete its CTA barrier and stream wait,
+and read the stale peer shard. Rank one's first copy then conflicts with the
+read. `Whole.copy_wait_matters` checks all 32 steps and the original launch's
+race freedom on the same inputs. [Copy-wait schedule](../../tests/lean/dist/Tutorial05NoAcquire.lean)
+
 ### A1 `undocumented_scope_order_vocabulary`
 
 A1 is the remainder of the former `scope_order_vocabulary` after the user's

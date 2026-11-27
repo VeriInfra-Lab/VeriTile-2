@@ -86,6 +86,17 @@ theorem acquire_matters : ∃ (x : RankTensor 2 (Fin (2*1) × Fin 1)) (s : DistS
   obtain ⟨x,s,cs,f,initial,run,race⟩ := NoAcquire.reachable_race
   exact ⟨x,s,cs,f,initial,race_free initial (by decide) putCellWrites,run,race⟩
 
+open VeriTile.Tests.FetchAddObservation (putCellWrites) in
+/-- Skipping one sending K11 lane's copy wait permits a 32-step race on the
+same inputs on which the full launch is race-free. All agent programs agree. -/
+theorem copy_wait_matters : ∃ (x : RankTensor 2 (Fin (2*1) × Fin 1)) (s : DistState)
+    (cs : Schedule) (f : Config Nat), Initial x s ∧ DRF (launch true 2 2 1 1 putCellWrites) s ∧
+    Run ExecutionControls.withoutCopyWait (ExecutionControls.withoutCopyWait.initial s) cs f ∧
+    DataRace ExecutionControls.withoutCopyWait f.history ∧ cs.length = 32 := by
+  obtain ⟨x,s,cs,f,init,run,race,len⟩ := ExecutionControls.copy_wait_deleted_races
+  exact ⟨x,s,cs,f,init,race_free init (by decide) putCellWrites,run,race,len⟩
+
+#print axioms copy_wait_matters
 #print axioms acquire_matters
 #print axioms race_free
 #print axioms model_t05
