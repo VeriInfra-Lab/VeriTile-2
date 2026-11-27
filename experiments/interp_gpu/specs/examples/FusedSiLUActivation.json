@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FusedSiLUActivation",
+    "lean": "VeriTile.Bench.Examples.FusedSiLU.Kernels.siluStepSiluKernel",
+    "source": "bench/examples/FusedSiLU/FusedSiLU.py::silu_activation"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "blockSize": 2
+  },
+  "arguments": [
+    {
+      "parameter": "zReg",
+      "buffer": "zReg"
+    },
+    {
+      "parameter": "siluReg",
+      "buffer": "siluReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "zReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-zReg.tensor"
+        }
+      },
+      "expected": {
+        "siluReg": "tests/interp/fixtures/tensor_examples/silu-siluReg.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "siluReg",
+      "dtype": "fp64",
+      "shape": [
+        4
+      ]
+    }
+  ]
+}

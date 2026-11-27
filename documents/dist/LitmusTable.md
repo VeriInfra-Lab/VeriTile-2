@@ -478,14 +478,15 @@ item that holds the quotation.
   lane 32 executes `T.wait_ge(tail[0], 1)`; every thread calls
   `T.sync_threads()`; warp 0 copies `buf` to `out`.
 - **Asked.** Whether `out` equals `src`.
-- **Expected.** At `71e7145`, the instruction guide identifies the whole-block barrier with `__syncthreads`; D8 gives the order among participating lanes. Under A1(c) and A8 the tail release/wait connects the publishing and waiting lanes. With both local barrier legs and that system-scope hand-off, only `out == src` is allowed. S5.2 owes the scoped chain proof. In the DeepEP version 1 port at `9ba8a605`, A5 supplies the order of the block barriers, and A6 and A10 supply the wait defaults and matching call reading.
+- **Expected.** At `71e7145`, the instruction guide identifies the whole-block barrier with `__syncthreads`; D8 gives the order among participating lanes. Under A1(c) and A8 the tail release/wait connects the publishing and waiting lanes. With both local barrier legs and that system-scope hand-off, only `out == src` is allowed. S5.2 (#57) checks the scope of each link; S8.2 (#72) owes the proof that the chain is in `HB` on a concrete history. In the DeepEP version 1 port at `9ba8a605`, A5 supplies the order of the block barriers, and A6 and A10 supply the wait defaults and matching call reading.
 - **Decided by.** D8 applies at the front-end pin `71e7145` (`instructions.md:191` and E-CU7). L-TS3 and E-TS1 ("They do not call NVSHMEM.") bound
   what is stated.
 - **Mark.** R(A1 c, D8, A8) at `71e7145`.
 - **Events.** `access store plain` by 32 agents; `bump` and `wait` on a
   `phase` counter; `access store (atomic sys release)`; `wait` with `ge`;
   `access load plain`. The event draft gives the barrier the scope `cta` and
-  leaves to ticket S5.2 whether a chain through it reaches the other rank.
+  leaves the scope check of each link to S5.2 (#57) and the proof that a chain
+  through it reaches the other rank to S8.2 (#72).
 
 #### LIT-a09. Load with `nc=True` of a word a peer writes
 
@@ -583,7 +584,7 @@ item that holds the quotation.
   waits at scope `sys` and loads the tile.
 - **Asked.** The value that the consumer reads for an element that a thread
   other than the notifying one stored.
-- **Expected.** D8 orders every participating thread’s earlier stores before the notifying thread’s later actions. With the system-scope wait of this row, A2 and A8 give the signal edge; the tile is required when the CTA-local leg and the system-scope hand-off compose for the payload. S5.2 checks that chain. D7 gives the fence only its caller’s operations. Tutorial 01 itself uses a device-scope wait, whose cross-rank outcome stays LIT-b02.
+- **Expected.** D8 orders every participating thread’s earlier stores before the notifying thread’s later actions. With the system-scope wait of this row, A2 and A8 give the signal edge; the tile is required when the CTA-local leg and the system-scope hand-off compose for the payload. S5.2 (#57) checks the scope of each link; S8.2 (#72) proves the composed chain in `HB`. D7 gives the fence only its caller’s operations. Tutorial 01 itself uses a device-scope wait, whose cross-rank outcome stays LIT-b02.
 - **Decided by.** L-NV1 decides that the fence alone does not cover the other
   threads. D8 supplies the intra-block ordering. The note E-NV22, which speaks of this
   pattern, is in `latest` and not in the manual of 3.6.5; it concerns a
@@ -592,9 +593,10 @@ item that holds the quotation.
 - **Mark.** R(D8, D7, A2, A8).
 - **Events.** `access store plain` by each thread; `bump` and `wait` on a
   `phase` counter; `fence` in mode `shmem`; `bump` of a `word`, mode `atomic
-  sys release`; `wait`; `access load plain`. S5.2 checks the scope of the composed
-  chain using the per-edge coverage condition in
-  [`SyncEdge.covers`](../../VeriTile/Dist/Event/Access.lean).
+  sys release`; `wait`; `access load plain`. S5.2 (#57) checks the scope of each
+  link of the chain using the per-edge coverage condition in
+  [`SyncEdge.covers`](../../VeriTile/Dist/Event/Access.lean); S8.2 (#72) composes
+  the links in `HB`.
 
 #### LIT-b04. Load after a wait whose token is not consumed
 
@@ -1102,7 +1104,7 @@ These rows expose the distinction between registered readings, platform precondi
 
 | Row | Why |
 | --- | --- |
-| LIT-b03, LIT-a08 | D8 gives the local order in both source files; the DeepEP port of LIT-a08 needs A5; D7 limits the NVSHMEM fence. S5.2 checks the scoped chain across the system-scope signal. |
+| LIT-b03, LIT-a08 | D8 gives the local order in both source files; the DeepEP port of LIT-a08 needs A5; D7 limits the NVSHMEM fence. S5.2 (#57) checks the scope of each link across the system-scope signal; S8.2 (#72) proves the chain in `HB`. |
 | LIT-b07 | It makes the inter-node path of tutorial 07 undefined, because `dl.wait` is read as CUDA atomics (D5) and the signal as an NVSHMEM operation. The proof targets a repaired single-family signal/wait pair (2026-11-23) |
 | LIT-b12 | The source file at `71e7145` has a plain volatile load (W1) and UB. In the port at `9ba8a605`, A7 gives the load GPU scope and UB; the system-scope repair gives 7 under A6, A7, A8 and A10 |
 | LIT-c05 | It rests on decision D1 between sources that disagree; the other reading gives the payload |

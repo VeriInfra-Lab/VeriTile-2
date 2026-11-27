@@ -148,6 +148,8 @@ globs = [
   "bench.examples.StableLogSumExp.+",
   "bench.examples.VectorAdd.+",
   "bench.examples.Welford.+",
+  "tests.interp.TensorExamples",
+  "tests.interp.HyperConnections",
 ]
 
 # Full target: Lite + Math + ApproxGeLU. Build this when working on the
@@ -549,6 +551,7 @@ globs = [
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
   "tests.lean.dist.TrustAssumptionDuplicateImports",
+  "tests.lean.dist.TrustAssumptionImports",
   "tests.lean.dist.CountMonotoneVacuous",
   "tests.lean.dist.NonWordObservation",
   "tests.lean.dist.FetchAddObservation",
@@ -557,6 +560,8 @@ globs = [
   "tests.lean.dist.IndexQueueSingleSlotModel",
   "tests.lean.dist.IndexQueueSingleSlotRuns",
   "tests.lean.dist.IndexQueueSingleSlotShape",
+  "tests.lean.dist.IndexQueueSound",
+  "tests.lean.dist.IndexQueueHiddenWrite",
   "tests.lean.dist.IndexQueueSingleSlotRefines",
   "tests.lean.dist.IndexQueueSingleSlotNegative",
   "tests.lean.dist.IndexQueueSingleSlotWitness",
@@ -567,6 +572,15 @@ globs = [
   "tests.lean.dist.Tutorial05CAS",
   "tests.lean.dist.Tutorial05K10",
   "tests.lean.dist.Tutorial05",
+  # Also run directly by the gate; built here so that its compiled axiom audit imports them.
+  "tests.lean.InterpBridgeCensus",
+  "tests.lean.dist.P2PTransferViews",
+  "tests.lean.TileLangSyntax",
+  "tests.lean.TileLangManualAcceptance",
+  "tests.lean.TileLangPinnedRoots",
+  "tests.lean.TileLangPrecedence",
+  "tests.lean.TileLangLower",
+  "tests.lean.TileLangTransfer",
 ]
 
 # Fork targets for the async and distributed line. Each main target has its own
