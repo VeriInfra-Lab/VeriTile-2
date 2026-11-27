@@ -120,14 +120,14 @@ private theorem paint_local (a : Agent) (s : DistState) (writes : Set Addr) (v :
 
 /-- A CTA segment reading a fixed finite tile footprint, writing all tile results
 only when its descriptor reads succeed. -/
-private noncomputable def tileAction (c : Cta) (reads writes : Set Addr)
+noncomputable def tileAction (c : Cta) (reads writes : Set Addr)
     (values : DistState → Option (Addr → MemCell)) : Segment where
   agent := .cta c
   reads := fun _ => reads
   writes := fun _ => writes
   run := fun s => (values s).map (paint s writes)
 
-private theorem tileAction_sound (c : Cta) (reads writes : Set Addr)
+theorem tileAction_sound (c : Cta) (reads writes : Set Addr)
     (values : DistState → Option (Addr → MemCell)) (visible : ∀ p ∈ writes, ViewName.Visible (.cta c) p)
     (det : ∀ a b, DistState.AgreesOn reads a b → values a = values b) :
     (tileAction c reads writes values).FootprintSound := by
@@ -180,14 +180,14 @@ private theorem readSum_congr {n rows cols : Nat} (r : Fin n) (u : Coordinate ro
 def finiteCell (x : ℝ) := VeriTile.Triton.MemCell.of .real (x : WithBot ℝ)
 
 open Classical in
-private noncomputable def valuesOf {n rows cols : Nat} (r : Fin n) (pid : Nat) (s : DistState) :
+noncomputable def valuesOf {n rows cols : Nat} (r : Fin n) (pid : Nat) (s : DistState) :
     Option (Addr → VeriTile.Triton.MemCell) :=
   if ∀ u : Coordinate rows cols, tileIndex u = pid → (readSum s r u.1 u.2).isSome then
     some fun p => if h : p ∈ writesOf (rows := rows) (cols := cols) r pid then
       finiteCell ((readSum s r h.choose.1 h.choose.2).getD 0) else finiteCell 0
   else none
 
-private theorem tile_values_congr {n rows cols : Nat} (r : Fin n) (pid : Nat) {s t : DistState}
+theorem tile_values_congr {n rows cols : Nat} (r : Fin n) (pid : Nat) {s t : DistState}
     (agr : DistState.AgreesOn (readsOf (rows := rows) (cols := cols) r pid) s t) :
     valuesOf (rows := rows) (cols := cols) r pid s = @valuesOf n rows cols r pid t := by
   have eq (u : Coordinate rows cols) (owned : tileIndex u = pid) :=
