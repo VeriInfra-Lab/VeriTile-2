@@ -101,6 +101,8 @@ run_cmd
   let direct := eager "T.clear(X)"
   for body in ["T.wgmma_gemm(X, Y, X)", "T.ptx_wgmma_ss(X, Y, X)", "T.tcgen05_gemm(X, Y, X)",
       "T.wgmma(X, Y)", "T.tcgen05(X)", "T.fence_proxy_async()", "unknown.T.copy(X, Y)",
+      "T.wait_wgmma(0)", "T.warpgroup_arrive()", "T.warpgroup_commit_batch()", "T.warpgroup_wait(0)",
+      "g = T.WGMMATensorCoreIntrinEmitter.wgmma", "g = T.WGMMATensorCoreIntrinEmitter.wgmma; g(X, Y, X)",
       "L = T.Layout(X.shape, lambda i: T.tcgen05_gemm(i))", "with T.ws(T.ptx_wgmma_ss(X)): {T.clear(X)}",
       "while X: {T.clear(X)}", "break", "continue", "X = X and Y", "X = not Y", "X = X or Y",
       "X, Y += 1", "X = a --b\n", "X = a /- hidden -/"] do
@@ -129,7 +131,8 @@ run_cmd
   for n in exportedNames do
     let src := eager ("X = T." ++ n ++ "()")
     let low := ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
-      fun opcode => n == opcode || n.startsWith (opcode ++ "_")
+      (fun opcode => n == opcode || n.startsWith (opcode ++ "_")) ||
+      ["wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait"].contains n
     if low then parseFails src else
       unless (Parser.runParserCategory env `term src).isOk do throwError "missing exported spelling: {n}"
       checkAdmission src false
@@ -186,7 +189,8 @@ example : syntacticCall .tileLang `T.gemm = true := by decide +kernel
 example : syntacticCall .tileScale `T.wgmma_gemm = true := by decide +kernel
 example : syntacticCall .tileLang `T.unregistered_name = false := by decide +kernel
 run_cmd
-  for body in ["T.wgmma_gemm(X, Y, X)", "T.tcgen05_gemm(X, Y, X)", "T.fence_proxy_async()"] do
+  for body in ["T.wgmma_gemm(X, Y, X)", "T.tcgen05_gemm(X, Y, X)", "T.fence_proxy_async()",
+      "T.warpgroup_arrive()", "g = T.WGMMATensorCoreIntrinEmitter.wgmma"] do
     unless (Parser.runParserCategory (← getEnv) `term ((eager body).replace "tilelang {" "tilescale {")).isOk do
       throwError "tilescale rejects {body}"
     parseFails (eager body)

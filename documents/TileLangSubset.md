@@ -29,7 +29,7 @@ Before the outer function a source can declare a one-parameter top-level layout 
 
 ## Typed objects and admission
 
-The A3.1 signature covers `Program`, `Definition`, `Procedure`, `Statement`, `Place`, `Parameter`, `Value`, `Index`, `Argument`, `LayoutHelper`, `JitOption`, `OptionKey`, and their mode and operator tags `Mode` and `Binary`, together with the two exclusion theorems `syntacticCall_tileLang_excluded` and `syntacticCall_tileLang_closed` on the classifier that the parser applies to call and value names in TileLang mode. The parser's use of that classifier is covered by the negative parser tests, not by the signature. `Program.accepted` and `Program.lower` remain unsigned. [D1 and D2 decisions](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7200986061) The source retains symbolic dimensions and dtype expressions. Equality and pattern matching distinguish a tensor annotation from an assignment, a slice from an index, and a statement call from a value. The parser's internal child offsets are not the admission contract. [AST](../VeriTile/TileLang/DSL/Ast.lean) · [Admission](../VeriTile/TileLang/DSL/Accepted.lean) · [Typed readback and negative clients](../tests/lean/TileLangSyntax.lean)
+The A3.1 signature covers `Program`, `Definition`, `Procedure`, `Statement`, `Place`, `Parameter`, `Value`, `Index`, `Argument`, `LayoutHelper`, `JitOption`, `OptionKey`, and their mode and operator tags `Mode` and `Binary`, together with the two exclusion theorems `syntacticCall_tileLang_excluded` and `syntacticCall_tileLang_closed` on the classifier that the parser applies to call and value names in TileLang mode. The first enumerates the 25 pinned exports that fail to parse in TileLang mode; the second says that any other qualified call name fails too. The parser's use of that classifier is covered by the negative parser tests, not by the signature. `Program.accepted` and `Program.lower` remain unsigned. [D1 and D2 decisions](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7200986061) The source retains symbolic dimensions and dtype expressions. Equality and pattern matching distinguish a tensor annotation from an assignment, a slice from an index, and a statement call from a value. The parser's internal child offsets are not the admission contract. [AST](../VeriTile/TileLang/DSL/Ast.lean) · [Admission](../VeriTile/TileLang/DSL/Accepted.lean) · [Typed readback and negative clients](../tests/lean/TileLangSyntax.lean)
 
 `Program.accepted : Program → Bool` is a total decision procedure over the complete typed object, including hand-constructed objects. It checks mode, options, the outer-function shape, local binding and arity, permitted calls and exact keyword combinations, nested operands, and binders. This is a decision about membership in the admitted source fragment. Symbolic values may still need a dtype, shape, scope or ordering contract before the kernel can execute. Every extension of admission must be reported by the coordinator as a tier-A decision naming the new forms it admits.
 
@@ -45,7 +45,7 @@ Decimal AST nodes retain their spelling. Admission recognizes an unsigned intege
 
 ## Name × arguments × status
 
-The generated call matrix inventories all 717 distinct exports of the pinned CUDA `tilelang.language.__all__`, including names re-exported by the pinned TVM gitlink. A live Lean client exercises the typed admission decision for every export in expression, statement, iterator and prelude positions, and checks specialized forms for launches, annotations and transfers. The matrix records 40 partially admitted names, 656 with no admitted call and 21 explicitly excluded names. A second client exercises typed objects constructed directly. Run `python3 scripts/generate_tilelang_surface.py --check --check-accepted` to compare the live results with the pinned matrix. [Live classifier](../tests/lean/TileLangAcceptanceSurface.lean) · [Hand-constructed clients](../tests/lean/TileLangManualAcceptance.lean)
+The generated call matrix inventories all 717 distinct exports of the pinned CUDA `tilelang.language.__all__`, including names re-exported by the pinned TVM gitlink. A live Lean client exercises the typed admission decision for every export in expression, statement, iterator and prelude positions, and checks specialized forms for launches, annotations and transfers. The matrix records 40 partially admitted names, 652 with no admitted call and 25 explicitly excluded names. A second client exercises typed objects constructed directly. Run `python3 scripts/generate_tilelang_surface.py --check --check-accepted` to compare the live results with the pinned matrix. [Live classifier](../tests/lean/TileLangAcceptanceSurface.lean) · [Hand-constructed clients](../tests/lean/TileLangManualAcceptance.lean)
 
 Each row identifies the basis and admitted shape. The table below gives shorthand for the observed pairs in the nine-root census. Numbers count positional operands; keywords are required in each stated alternative, may change order, and cannot repeat. A cited root witnesses the occurrence even when its outer form independently fails admission. [Complete call matrix](generated/TileLangCallMatrix.md) · [Census](census/MinimalSyntax.md#tilelang) · [Complete public roots](../tests/lean/TileLangPinnedRoots.lean)
 
@@ -97,13 +97,31 @@ Each row identifies the basis and admitted shape. The table below gives shorthan
 | `Return` | Expression in a kernel or helper; the declared prim_func in a factory | 4 | `returnStmt`, `factory` |
 | `AugAssign` | Name or subscript with `+=`, `-=`, `*=` or `/=` | 3 | `addAssignStmt`, `subAssignStmt`, `mulAssignStmt`, `divAssignStmt` |
 
+### Explicit exclusions
+
+In TileLang mode, `explicitInstruction` decides which exports fail to parse: a name equal to one of six opcodes or starting with one followed by `_`, or one of four named WGMMA synchronization calls. `syntacticCall_tileLang_excluded` lists the 25 pinned exports this rule rejects. The rule covers calls, values, and every component of a `T.` attribute chain, for example `T.WGMMATensorCoreIntrinEmitter.wgmma`.
+
 | Explicit exclusions | Admission of this form |
 | --- | --- |
-| Explicit `T.wgmma(...)` and its variants | parse failure |
-| Explicit `T.tcgen05(...)` and its variants | parse failure |
-| Proxy-fence calls such as `T.fence_proxy_async()` | parse failure |
+| Explicit `T.wgmma(...)` and its variants (prefixes `wgmma`, `ptx_wgmma`) | parse failure |
+| Explicit `T.tcgen05(...)` and its variants (prefixes `tcgen05`, `ptx_tcgen05`) | parse failure |
+| Proxy-fence calls such as `T.fence_proxy_async()` (prefixes `fence_proxy`, `ptx_fence_proxy`) | parse failure |
+| WGMMA synchronization calls `T.warpgroup_arrive()`, `T.warpgroup_commit_batch()`, `T.warpgroup_wait(n)`, `T.wait_wgmma(id)` | parse failure |
 
-An exported call outside these admitted forms can still be represented as a typed call for inspection. TileLang mode excludes explicit WGMMA, TCGen05 and proxy-fence instructions even when nested inside another expression or macro. An unrelated qualified call outside the pinned surface fails the grammar. Unbound local helpers fail admission. In particular, `T.call_extern` has no admitted external symbol. A future external-call whitelist would require a coordinator tier-A decision naming specific admitted symbols and contracts.
+The four synchronization calls are excluded by name, because their device code issues WGMMA instructions:
+
+| Export | Python binding | Device function | Instruction |
+| --- | --- | --- | --- |
+| `T.warpgroup_arrive` | [`builtin.py` L540](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/builtin.py#L540) | [`intrin.h` L70–72](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/src/tl_templates/cuda/intrin.h#L70-L72), `cute::warpgroup_arrive()` | `wgmma.fence.sync.aligned` |
+| `T.warpgroup_commit_batch` | [`builtin.py` L549](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/builtin.py#L549) | [`intrin.h` L79–81](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/src/tl_templates/cuda/intrin.h#L79-L81), `cute::warpgroup_commit_batch()` | `wgmma.commit_group.sync.aligned` |
+| `T.warpgroup_wait` | [`builtin.py` L558](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/builtin.py#L558) | [`intrin.h` L88–90](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/src/tl_templates/cuda/intrin.h#L88-L90), `cute::warpgroup_wait<N>()` | `wgmma.wait_group.sync.aligned N` |
+| `T.wait_wgmma` | [`builtin.py` L872–882](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/tilelang/language/builtin.py#L872-L882) | [`intrin.h` L97–99](https://github.com/tile-ai/tilelang/blob/35850c06875bcc84751417982bf7b4d662bafdbc/src/tl_templates/cuda/intrin.h#L97-L99), `cute::warpgroup_wait<N>()` | `wgmma.wait_group.sync.aligned N` |
+
+The instruction column follows CUTLASS `include/cute/arch/mma_sm90_gmma.hpp` at the TileLang gitlink `b2dd65dc`, lines 53, 67 and 80. The delegated review of #680 traced it there; this document did not re-read that file.
+
+Some routes to the same hardware still parse in TileLang mode, and only `Program.accepted`, which is unsigned, rejects them. These are `T.alloc_tmem` and `T.deallocate_tmem`, which the review reads as lowering to TCGen05 allocation through a pass, and the string routes `T.call_intrin` and `T.call_extern`. Whether to exclude them is a separate user decision. The descriptor exports `alloc_wgmma_desc`, `alloc_tcgen05_*` and `initialize_*_descriptor` allocate or fill descriptors, issue no instruction and are not excluded.
+
+An exported call outside these admitted forms can still be represented as a typed call for inspection. TileLang mode rejects the excluded names even when they are nested inside another expression or macro. An unrelated qualified call outside the pinned surface fails the grammar. Unbound local helpers fail admission. In particular, `T.call_extern` has no admitted external symbol. A future external-call whitelist would require a coordinator tier-A decision naming specific admitted symbols and contracts.
 
 TileScale mode shares the grammar and recognizes separate control-flow and operand forms, including `while`, `break`, `continue`, Boolean `and/or/not`, and the registered `scope`, `dst_pe` and `leader_thread_extent` combinations. The TileLang-only negative tests do not impose a TileScale execution contract. #84–#90 own the layout, memory, operator and synchronization contracts recorded in their tickets.
 

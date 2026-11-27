@@ -17,38 +17,54 @@ def sourceIdentifier : Name → Bool
         "async","await","del","is","raise"].contains s
   | _ => false
 
+/-- A name that issues an explicit WGMMA, TCGen05 or proxy-fence instruction: one of six
+opcode prefixes, or one of four exports whose device code issues a WGMMA fence,
+commit or wait. At tile-ai/tilelang@35850c06, `tilelang/language/builtin.py`
+L540 `warpgroup_arrive`, L549 `warpgroup_commit_batch`, L558 `warpgroup_wait` and
+L872 `wait_wgmma` call the device functions of `src/tl_templates/cuda/intrin.h`
+L70–99, which call CUTLASS `cute::warpgroup_arrive`, `warpgroup_commit_batch` and
+`warpgroup_wait`. -/
+def explicitInstruction (field : String) : Bool :=
+  ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
+    (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) ||
+  ["wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait"].contains field
+
 def syntacticCall (mode : Mode) (name : Name) : Bool :=
   match name with
   | .str `T field =>
-    let low := ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
-      fun opcode => field == opcode || field.startsWith (opcode ++ "_")
+    let low := explicitInstruction field
     (mode != .tileLang || !low) && (exportedNames.contains field ||
       (mode == .tileScale && (low || ["copy", "atomic_add", "tma_copy", "alloc_shared"].contains field)))
   | _ => name == `math.ceil || sourceIdentifier name
 
-/-- Signed (#83, A3.1). In TileLang mode the source grammar classifies no explicit
-WGMMA, TCGen05 or proxy-fence name as a call or value, so the quotation fails to
-parse. The parser applies this classifier in `validateUnit` (tests/lean/TileLangSyntax.lean). -/
-theorem syntacticCall_tileLang_excluded (field : String)
-    (h : ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
-      (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) = true) :
-    syntacticCall .tileLang (.str `T field) = false := by
-  simp only [syntacticCall, h]; rfl
+/-- Signed (#83, A3.1). The pinned exports that are not TileLang calls or values, so a
+quotation naming one fails to parse: exactly these 25, the exports that satisfy
+`explicitInstruction`. The parser applies `syntacticCall` in `validateUnit`
+(tests/lean/TileLangSyntax.lean). -/
+theorem syntacticCall_tileLang_excluded :
+    exportedNames.filter (fun field => !syntacticCall .tileLang (.str `T field)) =
+      ["fence_proxy_async", "ptx_tcgen05_mma_blockscaled_ss", "ptx_tcgen05_mma_ss",
+       "ptx_tcgen05_mma_ts", "ptx_wgmma_rs", "ptx_wgmma_sp_rs", "ptx_wgmma_sp_ss", "ptx_wgmma_ss",
+       "tcgen05_after_thread_sync", "tcgen05_before_thread_sync", "tcgen05_cp_warpx4",
+       "tcgen05_gemm", "tcgen05_gemm_blockscaled", "tcgen05_gemm_sp", "tcgen05_mma",
+       "tcgen05_mma_arrive", "tcgen05_mma_blockscaled", "tcgen05_sf_warp_transpose",
+       "wait_wgmma", "warpgroup_arrive", "warpgroup_commit_batch", "warpgroup_wait",
+       "wgmma_gemm", "wgmma_gemm_sp", "wgmma_mma"] := by
+  decide +kernel
 
-/-- Signed (#83, A3.1). In TileLang mode a name outside the pinned export surface,
-`math.ceil` and unqualified source identifiers is not a call, so it fails to parse. -/
+/-- Signed (#83, A3.1). In TileLang mode a call name is a pinned export that issues no
+explicit instruction, `math.ceil` or an unqualified source identifier. Any other
+qualified name fails to parse. -/
 theorem syntacticCall_tileLang_closed (n : Name) (h : syntacticCall .tileLang n = true) :
     (∃ field, n = .str `T field ∧ exportedNames.contains field = true ∧
-      ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
-        (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) = false) ∨
+      explicitInstruction field = false) ∨
     n = `math.ceil ∨ sourceIdentifier n = true := by
   unfold syntacticCall at h
   split at h
   · rename_i field
     refine .inl ⟨field, rfl, ?_⟩
     revert h
-    cases ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
-      (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) <;>
+    cases explicitInstruction field <;>
       simp [show (Mode.tileLang == Mode.tileScale) = false from rfl,
         show (Mode.tileLang != Mode.tileLang) = false from rfl]
   · exact .inr (by simpa using h)

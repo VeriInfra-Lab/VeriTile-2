@@ -34,7 +34,8 @@ def tlName : Parser := rawIdentNoAntiquot >>
 private def valueSpelling (mode : Mode) : Name → Bool
   | .str .anonymous field => sourceIdentifier (.mkSimple field)
   | .str `T field => syntacticCall mode (.str `T field)
-  | .str base field => valueSpelling mode base && sourceIdentifier (.mkSimple field)
+  | .str base field => valueSpelling mode base && sourceIdentifier (.mkSimple field) &&
+      !(mode == .tileLang && base.getRoot == `T && explicitInstruction field)
   | _ => false
 
 def tlValueName : Parser := rawIdentNoAntiquot >>
