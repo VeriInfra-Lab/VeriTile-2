@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FusedSiLU",
+    "lean": "VeriTile.Bench.Examples.FusedSiLU.Kernels.fusedSiLUKernel",
+    "source": "bench/examples/FusedSiLU/FusedSiLU.py::fused_silu"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "blockSize": 2
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "gateReg",
+      "buffer": "gateReg"
+    },
+    {
+      "parameter": "residualReg",
+      "buffer": "residualReg"
+    },
+    {
+      "parameter": "outReg",
+      "buffer": "outReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-xReg.tensor"
+        },
+        "gateReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-gateReg.tensor"
+        },
+        "residualReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-residualReg.tensor"
+        }
+      },
+      "expected": {
+        "outReg": "tests/interp/fixtures/tensor_examples/silu-outReg.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "outReg",
+      "dtype": "bf16",
+      "shape": [
+        4
+      ]
+    }
+  ]
+}

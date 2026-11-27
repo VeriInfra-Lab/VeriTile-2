@@ -8,13 +8,16 @@ check on the output of every gate command: the warnings of `lake env lean
 tests/lean/...` and those Lake replays for every tests/lean module it builds
 or finds cached.
 
+The compiled check imports the gate-built tests.lean modules together and
+audits test-owned axiom declarations throughout their import closure.
 Source checks also reject a test's own axiom declarations. Log checks audit
 the dependencies reported by `#print axioms` at test sites. Lake supplies
 the site in its log; direct Lean runs supply the test file on the command line.
 
-scripts/test-sorry-allowlist.txt uses `file<TAB>declaration<TAB>reason`.
-For a source axiom use the name as written, including any quoting or namespace
-prefix. For a sorry warning use the word at the reported position (or `example`).
+Both test-sorry-allowlist.txt and test-axiom-allowlist.txt use
+`file<TAB>declaration<TAB>reason`. Source axioms use the spelling in the source.
+The compiled check uses the declaring module and fully qualified declaration.
+For a sorry warning use the word at the reported position (or `example`).
 To permit sorryAx in printed dependencies use the fully qualified name printed
 for the audited declaration. An allowed source axiom still fails as a dependency.
 
@@ -45,17 +48,22 @@ hidden, not the ways of hiding it. It fails on
   assemble a hiding guard or a `sorry` out of pieces no rule here sees.
 Guards and metaprograms are found anywhere in code, not only at a line start;
 `--` and `/- -/` comments (which nest) and string contents are skipped, and
-docstrings are kept for the guard rules. What remains needs metaprogramming
-defined outside tests/lean, which coordinator review of gate-file and
-allowlist diffs covers.
+docstrings are kept for the guard rules. The compiled audit also checks axioms
+introduced during elaboration of gate-built test modules and their test imports.
+The gate also builds every `tests/lean` file it runs directly with `lake env lean`,
+so the audit covers those files too (scripts/test_fork_targets.py checks this).
+The `--run` program `tests/interp/ReshapeOrder.lean` has no theorems and is not audited.
 """
 import argparse
+import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST = ROOT / 'scripts/test-sorry-allowlist.txt'
+AXIOM_ALLOWLIST = ROOT / 'scripts/test-axiom-allowlist.txt'
 # Kept apart from ALLOWLIST: an accepted macro name must not exempt the lines that use it from the sorry rules.
 META_ALLOWLIST = ROOT / 'scripts/test-metaprogram-allowlist.txt'
 # Lake prints `warning: FILE:L:C: MSG`, Lean prints `FILE:L:C: warning: MSG`; this toolchain quotes with backticks.
@@ -217,7 +225,7 @@ def captures_warnings(options):
     return not severities or any(re.search(r'\b(?:warning|all)\b', item) for item in severities)
 
 
-def tripwires(root, accepted, metaprograms=frozenset()):
+def tripwires(root, accepted, metaprograms=frozenset(), axioms=frozenset()):
     """Source lines that use or could hide a `sorry` outside the allowlists."""
     hits = []
     for name in ('lakefile.toml', 'library/lakefile.toml'):
@@ -241,7 +249,7 @@ def tripwires(root, accepted, metaprograms=frozenset()):
                          [*TEST_WORDS.finditer(line), *TACTICS.finditer(code_lines[number - 1])]]
         for match in AXIOM_DECL.finditer(code):
             name = match[1] or '?'
-            if match[1] is None or (file, name) not in accepted:
+            if match[1] is None or (file, name) not in axioms:
                 hits.append(f'{file}:{text.count(chr(10), 0, match.start()) + 1}: axiom {name}')
         for match in META.finditer(code):
             found = META_NAME.match(text, match.end())
@@ -269,13 +277,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('logs', nargs='*', type=Path, help='output of gate commands')
     parser.add_argument('--allowlist', type=Path, default=ALLOWLIST)
+    parser.add_argument('--axiom-allowlist', type=Path, default=AXIOM_ALLOWLIST)
+    parser.add_argument('--compiled', nargs='+', metavar='MODULE',
+                        help='audit axiom declarations in these compiled test modules and their test imports')
     parser.add_argument('--meta-allowlist', type=Path, default=META_ALLOWLIST)
     parser.add_argument('--test-file', help='test file of a direct Lean run (bare #print axioms output)')
     parser.add_argument('--sources', action='store_true', help='check the sources for ways to hide the warning')
     parser.add_argument('--root', type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.compiled:
+        checked = subprocess.run(['lake', 'env', 'lean', '--run', 'scripts/TestAxiomAudit.lean', *args.compiled],
+                                 cwd=ROOT, capture_output=True, text=True)
+        if checked.returncode:
+            raise ValueError('compiled test audit failed:\n' + checked.stdout + checked.stderr)
+        declared = {tuple(row) for row in json.loads(checked.stdout)}
+        rejected = sorted(declared - allowed(args.axiom_allowlist))
+        if rejected:
+            raise ValueError('unapproved compiled test axiom:\n' +
+                             '\n'.join(f'{file}\t{name}' for file, name in rejected))
+        print(f'[ok] imported {len(args.compiled)} test module(s); '
+              f'{len(declared)} test axiom declaration(s), all approved')
     if args.sources:
-        hits = tripwires(args.root, allowed(args.allowlist), allowed(args.meta_allowlist))
+        hits = tripwires(args.root, allowed(args.allowlist), allowed(args.meta_allowlist),
+                         allowed(args.axiom_allowlist))
         if hits:
             raise ValueError('unapproved test source:\n' + '\n'.join(hits))
         print('[ok] test sources passed the proof and metaprogramming checks')

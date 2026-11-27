@@ -133,7 +133,8 @@ def documented_atomic_update_lowering : TrustAssumption where
   name := `documented_atomic_update_lowering
   statement := Assumption.documented_atomic_update_lowering
   sourceOrRationale :=
-    "The function carried by `AccessValue.update` is trusted only at the boundary that lowers " ++
+    "S3.1 N5′ (#43, #608). The function carried by `AccessValue.update` is trusted " ++
+    "only at the boundary that lowers " ++
     "a documented source-level atomic to a distributed emission. A producer identifies its " ++
     "primitive, pinned contract, operand function and return behaviour; a plain load, " ++
     "computation and store never becomes one atomic event. At main `90f8e34ed` no front end " ++

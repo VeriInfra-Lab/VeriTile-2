@@ -57,3 +57,31 @@ reject --carrier fp32-basic --grid 2 VectorAdd "$fixtures/vector-x.tensor" "$fix
 shopt -s nullglob
 leftovers=("$work"/destination.tmp.*)
 (( ${#leftovers[@]} == 0 ))
+
+# Compose the three actual SiLU stage executables from their predecessor's
+# output files, and compare both intermediates and the final BF16 result.
+mixed="$fixtures/tensor_examples"
+silu=(--carrier binary64 --grid 2 --constexpr blockSize=2)
+"$runner" "${silu[@]}" FusedSiLUGate "$mixed/silu-xReg.tensor" "$mixed/silu-gateReg.tensor" "$work/z.tensor"
+cmp "$work/z.tensor" "$mixed/silu-zReg.tensor"
+"$runner" "${silu[@]}" FusedSiLUActivation "$work/z.tensor" "$work/silu.tensor"
+cmp "$work/silu.tensor" "$mixed/silu-siluReg.tensor"
+"$runner" "${silu[@]}" FusedSiLUResidual "$work/silu.tensor" "$mixed/silu-residualReg.tensor" "$work/unfused.tensor"
+cmp "$work/unfused.tensor" "$mixed/silu-outReg.tensor"
+
+# Two result files become visible together. A failed repeat preserves both.
+"$runner" --carrier binary64 --grid 1 --constexpr blockSize=4 --scalar rowStride=5 \
+  Welford "$mixed/welford-row.tensor" "$work/stats"
+cmp "$work/stats/meanReg.tensor" "$mixed/welford-mean.tensor"
+cmp "$work/stats/varReg.tensor" "$mixed/welford-var.tensor"
+reject --carrier binary64 --grid 1 --constexpr blockSize=4 --scalar rowStride=5 \
+  Welford "$mixed/welford-row.tensor" "$work/stats"
+reject --carrier binary64 --grid 2 --constexpr blockSize=4 --scalar rowStride=5 \
+  Welford "$mixed/welford-row.tensor" "$work/invalid-stats"
+reject --carrier binary64 --grid 1 --constexpr blockSize=4 \
+  Welford "$mixed/welford-row.tensor" "$work/invalid-stats"
+cmp "$work/stats/meanReg.tensor" "$mixed/welford-mean.tensor"
+cmp "$work/stats/varReg.tensor" "$mixed/welford-var.tensor"
+test ! -e "$work/invalid-stats"
+leftovers=("$work"/stats.tmp.*)
+(( ${#leftovers[@]} == 0 ))

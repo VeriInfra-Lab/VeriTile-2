@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "HyperConnectionsWidth",
+    "lean": "VeriTile.Bench.Examples.HyperConnectionsWidth.Kernels.matrixKernel",
+    "source": "bench/examples/HyperConnectionsWidth/HyperConnectionsWidth.py::matrixKernel"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "S": 2,
+    "T": 4,
+    "D": 2,
+    "numIters": 2
+  },
+  "arguments": [
+    {
+      "parameter": "resReg",
+      "buffer": "resReg"
+    },
+    {
+      "parameter": "hResReg",
+      "buffer": "hResReg"
+    },
+    {
+      "parameter": "hPreReg",
+      "buffer": "hPreReg"
+    },
+    {
+      "parameter": "resMixReg",
+      "buffer": "resMixReg"
+    },
+    {
+      "parameter": "branchInReg",
+      "buffer": "branchInReg"
+    },
+    {
+      "parameter": "tau",
+      "value": 2
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "resReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            2,
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-res.tensor"
+        },
+        "hResReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            2
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-res-logits.tensor"
+        },
+        "hPreReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/hyper-pre.tensor"
+        }
+      },
+      "expected": {
+        "resMixReg": "tests/interp/fixtures/tensor_examples/hyper-mix.tensor",
+        "branchInReg": "tests/interp/fixtures/tensor_examples/hyper-in.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "resMixReg",
+      "dtype": "fp32",
+      "shape": [
+        2,
+        2,
+        2
+      ]
+    },
+    {
+      "name": "branchInReg",
+      "dtype": "fp32",
+      "shape": [
+        2,
+        4,
+        2
+      ]
+    }
+  ]
+}

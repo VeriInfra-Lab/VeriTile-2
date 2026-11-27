@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "Welford",
+    "lean": "VeriTile.Bench.Examples.Welford.Kernels.onlineWelfordKernel",
+    "source": "bench/examples/Welford/Welford.py::onlineWelfordKernel"
+  },
+  "grid": [
+    1
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "blockSize": 4
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "meanReg",
+      "buffer": "meanReg"
+    },
+    {
+      "parameter": "varReg",
+      "buffer": "varReg"
+    },
+    {
+      "parameter": "rowStride",
+      "value": 5
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp32",
+          "shape": [
+            1,
+            5
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/welford-row.tensor"
+        }
+      },
+      "expected": {
+        "meanReg": "tests/interp/fixtures/tensor_examples/welford-mean.tensor",
+        "varReg": "tests/interp/fixtures/tensor_examples/welford-var.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "meanReg",
+      "dtype": "bf16",
+      "shape": [
+        1
+      ]
+    },
+    {
+      "name": "varReg",
+      "dtype": "bf16",
+      "shape": [
+        1
+      ]
+    }
+  ]
+}
