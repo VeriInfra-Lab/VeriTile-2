@@ -1,6 +1,6 @@
 import VeriTile.TileLang.DSL.Accepted
 
-/-! Closed source syntax for the A3.1 freeze draft. The public quotation returns
+/-! Closed source syntax of A3.1. The public quotation returns
 a typed Program, including calls whose semantics are deferred.
 Braces delimit Python suites; semicolons separate their statements. -/
 namespace VeriTile.TileLang
@@ -34,7 +34,8 @@ def tlName : Parser := rawIdentNoAntiquot >>
 private def valueSpelling (mode : Mode) : Name → Bool
   | .str .anonymous field => sourceIdentifier (.mkSimple field)
   | .str `T field => syntacticCall mode (.str `T field)
-  | .str base field => valueSpelling mode base && sourceIdentifier (.mkSimple field)
+  | .str base field => valueSpelling mode base && sourceIdentifier (.mkSimple field) &&
+      !(mode == .tileLang && base.getRoot == `T && explicitInstruction field)
   | _ => false
 
 def tlValueName : Parser := rawIdentNoAntiquot >>
