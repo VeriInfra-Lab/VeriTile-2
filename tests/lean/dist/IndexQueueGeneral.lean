@@ -1,6 +1,7 @@
 import tests.lean.dist.IndexQueueHandoff
 import tests.lean.dist.IndexQueueRoomWait
 import tests.lean.dist.IndexQueueSound
+import tests.lean.dist.Tutorial01
 
 /-! Refinement of an arbitrary shaped index queue. The tail observation locates
 the matching payload write. The room wait orders a later reuse after the take. -/
