@@ -6,7 +6,9 @@ open VeriTile.Triton VeriTile.Dist VeriTile.Dist.Frontend.TritonExt.PointerCasts
 
 namespace P2PPutInventory
 
-private def put (unit : SourceDType) (nbytes sm pid : Nat) :=
+-- The host sizes its int64 signal allocation by device capacity (max_num_sm),
+-- independently of the number of CTAs in this launch. The fixture uses 16 SMs.
+private def put (unit : SourceDType) (nbytes sm pid : Nat) (maxNumSm : Nat := 16) :=
   let width := (nbytes + sm - 1) / sm
   let start := pid * width
   let size := min (start + width) nbytes - start
@@ -14,7 +16,7 @@ private def put (unit : SourceDType) (nbytes sm pid : Nat) :=
     pointers := [
       ⟨"src_ptr", ⟨.global 0, "src", 0x10000000, nbytes, unit, Bool.true⟩, .bf16⟩,
       ⟨"dst_ptr", ⟨.global 0, "dst", 0x20000000, nbytes, unit, Bool.true⟩, .bf16⟩,
-      ⟨"signal_ptr", ⟨.global 0, "flag", 0x30000000, 8 * sm, .i64, Bool.true⟩, .i64⟩]
+      ⟨"signal_ptr", ⟨.global 0, "flag", 0x30000000, 8 * maxNumSm, .i64, Bool.true⟩, .i64⟩]
     integers := [("data_copy_begin", start), ("data_copy_real_size", size), ("pid", pid),
                  ("signal_value", 1), ("dst_pe", 1)] }
   with_pointer_views launch in triton {

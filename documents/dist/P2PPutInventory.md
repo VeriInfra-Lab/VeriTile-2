@@ -4,7 +4,7 @@ The pinned P2P benchmark exercises two separate paths. With root 55 the receiver
 
 | Root | Recorded scope |
 | --- | --- |
-| 55, `p2p_copy_kernel` (historical 96) | #296 covers launches in which each CTA's byte count is a multiple of the element size. A split BF16 cell is a diagnosed gap in #596. The default eight-CTA launch satisfies the premise. [User decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/296#issuecomment-7197417954) · [Read-path inventory and controls](https://github.com/VeriInfra-Lab/VeriTile-2/pull/612) |
+| 55, `p2p_copy_kernel` (historical 96) | [Root-55 decision on #296](https://github.com/VeriInfra-Lab/VeriTile-2/issues/296#issuecomment-7197417954) |
 | 56, `p2p_put_kernel` (historical 97) | The whole-cell launch projects to typed source and destination ranges with an independent SET completion per CTA. The public seven-CTA launch fails the typed range checks. This is a third live root requiring a cross-width payload relation for the split launch. The user owns the disposition under the #596 trigger. [Trigger](https://github.com/VeriInfra-Lab/VeriTile-2/issues/296#issuecomment-7197417954) |
 | 57, `p2p_copy_remote_to_local_kernel` (historical 98) | The fused BF16/byte loads and stores are a diagnosed gap in #596, outside #296. [User decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/593#issuecomment-7174675011) |
 
