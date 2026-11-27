@@ -559,6 +559,8 @@ globs = [
   "tests.lean.dist.Tutorial05Flags",
   "tests.lean.dist.Tutorial05Race",
   "tests.lean.dist.Tutorial05",
+  "tests.lean.dist.Tutorial05NoStreamWait",
+  "tests.lean.dist.Tutorial05Shadow",
   # Also run directly by the gate; built here so that its compiled axiom audit imports them.
   "tests.lean.InterpBridgeCensus",
   "tests.lean.dist.P2PTransferViews",
