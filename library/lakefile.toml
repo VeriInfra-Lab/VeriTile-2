@@ -487,6 +487,7 @@ globs = [
   "tests.lean.InterpAdequacyNeg",
   "tests.lean.InterpFPValue",
   "tests.lean.dist.SwizzleSource",
+  "tests.lean.equiv.EquivSpecStubs",
   "tests.lean.dist.AtomicSetRuns",
   "tests.lean.dist.CountingNegatives",
   "tests.lean.dist.CountingPattern",
@@ -564,6 +565,7 @@ globs = [
   # Also run directly by the gate; built here so that its compiled axiom audit imports them.
   "tests.lean.InterpBridgeCensus",
   "tests.lean.dist.P2PTransferViews",
+  "tests.lean.dist.P2PPutViews",
   "tests.lean.TileLangSyntax",
   "tests.lean.TileLangManualAcceptance",
   "tests.lean.TileLangPinnedRoots",

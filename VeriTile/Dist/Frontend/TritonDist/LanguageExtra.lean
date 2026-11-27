@@ -1,9 +1,29 @@
 import VeriTile.Dist.Frontend.TritonDist.Syntax
 import VeriTile.Dist.Event.Access
 
-/-! The #81 rows of documents/dist/TritonDistSubset.md, at TD 7908e4ea9010.
-Values and locations are supplied by the source evaluator; the results below
-project to the signed S1 locations and S2 events. -/
+/-!
+The #81 rows of `documents/dist/TritonDistSubset.md`, at TD 7908e4ea9010.
+The source evaluator supplies values and locations. These plans project to the
+signed S1 locations and S2 events, with evidence from the signed call table:
+
+| Lowering | Evidence |
+| --- | --- |
+| `tid` | E-TD8 |
+| `laneid` | W3 |
+| `__shfl_sync_i32` and `__shfl_up_sync_i32` | W4 → W3, M7 |
+| `__syncthreads` | E-TD8, E-CU7, D8, M2 |
+| `ld` and its empty spin | D5, A1(a), A3 |
+| `ld_acquire` and its plain waits | A3, W1, `PrimitiveSources.md` §9 item 10 |
+| `membar` | W2 |
+| `st` | D5, A1(a), A8 for cross-GPU system-scope accesses |
+| `atomic_add` | D5, A1(a,b) |
+| `atomic_cas` and its grouped spin | D5, A1(a,b), A3, A8 for cross-GPU system-scope accesses |
+| `tl.atomic_add` | E-TR1, A1(d) |
+
+A proof relying on native atomicity for a system-scope operation on a word
+accessed by threads on different GPUs must name A8, the platform condition
+recorded in `documents/dist/PrimitiveSources.md` §7 (see I10 and E-CU5).
+-/
 
 namespace VeriTile.Dist.Frontend.TritonDist.LanguageExtra
 open Lean Elab Term
