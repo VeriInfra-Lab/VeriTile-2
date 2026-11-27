@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FusedSiLUResidual",
+    "lean": "VeriTile.Bench.Examples.FusedSiLU.Kernels.siluStepResidualKernel",
+    "source": "bench/examples/FusedSiLU/FusedSiLU.py::silu_residual"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "blockSize": 2
+  },
+  "arguments": [
+    {
+      "parameter": "siluReg",
+      "buffer": "siluReg"
+    },
+    {
+      "parameter": "residualReg",
+      "buffer": "residualReg"
+    },
+    {
+      "parameter": "outReg",
+      "buffer": "outReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "siluReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-siluReg.tensor"
+        },
+        "residualReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-residualReg.tensor"
+        }
+      },
+      "expected": {
+        "outReg": "tests/interp/fixtures/tensor_examples/silu-outReg.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "outReg",
+      "dtype": "bf16",
+      "shape": [
+        4
+      ]
+    }
+  ]
+}

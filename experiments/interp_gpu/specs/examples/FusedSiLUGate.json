@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FusedSiLUGate",
+    "lean": "VeriTile.Bench.Examples.FusedSiLU.Kernels.siluStepGateKernel",
+    "source": "bench/examples/FusedSiLU/FusedSiLU.py::silu_gate"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "binary64"
+  },
+  "constexpr": {
+    "blockSize": 2
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "gateReg",
+      "buffer": "gateReg"
+    },
+    {
+      "parameter": "zReg",
+      "buffer": "zReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "normal",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-xReg.tensor"
+        },
+        "gateReg": {
+          "dtype": "fp64",
+          "shape": [
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/silu-gateReg.tensor"
+        }
+      },
+      "expected": {
+        "zReg": "tests/interp/fixtures/tensor_examples/silu-zReg.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "zReg",
+      "dtype": "fp64",
+      "shape": [
+        4
+      ]
+    }
+  ]
+}
