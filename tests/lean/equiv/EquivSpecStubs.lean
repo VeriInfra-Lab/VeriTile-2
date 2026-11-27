@@ -2,7 +2,7 @@ import VeriTile.Staging.Equiv.EquivSpec
 import tests.lean.dist.AtomicSetRuns
 import tests.lean.dist.FetchAddObservation
 
-/-! Public witnesses for the unsigned #236 alternatives. -/
+/-! Public clients for the unsigned #236 decisions U1–U4. -/
 namespace VeriTile.Tests.EquivSpecStubs
 open VeriTile.Equiv VeriTile.Triton VeriTile.Dist
 noncomputable section
@@ -20,23 +20,27 @@ private theorem reduceIO {a b : KernelIO₁} {R : RoundingModel} {test : IOCase 
       c.outputFits c.leftFits c.rightFits c.initial c.atPid c.clean
     exact ⟨⟨l,hl,fl⟩,⟨r,hr,fr⟩,(agrees c l r hl hr).mpr (funext obs)⟩
 
-theorem checkedCrossIO (a b : KernelIO₁) (R : RoundingModel) :
-    AtSingleIO a b R (CrossSingle a b R) ↔ KernelIO₁.Equiv a b R := by
-  apply reduceIO
-  intro c l r hl hr
-  change observed c.window (c.run R a) = observed c.window (c.run R b) ↔ _
-  simp [hl,hr,observed]
+private theorem ambientOutput (R : RoundingModel) (k : AlgKernel) (s : BlockState)
+    (read : (RegionName → Nat → MemCell) → O) {out : O} :
+    GridOutput R k .single s read out ↔ ∃ f, execR R k s = some f ∧ read f.mem = out := by
+  constructor
+  · rintro ⟨order,f,exec,obs⟩; cases order; exact ⟨f,exec,obs⟩
+  · rintro ⟨f,exec,obs⟩; exact ⟨.single,f,exec,obs⟩
 
 theorem checkedGridIO (a b : KernelIO₁) (R : RoundingModel) :
-    AtSingleIO a b R (GridSingle a b R) ↔ KernelIO₁.Equiv a b R := checkedCrossIO a b R
+    AtSingleIO a b R (GridSingle a b R) ↔ KernelIO₁.Equiv a b R := by
+  apply reduceIO
+  intro c l r hl hr
+  unfold GridSingle GridEquiv
+  simp only [ambientOutput]
+  change (∀ out, (∃ f, c.run R a = some f ∧ c.window f.mem = out) ↔
+      ∃ f, c.run R b = some f ∧ c.window f.mem = out) ↔ _
+  simp only [hl,hr,Option.some.injEq,exists_eq_left']
+  exact ⟨fun h => ((h _).mp rfl).symm,fun h out => by rw [h]⟩
 
-theorem checkedCrossRules (bridge : RuleBridge F rules R) (ha : F a) (hb : F b) :
-    AtSingleIO a b R (CrossSingle a b R) ↔ Spec.Equiv a b rules :=
-  (checkedCrossIO a b R).trans ⟨bridge.complete ha hb,bridge.sound ha hb⟩
-
-theorem checkedGridRules (bridge : RuleBridge F rules R) (ha : F a) (hb : F b) :
-    AtSingleIO a b R (GridSingle a b R) ↔ Spec.Equiv a b rules :=
-  (checkedGridIO a b R).trans ⟨bridge.complete ha hb,bridge.sound ha hb⟩
+theorem checkedGridRules (sound : RulesSound F rules R) (ha : F a) (hb : F b)
+    (derivation : Spec.Equiv a b rules) : AtSingleIO a b R (GridSingle a b R) :=
+  (checkedGridIO a b R).mpr (sound ha hb derivation)
 
 private def actor : Agent := .cta ⟨0,[]⟩
 private def stopped (s f : BlockState) : Config Unit :=
@@ -125,22 +129,21 @@ theorem checkedDistIO (a b : KernelIO₁) (R : RoundingModel) (w : CellWrites) :
   simp only [oneActorOutputs w hl,oneActorOutputs w hr]
   exact ⟨fun h => ((h _).mp rfl).symm, fun h o => by rw [h]⟩
 
-theorem checkedDistRules (bridge : RuleBridge F rules R) (ha : F a) (hb : F b) (w : CellWrites) :
-    AtSingleIO a b R (DistSingle a b R w) ↔ Spec.Equiv a b rules :=
-  (checkedDistIO a b R w).trans ⟨bridge.complete ha hb,bridge.sound ha hb⟩
+theorem checkedDistRules (sound : RulesSound F rules R) (ha : F a) (hb : F b) (w : CellWrites)
+    (derivation : Spec.Equiv a b rules) : AtSingleIO a b R (DistSingle a b R w) :=
+  (checkedDistIO a b R w).mpr (sound ha hb derivation)
 
 private def output : RegionName := "out"
 private def addr : MemAccess .nat [] := .region output (.constNat 0)
 private def inc : AlgKernel := ⟨[output],[output],[
   .store .nat [] addr (.add .nat .nil (.load .nat addr .none) (.constNat 1)) .none]⟩
-private def skip : AlgKernel := ⟨[output],[output],[]⟩
 private def initial : BlockState := { (default : BlockState) with mem := fun _ _ => .of .nat 0 }
 private def readOut (m : RegionName → Nat → MemCell) := (m output 0).readAs .nat
 private def grid2 : Grid := ⟨[2]⟩
 private def idx (n : Fin 2) : GridIndex grid2 := fun axis =>
   ⟨n.val, by have h : axis.val = 0 := by have := axis.isLt; change axis.val < 1 at this; omega
              simp [Grid.dim,grid2,n.isLt]⟩
-private def both : Partition := .grid grid2 [idx 0,idx 1]
+private def forward : BlockOrder (.grid grid2) := .grid [idx 0,idx 1]
   (by simp; intro eq; have eq0 := congrArg (fun f : GridIndex grid2 => (f ⟨0,by decide⟩).val) eq; cases eq0)
   (by intro i
       let n : Fin 2 := i ⟨0,by decide⟩
@@ -156,32 +159,66 @@ private theorem stepInc (s : BlockState) :
   rw [execR_triv]
   simp [inc,addr,exec,stepStmts,stepStmt,NumericDType.add]
 
-private def computeProjection : Projection ComputeKernel where
-  project c := c.toAlgorithm?.toOption
-  signature | .mk ins outs _ => (ins,outs)
-  preserves := by
-    intro c k ok
-    cases c with
-    | mk ins outs body =>
-      cases h : ComputeStmt.listToAlgorithm? body with
-      | error _ => simp [ComputeKernel.toAlgorithm?_mk,h,Except.toOption] at ok
-      | ok body' => simp [ComputeKernel.toAlgorithm?_mk,h,Except.toOption] at ok; subst k; rfl
+private def reverseOrder {g : Grid} : BlockOrder (.grid g) → BlockOrder (.grid g)
+  | .grid indices once all => .grid indices.reverse (by simpa using once) (fun i => List.mem_reverse.mpr (all i))
 
-private def computeInc : Projected computeProjection :=
-  ⟨ComputeKernel.fromKernelBody inc.inputs inc.outputs inc.body,inc,by
-    simp [computeProjection,Except.toOption]⟩
+private def backwards := reverseOrder forward
 
-theorem crossPositive : CrossFrontendEquiv .triv computeInc (atBase inc) initial readOut := rfl
-theorem crossNegative : ¬ CrossFrontendEquiv .triv (atBase inc) (atBase skip) initial readOut := by
-  change observed readOut (execR .triv inc initial) ≠ observed readOut (execR .triv skip initial)
-  rw [stepInc,execR_triv]
-  simp [skip,exec,observed,readOut,initial,BlockState.writeMemTyped,BlockState.readMemValue,BlockState.readMemTyped]
+private def pidWriter : AlgKernel := ⟨[],[output],[.store .nat [] addr (.programId 0) .none]⟩
+private def fixedOrderWriter : AlgKernel := ⟨[],[output],[
+  .store .nat [] addr (.constNat 0) .none, .store .nat [] addr (.constNat 1) .none]⟩
 
-theorem gridPositive : GridEquiv .triv skip skip .single both initial readOut := by
-  simp [GridEquiv,both,runPartition,execR_triv,skip,exec,List.foldlM,observed,readOut]
-theorem gridNegative : ¬ GridEquiv .triv inc inc .single both initial readOut := by
-  simp [GridEquiv,both,runPartition,List.foldlM,stepInc,observed,readOut,
-    BlockState.writeMemTyped,BlockState.readMemValue,BlockState.readMemTyped,initial]
+private theorem singleWhen (hr : execR R k s = some f) (read : (RegionName → Nat → MemCell) → O) :
+    GridOutput R k .single s read out ↔ read f.mem = out := by
+  rw [ambientOutput]; simp [hr]
+
+private theorem orderReaches {part : Partition} (order : BlockOrder part)
+    (read : (RegionName → Nat → MemCell) → O) (h : (runPartition R k order s).map (fun f => read f.mem) = some out) :
+    GridOutput R k part s read out := by
+  obtain ⟨f,hf,ho⟩ := Option.map_eq_some_iff.mp h
+  exact ⟨order,f,hf,ho⟩
+
+private theorem grid2IncReachesTwo : GridOutput .triv inc (.grid grid2) initial readOut (some 2) := by
+  apply orderReaches forward
+  simp [forward,runPartition,List.foldlM,stepInc,readOut,BlockState.writeMemTyped,
+    BlockState.readMemValue,BlockState.readMemTyped,initial]
+
+/-- The same non-idempotent write runs once versus twice. -/
+theorem gridNegative : ¬ GridEquiv .triv inc inc .single (.grid grid2) initial readOut := by
+  intro eqv
+  have one := (singleWhen (stepInc initial) readOut).mp ((eqv _).mpr grid2IncReachesTwo)
+  contradiction
+
+/-- Distinct writing programs: the overwritten initial zero of the fixed-order
+writer leaves the same single result as incrementing zero once. -/
+theorem gridPositive : GridEquiv .triv inc fixedOrderWriter .single .single initial readOut := by
+  intro out
+  rw [singleWhen (stepInc initial),ambientOutput,execR_triv]
+  simp [fixedOrderWriter,addr,exec,stepStmts,stepStmt,readOut,initial,BlockState.writeMemTyped,
+    BlockState.readMemValue,BlockState.readMemTyped]
+
+/-- P6: the two legal orders of the same actual program reach different outputs. -/
+theorem pidOrders : GridOutput .triv pidWriter (.grid grid2) initial readOut (some 1) ∧
+    GridOutput .triv pidWriter (.grid grid2) initial readOut (some 0) := by
+  constructor
+  · apply orderReaches forward
+    simp [forward,runPartition,List.foldlM,execR_triv,pidWriter,exec,stepStmts,stepStmt,addr,
+      readOut,BlockState.writeMemTyped,BlockState.withGridIndex,GridIndex.toPids,grid2,idx]
+  · apply orderReaches backwards
+    simp [backwards,reverseOrder,forward,runPartition,List.foldlM,execR_triv,pidWriter,exec,stepStmts,stepStmt,addr,
+      readOut,BlockState.writeMemTyped,BlockState.withGridIndex,GridIndex.toPids,grid2,idx]
+
+/-- The fixed program replays the forward order on the entire memory for any input. -/
+theorem pidFixedReplaysForward (s : BlockState) :
+    (runPartition .triv pidWriter forward s).map BlockState.mem =
+      (execR .triv fixedOrderWriter s).map BlockState.mem := by
+  simp [forward,runPartition,List.foldlM,execR_triv,pidWriter,fixedOrderWriter,exec,stepStmts,stepStmt,
+    addr,BlockState.writeMemTyped,BlockState.withGridIndex,GridIndex.toPids,grid2,idx]
+
+theorem pidNotFixed : ¬ GridEquiv .triv pidWriter fixedOrderWriter (.grid grid2) .single initial readOut := by
+  intro h
+  have single := (ambientOutput .triv fixedOrderWriter initial readOut).mp ((h _).mp pidOrders.2)
+  simp [execR_triv,fixedOrderWriter,exec,stepStmts,stepStmt,addr,readOut,BlockState.writeMemTyped] at single
 
 /-- An idle distributed launch can only complete with its original memory. -/
 private def idle (w : CellWrites) : Launch Bool := {AtomicSetRuns.launch w with start := fun _ => none}
@@ -290,27 +327,71 @@ theorem safe_complete_not_pairwise (w : CellWrites) (s : DistState)
 example : Safe (launch putCellWrites) zeroState ∧ Completes (launch putCellWrites) zeroState ∧
     ¬ PairwiseOutputs (launch putCellWrites) (launch putCellWrites) zeroState (· (slotOf first)) :=
   safe_complete_not_pairwise _ _ (by simp [zeroState])
-/-- The shared predicate in U3(c) must characterize the output: True accepts every safe pair. -/
-theorem commonTrue (x : Launch P) (y : Launch Q) (s : DistState) (read : (Addr → MemCell) → O) :
-    CommonPost x y s read (fun _ => True) ↔ Safe x s ∧ Safe y s := by
-  constructor
-  · exact fun h => ⟨h.1.1,h.2.1⟩
-  · exact fun ⟨hx,hy⟩ => ⟨⟨hx,fun _ _ _ _ => trivial⟩,⟨hy,fun _ _ _ _ => trivial⟩⟩
+/-- Equal result sets still allow multiple final observations, even for a safe
+completing self-pair. Restricting DistEquiv to pairwise equality breaks this client. -/
+theorem safe_distinct_outputs (w : CellWrites) (s : DistState)
+    (zero : (s.cell counter).readAs .nat = some 0) :
+    Safe (launch w) s ∧ Completes (launch w) s ∧ DistEquiv (launch w) (launch w) s (· (slotOf first)) ∧
+      ¬ ∃! out, CompleteOutput (launch w) s (· (slotOf first)) out := by
+  obtain ⟨safe,comp,ne⟩ := safe_complete_not_pairwise w s zero
+  have self : DistEquiv (launch w) (launch w) s (· (slotOf first)) := fun _ => Iff.rfl
+  exact ⟨safe,comp,self,fun unique =>
+    ne ((pairwise_iff_distEquiv_unique _ _ _ _ comp comp).mpr ⟨self,unique⟩)⟩
 end FetchWitness
 
-#print axioms checkedCrossIO
+/-- Two distinct event-free launches compute the same memory observation. -/
+theorem distDistinct (w : CellWrites) :
+    DistEquiv (singleLaunch w .triv inc initial) (singleLaunch w .triv fixedOrderWriter initial)
+      (singleInitial initial) (fun cells => readOut (rankZeroMemory cells)) := by
+  have fixed : ∃ f, execR .triv fixedOrderWriter initial = some f := by
+    rw [execR_triv]; simp [fixedOrderWriter,exec,stepStmts,stepStmt,addr]
+  obtain ⟨f,hf⟩ := fixed
+  intro out
+  rw [oneActorOutputs w (stepInc initial),oneActorOutputs w hf]
+  exact ((singleWhen (stepInc initial) readOut).symm.trans (gridPositive out)).trans (singleWhen hf readOut)
+
+section Laws
+variable (R : RoundingModel) (k l m : AlgKernel) (i j t : Partition)
+    (s : BlockState) (read : (RegionName → Nat → MemCell) → O)
+
+theorem checkedGridRefl : GridEquiv R k k i i s read := fun _ => Iff.rfl
+
+theorem checkedGridSymm (h : GridEquiv R k l i j s read) : GridEquiv R l k j i s read :=
+  fun out => (h out).symm
+
+theorem checkedGridTrans (h : GridEquiv R k l i j s read) (h' : GridEquiv R l m j t s read) :
+    GridEquiv R k m i t s read := fun out => (h out).trans (h' out)
+
+variable (x : Launch P) (y : Launch Q) (z : Launch T) (d : DistState) (o : (Addr → MemCell) → O)
+
+theorem checkedDistRefl : DistEquiv x x d o := fun _ => Iff.rfl
+
+theorem checkedDistSymm (h : DistEquiv x y d o) : DistEquiv y x d o := fun out => (h out).symm
+
+theorem checkedDistTrans (h : DistEquiv x y d o) (h' : DistEquiv y z d o) :
+    DistEquiv x z d o := fun out => (h out).trans (h' out)
+end Laws
+
+#print axioms checkedGridRefl
+#print axioms checkedGridSymm
+#print axioms checkedGridTrans
+#print axioms checkedDistRefl
+#print axioms checkedDistSymm
+#print axioms checkedDistTrans
 #print axioms checkedGridIO
 #print axioms checkedDistIO
-#print axioms checkedCrossRules
 #print axioms checkedGridRules
 #print axioms checkedDistRules
-#print axioms crossPositive
-#print axioms crossNegative
 #print axioms gridPositive
 #print axioms gridNegative
+#print axioms pidOrders
+#print axioms pidFixedReplaysForward
+#print axioms pidNotFixed
 #print axioms distPositive
+#print axioms distDistinct
 #print axioms distNegative
+#print axioms pairwise_iff_distEquiv_unique
 #print axioms FetchWitness.safe_complete_not_pairwise
-#print axioms FetchWitness.commonTrue
+#print axioms FetchWitness.safe_distinct_outputs
 end
 end VeriTile.Tests.EquivSpecStubs
