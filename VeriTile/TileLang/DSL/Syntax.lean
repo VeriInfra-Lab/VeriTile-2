@@ -1,6 +1,6 @@
 import VeriTile.TileLang.DSL.Accepted
 
-/-! Closed source syntax for the A3.1 freeze draft. The public quotation returns
+/-! Closed source syntax of A3.1. The public quotation returns
 a typed Program, including calls whose semantics are deferred.
 Braces delimit Python suites; semicolons separate their statements. -/
 namespace VeriTile.TileLang

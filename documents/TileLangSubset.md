@@ -1,6 +1,6 @@
 # TileLang source syntax
 
-Import `VeriTile.TileLang` to quote a factory or a direct JIT kernel. Both `tilelang { … }` and `tilescale { … }` return a `VeriTile.TileLang.Program`. The grammar is shared. The selected mode is stored on the typed object. This revision implements the user's T1–T10 decisions for A3.1 and is awaiting coordinator review and signature. [Decisions](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7197427447) · [Additional acceptance criteria](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7197942972)
+Import `VeriTile.TileLang` to quote a factory or a direct JIT kernel. Both `tilelang { … }` and `tilescale { … }` return a `VeriTile.TileLang.Program`. The grammar is shared. The selected mode is stored on the typed object. This revision implements the user's T1–T10 decisions for A3.1. The signature is described in [Typed objects and admission](#typed-objects-and-admission). [Decisions](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7197427447) · [Additional acceptance criteria](https://github.com/VeriInfra-Lab/VeriTile-2/issues/83#issuecomment-7197942972)
 
 ## Quoting a kernel
 
