@@ -18,6 +18,7 @@ The method is described in documents/TileLangSubset.md (Explicit exclusions):
 executed, and writes the fixture; with --check it compares instead. --check alone checks that
 every fixture row is excluded by the rule or kept with its reason, and that the excluded rows
 are the list in `syntacticCall_tileLang_excluded` and the generated matrix's `never` rows.
+The same check validates the reverse inventory and each device emitter's disposition.
 """
 import argparse
 import ast
@@ -28,8 +29,13 @@ from pathlib import Path
 import re
 import subprocess
 
+if __package__:
+    from . import scan_tilelang_emitters as reverse
+else:
+    import scan_tilelang_emitters as reverse
+
 ROOT = Path(__file__).resolve().parents[1]
-PIN = "35850c06875bcc84751417982bf7b4d662bafdbc"
+PIN = reverse.PIN
 TVM = "0215a96cba91eabac903afa4ec1e42c99257e4c3"
 EXPORTS = ROOT / "scripts/fixtures/tilelang_surface/exports.tsv"
 ADMISSIONS = EXPORTS.with_name("admissions.json")
@@ -210,7 +216,15 @@ def main():
     if errors:
         parser.exit(1, "\n".join(errors) + "\n")
     mine = [r["export"] for r in rows if r["status"] == "excluded"]
-    print(f"{len(mine)} excluded and {len(rows) - len(mine)} kept exports reach an instruction family")
+    # These two composite tile operators are lowered by copy.cc. Their
+    # device paths are recorded by the reverse scan, outside the forward pass.
+    accounted = set(mine) | KEPT.keys() | {"copy", "copy_cluster"}
+    try:
+        count = reverse.check(args.sources[0] if args.sources else None, allowed_exports=accounted)
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        parser.exit(1, f"{error}\n")
+    print(f"Forward scan: {len(mine)} excluded and {len(rows) - len(mine)} kept exports reach an instruction family")
+    print(f"{count} CUDA template emitters accounted for by the reverse scan")
 
 
 if __name__ == "__main__":

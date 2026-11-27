@@ -80,6 +80,9 @@ class ReverseInstructions(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 reverse.main(args, fixture=fixture, pin=pin)
 
+            with self.assertRaisesRegex(ValueError, "no excluded or kept disposition"):
+                reverse.check(None, fixture, allowed_exports=set())
+
             put(root / "exports.tsv", [("export",), ("other",)])
             with self.assertRaisesRegex(ValueError, "unknown export"):
                 reverse.check(None, fixture)

@@ -146,7 +146,7 @@ def read_tsv(path, header):
         return list(reader)
 
 
-def routes(directory, sources=None):
+def routes(directory, sources=None, allowed_exports=None):
     with (directory / "exports.tsv").open() as stream:
         public = {row["export"] for row in csv.DictReader(stream, delimiter="\t")}
     entries = {}
@@ -158,6 +158,8 @@ def routes(directory, sources=None):
             for export in exports.split(","):
                 if export not in public:
                     raise ValueError(f"{name}: unknown export {export!r}")
+                if allowed_exports is not None and export not in allowed_exports:
+                    raise ValueError(f"{name}: export {export!r} has no excluded or kept disposition")
         # Each witness is a pinned path, line, and literal fragment on that line.
         for ref in row["source_witnesses"].split(" | "):
             file, line, fragment = ref.split(":", 2)
@@ -171,8 +173,8 @@ def routes(directory, sources=None):
     return entries
 
 
-def inventory(fixture, sources=None):
-    known = routes(fixture.parent, sources)
+def inventory(fixture, sources=None, allowed_exports=None):
+    known = routes(fixture.parent, sources, allowed_exports)
     rows, used = {}, set()
     for row in read_tsv(fixture, HEADER):
         key = Function(row["file"], int(row["line"]), row["function"])
@@ -187,9 +189,9 @@ def inventory(fixture, sources=None):
     return rows
 
 
-def check(repo, fixture=FIXTURE, pin=PIN):
+def check(repo, fixture=FIXTURE, pin=PIN, *, allowed_exports=None):
     sources = Sources(repo, pin) if repo else None
-    expected = inventory(fixture, sources)
+    expected = inventory(fixture, sources, allowed_exports)
     if sources:
         actual = sources.emitters()
         for key in sorted(actual.keys() | expected.keys()):
