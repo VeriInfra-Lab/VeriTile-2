@@ -147,6 +147,48 @@ theorem remote_pair {j : Nat} {b : Agent} {e' : Emission} (run : Run (launch on 
   cases eq
   exact ⟨_,_,rfl,he⟩
 
+private theorem bumpRelease {ev : Event} {b : Bump} (bump : ev.bump? = some b) :
+    ev.releaseOf? = some (b.counter,b.mode) := by
+  cases ev <;> simp_all [Event.bump?,Event.releaseOf?]
+
+/-- In any reachable prefix, a direct edge between distinct ranks connects the
+sender's system CAS on the peer flag to that peer's matching receive CAS. -/
+theorem cross_rank_edge {i j : Nat} {x y : Occurrence}
+    (run : Run (launch on n lanes rows cols w) ((launch on n lanes rows cols w).initial initial) cs f)
+    (left : f.history[i]? = some x) (right : f.history[j]? = some y)
+    (distinct : x.owner.rankOf ≠ y.owner.rankOf)
+    (edge : DirectHB (launch on n lanes rows cols w) f.history payload i j) :
+    ∃ r t, x = .issued (Stream.lane r t) (s1 r t) ∧ y = .issued (Stream.lane t r) (w1 t r) := by
+  have H := reachableShape run
+  have px := H.programs x (List.mem_of_getElem? left)
+  have py := H.programs y (List.mem_of_getElem? right)
+  have sync {a b : Agent × Event} (xa : x.event? = some a) (yb : y.event? = some b)
+      (ss : SyncEdge (launch on n lanes rows cols w).reach payload a b) :
+      ∃ r t, x = .issued (Stream.lane r t) (s1 r t) ∧ y = .issued (Stream.lane t r) (w1 t r) := by
+    cases x <;> cases xa <;> try contradiction
+    cases y <;> cases yb <;> try contradiction
+    obtain ⟨r,t,rfl,rfl⟩ := remote_pair run left right distinct ss
+    simp only [Occurrence.program?,Occurrence.owner,Option.some.injEq] at px py
+    exact ⟨r,t,congrArg (fun a => Occurrence.issued a (s1 r t)) px,
+      congrArg (fun b => Occurrence.issued b (w1 t r)) py⟩
+  obtain ⟨x',y',xi,yj,_,po|round|delivery|rf|count⟩ := edge
+  all_goals rw [left] at xi; rw [right] at yj; cases xi; cases yj
+  · obtain ⟨a,xa,ya⟩ := po
+    exact False.elim (distinct (congrArg Agent.rankOf (Option.some.inj (px.symm.trans (xa.trans (ya.symm.trans py))))))
+  · obtain ⟨c,a,b,m,m',members,k,_,_,_,_,_,_,_,_,ae,be,_,_,modes⟩ := round
+    rw [left] at ae
+    rw [right] at be
+    exact sync ae be ⟨c,m,m',rfl,rfl,modes⟩
+  · obtain ⟨a,t,_,rfl⟩ := delivery
+    cases py
+  · obtain ⟨a,b,_,_,ae,be,_,_,ss⟩ := rf
+    exact sync ae be ss
+  · obtain ⟨a,ev,b,c,v,m,threshold,m',_,ae,bump,be,_,modes⟩ := count
+    rw [left] at ae
+    rw [right] at be
+    exact sync ae be ⟨c,m,m',bumpRelease bump,rfl,modes⟩
+
+#print axioms cross_rank_edge
 #print axioms reached_segments_disjoint
 #print axioms k11_disjoint
 #print axioms local_counter

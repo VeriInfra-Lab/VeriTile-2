@@ -53,7 +53,7 @@ def rel (a : Agent) (c : Counter) : Occurrence :=
 def acq (a : Agent) (c : Counter) (n : Nat) : Occurrence :=
   .issued a ⟨a,.wait c .ge n (.atomic .gpu .acquire),.noValue⟩
 
-/-- Reuse the signed add-only edge with its actual scope, counter and cutpoints.
+/-- Reuse the fingerprinted add-only counting edge with its actual scope, counter and cutpoints.
 Require the real successful wait and the checked add-only history, never an HB premise. -/
 theorem streamEdge {l : Launch P} {h : History} {p : Addr} {i j n : Nat}
     (order : i < j) (same : a.rankOf = b.rankOf)
