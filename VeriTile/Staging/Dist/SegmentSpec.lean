@@ -170,16 +170,20 @@ open VeriTile.Triton (BlockState MemCell Stmt Kernel stepStmts exec)
 
 /-! ## Segments of upstream statements (S3.3) -/
 
-/-- Stub (S3.3), under signed statements. Part 1. The segment that runs the upstream
-statements `code` as agent `a`, with the footprints computed from the
-statements. -/
-opaque Segment.ofStmts (a : Agent) (code : List Stmt) : Segment :=
-  ⟨a, fun _ => none, fun _ => ∅, fun _ => ∅⟩
+/-- Under signed statements (S3.3). Part 1. The segment that runs the upstream
+statements `code` as agent `a`: upstream `stepStmts` on the view of `a`,
+written back. Both footprints are every cell visible to `a`, and empty when
+`code` is empty. They do not look at what the statements access. -/
+noncomputable def Segment.ofStmts (a : Agent) (code : List Stmt) : Segment where
+  agent := a
+  run σ := (stepStmts code (σ.view a)).map (σ.setView a)
+  reads _ := {p | code ≠ [] ∧ ViewName.Visible a p}
+  writes _ := {p | code ≠ [] ∧ ViewName.Visible a p}
 
 /-- Signed. Part 1. Proved by S3.3. A segment made from statements is run by
 the agent it was made for. -/
 theorem Segment.ofStmts_agent (a : Agent) (code : List Stmt) :
-    (Segment.ofStmts a code).agent = a := sorry
+    (Segment.ofStmts a code).agent = a := rfl
 
 /-- Signed. Part 1. Proved by S3.3. The bridge for one segment of a CTA:
 running it on the distributed state is running the upstream `stepStmts` of its
@@ -187,7 +191,7 @@ statements on the block state of the CTA and writing the result back. It fails
 exactly when the upstream execution fails. -/
 theorem Segment.ofStmts_run (c : Cta) (code : List Stmt) (σ : DistState) :
     (Segment.ofStmts (.cta c) code).run σ =
-      (stepStmts code (σ.block c.rank c.pid)).map (σ.setBlock c.rank c.pid) := sorry
+      (stepStmts code (σ.block c.rank c.pid)).map (σ.setBlock c.rank c.pid) := rfl
 
 /-- Signed. Part 1. Proved by S3.3. The same equation for every agent, on
 the projection of the agent. For a group or a thread it is what running
@@ -195,13 +199,81 @@ upstream statements as that agent means, and it says nothing before S1.6
 defines the projection. Not claimed: that the runs of the threads of a CTA
 compose to the upstream execution on the block state of the CTA. -/
 theorem Segment.ofStmts_run_view (a : Agent) (code : List Stmt) (σ : DistState) :
-    (Segment.ofStmts a code).run σ = (stepStmts code (σ.view a)).map (σ.setView a) := sorry
+    (Segment.ofStmts a code).run σ = (stepStmts code (σ.view a)).map (σ.setView a) := rfl
+
+/-- A block state with its memory replaced by that of another one is the other
+one when the rest agrees. -/
+private theorem withMem_eq {x y : BlockState} (hr : x.regs = y.regs) (hp : x.pids = y.pids)
+    (hu : x.undef = y.undef) (hn : x.numPids = y.numPids) : { x with mem := y.mem } = y := by
+  cases x; cases y; cases hr; cases hp; cases hu; cases hn; rfl
+
+/-- Two states whose contexts agree at `t` give `t` the same local state. -/
+private theorem sameLocal_of_context {σ τ : DistState} {t : Agent}
+    (h : σ.context t = τ.context t) : DistState.SameLocal t σ τ := by
+  cases t with
+  | rank => rfl
+  | _ =>
+    refine withMem_eq (x := σ.view _) (y := τ.view _) ?_ rfl ?_ ?_
+    · exact congrArg AgentContext.regs h
+    · exact congrArg AgentContext.undef h
+    · exact congrArg AgentContext.numPids h
 
 /-- Signed. Part 1. Proved by S3.3. The footprints computed from the
 statements of a CTA are sound. Nothing is claimed here for a group or a
 thread: it needs the laws that S1.6 gives the projection. -/
 theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
-    (Segment.ofStmts (.cta c) code).FootprintSound := sorry
+    (Segment.ofStmts (.cta c) code).FootprintSound := by
+  constructor
+  · intro σ σ' hrun p hp
+    rw [Segment.ofStmts_run, Option.map_eq_some_iff] at hrun
+    obtain ⟨b, hb, rfl⟩ := hrun
+    by_cases hcode : code = []
+    · subst hcode
+      rw [stepStmts.nil, Option.some.injEq] at hb
+      rw [← hb, DistState.setBlock_block]
+    · rw [DistState.setBlock_eq_setSubView]
+      exact DistState.cell_setSubView_of_not_visible _ _ _ _ fun hv => hp ⟨hcode, hv⟩
+  · intro σ σ' hrun
+    rw [Segment.ofStmts_run, Option.map_eq_some_iff] at hrun
+    obtain ⟨b, -, rfl⟩ := hrun
+    refine ⟨⟨b, rfl⟩, fun t ht _ => sameLocal_of_context ?_⟩
+    have hne : t ≠ .cta c := by
+      rintro rfl
+      exact ht rfl
+    exact (DistState.context_setSubView_ne σ hne b).symm
+  · intro σ₁ σ₂ hagree hlocal
+    refine ⟨rfl, rfl, fun σ₁' hrun => ?_⟩
+    rw [Segment.ofStmts_run, Option.map_eq_some_iff] at hrun
+    obtain ⟨b, hb, rfl⟩ := hrun
+    by_cases hcode : code = []
+    · subst hcode
+      rw [stepStmts.nil, Option.some.injEq] at hb
+      refine ⟨σ₂, ?_, fun p hp => (hp.1 rfl).elim, ?_⟩
+      · rw [Segment.ofStmts_run, stepStmts.nil, Option.map_some, DistState.setBlock_block]
+      · rw [← hb, DistState.setBlock_block]
+        exact hlocal
+    · -- The block state of the CTA is its visible cells and its local state.
+      have hblock : σ₁.block c.rank c.pid = σ₂.block c.rank c.pid := by
+        have hmem : (σ₁.block c.rank c.pid).mem = (σ₂.block c.rank c.pid).mem := by
+          funext n i
+          exact hagree _ ⟨hcode, ViewName.visible_address (.cta c) n i⟩
+        have hl : { σ₁.block c.rank c.pid with mem := (σ₂.block c.rank c.pid).mem } =
+            σ₂.block c.rank c.pid := hlocal
+        rw [← hl]
+        exact congrArg (fun m => { σ₁.block c.rank c.pid with mem := m }) hmem
+      refine ⟨σ₂.setBlock c.rank c.pid b, ?_, ?_, ?_⟩
+      · rw [Segment.ofStmts_run, ← hblock, hb, Option.map_some]
+      · intro p hp
+        rw [DistState.cell_setBlock_of_visible _ _ _ _ hp.2,
+          DistState.cell_setBlock_of_visible _ _ _ _ hp.2]
+      · have hu : (σ₁.context (.cta ⟨c.rank, c.pid⟩)).undef =
+            (σ₂.context (.cta ⟨c.rank, c.pid⟩)).undef := congrArg BlockState.undef hblock
+        have hn : (σ₁.context (.cta ⟨c.rank, c.pid⟩)).numPids =
+            (σ₂.context (.cta ⟨c.rank, c.pid⟩)).numPids := congrArg BlockState.numPids hblock
+        show { (σ₁.setBlock c.rank c.pid b).block c.rank c.pid with
+            mem := ((σ₂.setBlock c.rank c.pid b).block c.rank c.pid).mem } =
+          (σ₂.setBlock c.rank c.pid b).block c.rank c.pid
+        rw [DistState.block_setBlock, DistState.block_setBlock, hu, hn]
 
 /-! # Part 2: the continuation of an agent -/
 
@@ -281,7 +353,7 @@ structure EventCut where
 
 /-- UNSIGNED. Part 2. N7, decided as written (2026-11-25); not frozen. Run
 the segments and issue their event groups in list order. -/
-def AgentProgram.ofCuts (owner : Agent) : AgentProgram (List EventCut) where
+noncomputable def AgentProgram.ofCuts (owner : Agent) : AgentProgram (List EventCut) where
   segment cuts := cuts.head?.map EventCut.code |>.getD (Segment.ofStmts owner [])
   next cuts σ := match cuts with
     | [] => .finish
@@ -319,7 +391,7 @@ state is what is left of a flat body: upstream statements and, at each
 synchronization or communication point, the event performed there. A step
 runs the statements before the first event, emits that event and continues
 with the body after it, whatever the event read. -/
-def AgentProgram.ofBody (a : Agent) : AgentProgram (List (Stmt ⊕ Emission)) where
+noncomputable def AgentProgram.ofBody (a : Agent) : AgentProgram (List (Stmt ⊕ Emission)) where
   segment body := Segment.ofStmts a ((body.takeWhile Sum.isLeft).filterMap Sum.getLeft?)
   next body _ :=
     match body.dropWhile Sum.isLeft with
@@ -338,7 +410,7 @@ theorem AgentProgram.ofBody_step_noSync (a : Agent) (code : List Stmt) (σ σ' :
 result lists, in program order, the segments between the events and the
 events. It is fixed before execution. `go code` slices a body after the
 statements `code`, which have not yet been closed into a segment. -/
-def slice (a : Agent) (body : List (Stmt ⊕ Emission)) : List (Segment ⊕ Event) :=
+noncomputable def slice (a : Agent) (body : List (Stmt ⊕ Emission)) : List (Segment ⊕ Event) :=
   go [] body
 where
   go (code : List Stmt) : List (Stmt ⊕ Emission) → List (Segment ⊕ Event)
