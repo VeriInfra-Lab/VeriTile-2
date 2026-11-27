@@ -4,12 +4,14 @@
     python3 -B -m unittest discover -s experiments/interp_gpu/deepep_v1 -p 'test_*.py'
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
 import re
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -106,6 +108,46 @@ class Batch(unittest.TestCase):
             actual = [(op, sem, scope) for op, sem, scope, operand in access.findall(cuda) if operand == name]
             self.assertCountEqual(actual, [('ld', 'ACQUIRE', 'CTA')] * loads + [('st', 'RELEASE', 'CTA')] * stores)
 
+    def test_rank_hashes_the_files_materialized_by_git_apply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'fixture'
+            checkout = root / 'checkout'
+            port = checkout / dispatch_variant.PORT
+            port.mkdir(parents=True)
+            (port / 'kernel.py').write_bytes(b'before\n')
+            subprocess.run(['git', 'init', '-q', str(checkout)], check=True)
+            git = ['git', '-C', str(checkout)]
+            subprocess.run([*git, 'add', '.'], check=True)
+            subprocess.run([*git, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                            'commit', '-qm', 'source fixture'], check=True)
+            pin = subprocess.check_output([*git, 'rev-parse', 'HEAD'], text=True).strip()
+            (root / 'dispatch-release.patch').write_text(
+                '--- a/kernel.py\n+++ b/kernel.py\n@@ -1 +1 @@\n-before\n+after\n')
+            original = {'kernel.py': hashlib.sha256(b'before\n').hexdigest()}
+            changed = {'kernel.py': hashlib.sha256(b'after\n').hexdigest()}
+            actual_run = subprocess.run
+
+            def missing_patch(command, **kwargs):
+                if command[:2] == ['git', 'apply']:
+                    return subprocess.CompletedProcess(command, 0)
+                return actual_run(command, **kwargs)
+
+            for apply_patch in (True, False):
+                log = io.StringIO()
+                with self.subTest(applied=apply_patch), mock.patch.object(dispatch_variant, 'PIN', pin), \
+                        mock.patch.object(dispatch_variant, 'HERE', root), \
+                        mock.patch('gpurun.dist.deepep_port', return_value=port), \
+                        mock.patch('gpurun.run.load_entry', return_value=mock.Mock()), \
+                        mock.patch('subprocess.run', actual_run if apply_patch else missing_patch), \
+                        contextlib.redirect_stdout(log):
+                    dispatch_variant.run(0, 1, {}, {}, {})
+                (root / 'stdout.log').write_text('== repeat 0 ==\n' + log.getvalue())
+                error = judge_variant.source_error(root, {'ranks': 1, 'repeats': 1}, original, changed)
+                if apply_patch:
+                    self.assertIsNone(error)
+                else:
+                    self.assertIn('kernel.py has the original hash', error)
+
     def test_inputs_stay_where_the_port_is_documented(self):
         for test in TESTS:
             shapes = {spec['name']: spec['shape'] for spec in test['inputs'] + test['outputs']}
@@ -180,8 +222,66 @@ class Judge(unittest.TestCase):
     def test_reference_bundle_is_equal(self):
         self.assertEqual(self.verdicts(), {'intranode/identity': 'equal', 'intranode/rank_weighted': 'equal'})
 
+    def candidate(self, name=judge_variant.NAME):
+        # These tensor bytes come from gpurun's CPU reference entry. Supply the source
+        # evidence of the named candidate explicitly for isolated judge tests.
+        self.edit('manifest.json', lambda m: m.update(batch_id=name))
+        pins = json.loads(Path(judge_variant.__file__).with_name('source-sha256.json').read_text())
+        files = {**pins['original'], **pins[name]}
+        for test in TESTS:
+            lines = []
+            for repeat in range(test['repeats']):
+                lines.append(f'== repeat {repeat} ==')
+                for rank in range(test['ranks']):
+                    lines.append(dispatch_variant.SOURCE_RECORD + json.dumps({'rank': rank, 'files': files}))
+            (self.bundle / test['id'] / 'stdout.log').write_text('\n'.join(lines) + '\n')
+
+    def test_original_files_and_incomplete_source_records_reject_equal_tensors(self):
+        path = self.bundle / TESTS[0]['id'] / 'stdout.log'
+        pins = json.loads(Path(judge_variant.__file__).with_name('source-sha256.json').read_text())
+        for problem in ('original', 'unknown hash', 'missing file', 'extra file', 'duplicate rank', 'missing repeat'):
+            with self.subTest(problem=problem):
+                self.candidate()
+                lines = path.read_text().splitlines()
+                files = {**pins['original'], **pins[judge_variant.NAME]}
+                if problem == 'original':
+                    files = pins['original']
+                elif problem == 'unknown hash':
+                    files['intranode/dispatch.py'] = '0' * 64
+                elif problem == 'missing file':
+                    files.pop('buffer.py')
+                elif problem == 'extra file':
+                    files['extra.py'] = '0' * 64
+                lines[-1] = dispatch_variant.SOURCE_RECORD + json.dumps({'rank': 1, 'files': files})
+                if problem == 'duplicate rank':
+                    lines[-1] = lines[-2]
+                if problem == 'missing repeat':
+                    lines = lines[:3]
+                path.write_text('\n'.join(lines) + '\n')
+                results = judge_variant.compare_recorded(self.bundle)
+                self.assertEqual([r['verdict'] for r in results], ['different', 'equal'])
+                self.assertEqual([d['output'] for d in results[0]['differences']], ['source hashes'])
+
+    def test_variant_rejects_bad_metadata_with_matching_tensors(self):
+        self.candidate()
+        path = self.bundle / TESTS[0]['id'] / 'meta.json'
+        valid = path.read_text()
+        for field in ('status', 'ranks', 'repeats', 'inputs', 'distinct'):
+            with self.subTest(field=field):
+                meta = json.loads(valid)
+                if field == 'inputs':
+                    meta[field]['x']['sha256'] = '0' * 64
+                elif field == 'distinct':
+                    meta[field]['rank0/unexpected'] = {}
+                else:
+                    meta[field] = {'status': 'timeout', 'ranks': 3, 'repeats': 1}[field]
+                path.write_text(json.dumps(meta))
+                results = judge_variant.compare_recorded(self.bundle)
+                self.assertEqual([r['verdict'] for r in results], ['different', 'equal'])
+                self.assertEqual([d['output'] for d in results[0]['differences']], ['metadata'])
+
     def test_candidate_matches_recorded_gpu_hashes_and_repeat_counts(self):
-        self.edit('manifest.json', lambda m: m.update(batch_id=judge_variant.NAME))
+        self.candidate()
         self.assertEqual([r['verdict'] for r in judge_variant.compare_recorded(self.bundle)], ['equal', 'equal'])
         key = 'rank1/combined_x'
         self.edit('intranode/rank_weighted/meta.json',
@@ -193,12 +293,21 @@ class Judge(unittest.TestCase):
 
     def test_combined_request_replays_the_same_recorded_tensors(self):
         name = 'deepep-v1-variant-intranode-002'
-        self.edit('manifest.json', lambda m: m.update(batch_id=name))
+        self.candidate(name)
         results = judge_variant.compare_recorded(self.bundle, judge.BATCHES / name)
         self.assertEqual([r['verdict'] for r in results], ['equal', 'equal'])
 
+    def test_combined_request_rejects_dispatch_only_sources(self):
+        self.candidate()
+        name = 'deepep-v1-variant-intranode-002'
+        self.edit('manifest.json', lambda m: m.update(batch_id=name))
+        results = judge_variant.compare_recorded(self.bundle, judge.BATCHES / name)
+        for result in results:
+            self.assertEqual(result['verdict'], 'different')
+            self.assertEqual([d['output'] for d in result['differences']], ['source hashes'])
+
     def test_recorded_comparison_detects_one_wrong_rank_output(self):
-        self.edit('manifest.json', lambda m: m.update(batch_id=judge_variant.NAME))
+        self.candidate()
         self.plant(TESTS[0], 'rank0/recv_src_idx', lambda b: bytes([b[0] ^ 1]) + b[1:])
         results = judge_variant.compare_recorded(self.bundle)
         self.assertEqual([r['verdict'] for r in results], ['different', 'equal'])
