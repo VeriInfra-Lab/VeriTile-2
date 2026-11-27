@@ -26,6 +26,33 @@ def syntacticCall (mode : Mode) (name : Name) : Bool :=
       (mode == .tileScale && (low || ["copy", "atomic_add", "tma_copy", "alloc_shared"].contains field)))
   | _ => name == `math.ceil || sourceIdentifier name
 
+/-- Signed (#83, A3.1). In TileLang mode the source grammar classifies no explicit
+WGMMA, TCGen05 or proxy-fence name as a call or value, so the quotation fails to
+parse. The parser applies this classifier in `validateUnit` (tests/lean/TileLangSyntax.lean). -/
+theorem syntacticCall_tileLang_excluded (field : String)
+    (h : ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
+      (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) = true) :
+    syntacticCall .tileLang (.str `T field) = false := by
+  simp only [syntacticCall, h]; rfl
+
+/-- Signed (#83, A3.1). In TileLang mode a name outside the pinned export surface,
+`math.ceil` and unqualified source identifiers is not a call, so it fails to parse. -/
+theorem syntacticCall_tileLang_closed (n : Name) (h : syntacticCall .tileLang n = true) :
+    (∃ field, n = .str `T field ∧ exportedNames.contains field = true ∧
+      ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
+        (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) = false) ∨
+    n = `math.ceil ∨ sourceIdentifier n = true := by
+  unfold syntacticCall at h
+  split at h
+  · rename_i field
+    refine .inl ⟨field, rfl, ?_⟩
+    revert h
+    cases ["wgmma", "tcgen05", "ptx_wgmma", "ptx_tcgen05", "fence_proxy", "ptx_fence_proxy"].any
+      (fun opcode => field == opcode || field.startsWith (opcode ++ "_")) <;>
+      simp [show (Mode.tileLang == Mode.tileScale) = false from rfl,
+        show (Mode.tileLang != Mode.tileLang) = false from rfl]
+  · exact .inr (by simpa using h)
+
 def sourceValueName (n : Name) : Bool := sourceIdentifier n || match n with
   | .str base field => (sourceIdentifier base && ["shape", "dtype"].contains field) ||
       (base == `T && ["float16", "float32", "bfloat16", "int32", "int64", "bool"].contains field) ||

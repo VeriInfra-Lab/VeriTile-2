@@ -180,4 +180,15 @@ example : ["0.0", "2.5", "41e3", "1E-2", "0.5e+3"].all (fun s => (decimalProgram
 example : ["", "2", "-2.5", "01.0", ".5", "2.", "1e", "1e+", "1e2.5", " 2.5 "].all
     (fun s => !(decimalProgram s).accepted) := by decide +kernel
 
+-- The signed exclusion theorems are not vacuous: the classifier admits a nearby
+-- TileLang call and the excluded names in TileScale mode, and only the mode changes the parse.
+example : syntacticCall .tileLang `T.gemm = true := by decide +kernel
+example : syntacticCall .tileScale `T.wgmma_gemm = true := by decide +kernel
+example : syntacticCall .tileLang `T.unregistered_name = false := by decide +kernel
+run_cmd
+  for body in ["T.wgmma_gemm(X, Y, X)", "T.tcgen05_gemm(X, Y, X)", "T.fence_proxy_async()"] do
+    unless (Parser.runParserCategory (← getEnv) `term ((eager body).replace "tilelang {" "tilescale {")).isOk do
+      throwError "tilescale rejects {body}"
+    parseFails (eager body)
+
 end TileLangSyntaxTests
