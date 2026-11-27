@@ -159,22 +159,36 @@ private def literal (op field : String) (arg : TSyntax `tritonExpr) : TermElabM 
   let `(tritonExpr| $s:str) := arg | throwErrorAt arg "{op}: {field} must be a string literal"
   return s.getString
 
-private def scopeTerm (op : String) (arg : TSyntax `tritonExpr) : TermElabM (TSyntax `term) := do
-  match ← literal op "scope" arg with
-  | "cta" => `(Scope.cta)
-  | "gpu" => `(Scope.gpu)
-  | "sys" => `(Scope.sys)
-  | scope => throwErrorAt arg "{op}: unsupported scope '{scope}'"
+private inductive ScopedOp where
+  | load | plainLoad | store | add | cas | tritonAdd
 
-private def atomicMode (op field : String) (scope semantic : TSyntax `tritonExpr) :
+private def ScopedOp.label : ScopedOp → String
+  | .load => "ld"
+  | .plainLoad => "ld_acquire"
+  | .store => "st"
+  | .add => "atomic_add"
+  | .cas => "atomic_cas"
+  | .tritonAdd => "tl.atomic_add"
+
+private def scopeTerm (op : ScopedOp) (arg : TSyntax `tritonExpr) : TermElabM (TSyntax `term) := do
+  match op, ← literal op.label "scope" arg with
+  | _, "gpu" => `(Scope.gpu)
+  | _, "sys" => `(Scope.sys)
+  | .cas, "cta" | .tritonAdd, "cta" => `(Scope.cta)
+  | _, scope => throwErrorAt arg "{op.label}: unsupported scope '{scope}'"
+
+private def atomicMode (op : ScopedOp) (scope semantic : TSyntax `tritonExpr) :
     TermElabM (TSyntax `term) := do
   let scope ← scopeTerm op scope
-  let order ← match ← literal op field semantic with
-    | "relaxed" => `(MemOrder.relaxed)
-    | "acquire" => `(MemOrder.acquire)
-    | "release" => `(MemOrder.release)
-    | "acq_rel" => `(MemOrder.acqRel)
-    | order => throwErrorAt semantic "{op}: unsupported {field} '{order}'"
+  let field := match op with | .tritonAdd => "sem" | _ => "semantic"
+  let order ← match op, ← literal op.label field semantic with
+    | _, "relaxed" => `(MemOrder.relaxed)
+    | .store, "release" => `(MemOrder.release)
+    | .load, "acquire" => `(MemOrder.acquire)
+    | .add, "release" | .cas, "release" | .tritonAdd, "release" => `(MemOrder.release)
+    | .add, "acquire" | .cas, "acquire" | .tritonAdd, "acquire" => `(MemOrder.acquire)
+    | .add, "acq_rel" | .cas, "acq_rel" | .tritonAdd, "acq_rel" => `(MemOrder.acqRel)
+    | _, order => throwErrorAt semantic "{op.label}: unsupported {field} '{order}'"
   `(Mode.atomic $scope $order)
 
 private def quoteMemory (ptr : TSyntax `tritonExpr) (mode op : TSyntax `term)
@@ -187,9 +201,9 @@ private def quoteMemory (ptr : TSyntax `tritonExpr) (mode op : TSyntax `term)
       `(some $mask)
   `(Call.memory $ptr $mask $mode $op)
 
-private def quoteAdd (name field : String) (ptr value scope semantic : TSyntax `tritonExpr)
+private def quoteAdd (op : ScopedOp) (ptr value scope semantic : TSyntax `tritonExpr)
     (mask : Option (TSyntax `tritonExpr) := none) : TermElabM (TSyntax `term) := do
-  let mode ← atomicMode name field scope semantic
+  let mode ← atomicMode op scope semantic
   let value ← quoteDistSyntax value
   quoteMemory ptr mode (← `(MemoryOp.add $value)) mask
 
@@ -221,29 +235,28 @@ private def quoteExpr (expr : TSyntax `extraCallExpr) : TermElabM (TSyntax `term
     quoteShuffle (← `(Shuffle.up)) m v i
   | `(extraCallExpr| atomic_add($p:tritonExpr, $v:tritonExpr, semantic=$o:tritonExpr, scope=$s:tritonExpr))
   | `(extraCallExpr| atomic_add($p:tritonExpr, $v:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr)) =>
-    quoteAdd "atomic_add" "semantic" p v s o
+    quoteAdd .add p v s o
   | `(extraCallExpr| atomic_cas($p:tritonExpr, $old:tritonExpr, $new:tritonExpr,
       $s:tritonExpr, $o:tritonExpr)) =>
-    let mode ← atomicMode "atomic_cas" "semantic" s o
+    let mode ← atomicMode .cas s o
     let old ← quoteDistSyntax old
     let new ← quoteDistSyntax new
     quoteMemory p mode (← `(MemoryOp.compareExchange $old $new))
   | `(extraCallExpr| laneid()) => `(Call.laneid)
   | `(extraCallExpr| ld($p:tritonExpr)) =>
     quoteMemory p (← `(Mode.atomic Scope.gpu MemOrder.relaxed)) (← `(MemoryOp.load))
-  | `(extraCallExpr| ld($p:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr))
-  | `(extraCallExpr| ld($p:tritonExpr, semantic=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    quoteMemory p (← atomicMode "ld" "semantic" s o) (← `(MemoryOp.load))
+  | `(extraCallExpr| ld($p:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr)) =>
+    quoteMemory p (← atomicMode .load s o) (← `(MemoryOp.load))
   | `(extraCallExpr| ld_acquire($p:tritonExpr, $s:tritonExpr)) =>
-    discard (scopeTerm "ld_acquire" s)
+    discard (scopeTerm .plainLoad s)
     quoteMemory p (← `(Mode.plain)) (← `(MemoryOp.load))
   | `(extraCallExpr| tid($a:tritonExpr)) | `(extraCallExpr| tid(axis=$a:tritonExpr)) =>
     quoteTid a
   | `(extraCallExpr| tl.atomic_add($p:tritonExpr, $v:tritonExpr, mask=$m:tritonExpr,
       sem=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    quoteAdd "tl.atomic_add" "sem" p v s o (some m)
+    quoteAdd .tritonAdd p v s o (some m)
   | `(extraCallExpr| tl.atomic_add($p:tritonExpr, $v:tritonExpr, sem=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    quoteAdd "tl.atomic_add" "sem" p v s o
+    quoteAdd .tritonAdd p v s o
   | _ => throwErrorAt expr "unsupported language_extra expression"
 
 private def quoteStmt (stmt : TSyntax `extraCallStmt) : TermElabM (TSyntax `term) := do
@@ -257,15 +270,15 @@ private def quoteStmt (stmt : TSyntax `extraCallStmt) : TermElabM (TSyntax `term
     quoteStore p v (← `(Mode.atomic Scope.gpu MemOrder.relaxed))
   | `(extraCallStmt| st($p:tritonExpr, $v:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr))
   | `(extraCallStmt| st($p:tritonExpr, $v:tritonExpr, semantic=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    quoteStore p v (← atomicMode "st" "semantic" s o)
+    quoteStore p v (← atomicMode .store s o)
   | `(extraCallStmt| atomic_add($p:tritonExpr, $v:tritonExpr, semantic=$o:tritonExpr, scope=$s:tritonExpr))
   | `(extraCallStmt| atomic_add($p:tritonExpr, $v:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr)) =>
-    quoteAdd "atomic_add" "semantic" p v s o
+    quoteAdd .add p v s o
   | `(extraCallStmt| tl.atomic_add($p:tritonExpr, $v:tritonExpr, mask=$m:tritonExpr,
       sem=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    quoteAdd "tl.atomic_add" "sem" p v s o (some m)
+    quoteAdd .tritonAdd p v s o (some m)
   | `(extraCallStmt| tl.atomic_add($p:tritonExpr, $v:tritonExpr, sem=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    quoteAdd "tl.atomic_add" "sem" p v s o
+    quoteAdd .tritonAdd p v s o
   | _ => throwErrorAt stmt "unsupported language_extra statement"
 
 private partial def unparen (expr : TSyntax `tritonExpr) : TSyntax `tritonExpr :=
@@ -289,6 +302,10 @@ private def quoteSpin (cond : TSyntax `tritonExpr) : TermElabM (TSyntax `term) :
   let poll := unparen lhs
   unless poll.raw.isOfKind ``pendingExtraExpr do
     throwErrorAt lhs "language_extra spin: expected ld, ld_acquire or atomic_cas on the left"
+  let hasExtraCall (raw : Syntax) := (raw.find? (·.isOfKind ``pendingExtraExpr)).isSome
+  -- The spin replaces the whole condition, so only the polling call may occur in it.
+  if hasExtraCall threshold.raw || hasExtraCall poll.raw[0] then
+    throwErrorAt cond "language_extra spin: condition must contain exactly one language_extra call"
   let call : TSyntax `extraCallExpr := ⟨poll.raw[0]⟩
   let wait := fun ptr mode => do
     let ptr ← quoteDistSyntax ptr
@@ -296,11 +313,10 @@ private def quoteSpin (cond : TSyntax `tritonExpr) : TermElabM (TSyntax `term) :
     `(Call.wait $ptr $threshold $cmp $mode)
   match call with
   | `(extraCallExpr| ld($p:tritonExpr)) => wait p (← `(Mode.atomic Scope.gpu MemOrder.relaxed))
-  | `(extraCallExpr| ld($p:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr))
-  | `(extraCallExpr| ld($p:tritonExpr, semantic=$o:tritonExpr, scope=$s:tritonExpr)) =>
-    wait p (← atomicMode "ld" "semantic" s o)
+  | `(extraCallExpr| ld($p:tritonExpr, scope=$s:tritonExpr, semantic=$o:tritonExpr)) =>
+    wait p (← atomicMode .load s o)
   | `(extraCallExpr| ld_acquire($p:tritonExpr, $s:tritonExpr)) =>
-    discard (scopeTerm "ld_acquire" s)
+    discard (scopeTerm .plainLoad s)
     wait p (← `(Mode.plain))
   | `(extraCallExpr| atomic_cas($p:tritonExpr, $old:tritonExpr, $new:tritonExpr,
       $s:tritonExpr, $o:tritonExpr)) =>
@@ -308,7 +324,7 @@ private def quoteSpin (cond : TSyntax `tritonExpr) : TermElabM (TSyntax `term) :
       | throwErrorAt cond "atomic_cas spin: expected != comparison"
     unless (unparen old).raw == (unparen threshold).raw do
       throwErrorAt threshold "atomic_cas spin: compare against the CAS expected value"
-    let mode ← atomicMode "atomic_cas" "semantic" s o
+    let mode ← atomicMode .cas s o
     let ptr ← quoteDistSyntax p
     let old ← quoteDistSyntax old
     let new ← quoteDistSyntax new

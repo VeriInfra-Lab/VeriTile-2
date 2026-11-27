@@ -54,7 +54,6 @@ scoped syntax lookahead(ident) &"atomic_cas" "(" tritonExpr "," tritonExpr "," t
 scoped syntax lookahead(ident) &"laneid" "(" ")" : extraCallExpr
 scoped syntax lookahead(ident) &"ld" "(" tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"ld" "(" tritonExpr "," &"scope" "=" tritonExpr "," &"semantic" "=" tritonExpr ")" : extraCallExpr
-scoped syntax lookahead(ident) &"ld" "(" tritonExpr "," &"semantic" "=" tritonExpr "," &"scope" "=" tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"ld_acquire" "(" tritonExpr "," tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"tid" "(" tritonExpr ")" : extraCallExpr
 scoped syntax lookahead(ident) &"tid" "(" &"axis" "=" tritonExpr ")" : extraCallExpr

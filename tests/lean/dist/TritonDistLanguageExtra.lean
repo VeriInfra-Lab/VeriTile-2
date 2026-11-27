@@ -79,13 +79,23 @@ example : lower (triton { __syncthreads() })
 example : lower (triton { __syncthreads() })
     { context with agent := .cta cta } = [none] := rfl
 
+private theorem barrierRequiresParticipant :
+    lower (triton { __syncthreads() }) { context with round := some ⟨2, 3⟩ } = [none] := rfl
+
+private theorem loadRequiresAccessibleAddress :
+    lower (triton { x = ld(p) })
+      { context with evalAddr := fun _ _ => some { word with space := .global 2 } } = [none] := rfl
+
+private theorem spinRequiresSingleLane :
+    lower (triton { while ld(tile) != 1 {} }) = [none] := rfl
+
 example : lower (triton { membar(scope="gl") membar(scope="sys") }) =
     [some (.step [.fence .plain]), some (.step [.fence .plain])] := rfl
 
 -- D5 and A1(a): ld/st default to GPU/relaxed, preserving explicit modes.
-example : observe (triton {
+private theorem loadAndStoreModes : observe (triton {
     a = ld(p)
-    b = ld(p, semantic="acquire", scope="sys")
+    b = ld(p, scope="sys", semantic="acquire")
     st(p, 1)
     st(p, 2, semantic="release", scope="sys")
     st(p, 1, scope="gpu", semantic="release")
@@ -130,7 +140,8 @@ theorem groupedCasSpin :
     [some (.step [.wait (.word word) .eq 0 (.atomic .sys .release),
       .bump ⟨.word word, .set, 1, .atomic .sys .release⟩])] := rfl
 
-example : lower (triton { while ld(p, semantic="acquire", scope="sys") != 1 {} }) =
+private theorem explicitPollingMode :
+    lower (triton { while ld(p, scope="sys", semantic="acquire") != 1 {} }) =
     [some (.step [.wait (.word word) .eq 1 (.atomic .sys .acquire)])] := rfl
 
 -- W1/A3: neither polling compare adds CUDA acquire semantics.
@@ -188,6 +199,38 @@ theorem ldAcquireConflictsWithSignal (writer : Agent) :
 #guard_msgs in
 #check (triton { x = atomic_cas(p, 0, 1, "cluster", "acquire") } : LanguageExtra.Source)
 
+/-- error: ld: unsupported scope 'cta' -/
+#guard_msgs in
+#check (triton { x = ld(p, scope="cta", semantic="relaxed") } : LanguageExtra.Source)
+
+/-- error: ld: unsupported semantic 'acq_rel' -/
+#guard_msgs in
+#check (triton { while ld(p, scope="gpu", semantic="acq_rel") != 1 {} } : LanguageExtra.Source)
+
+/-- error: ld_acquire: unsupported scope 'cta' -/
+#guard_msgs in
+#check (triton { x = ld_acquire(p, "cta") } : LanguageExtra.Source)
+
+/-- error: st: unsupported semantic 'acq_rel' -/
+#guard_msgs in
+#check (triton { st(p, 1, scope="sys", semantic="acq_rel") } : LanguageExtra.Source)
+
+/-- error: st: unsupported scope 'cta' -/
+#guard_msgs in
+#check (triton { st(p, 1, scope="cta", semantic="release") } : LanguageExtra.Source)
+
+/-- error: atomic_add: unsupported scope 'cta' -/
+#guard_msgs in
+#check (triton { x = atomic_add(p, 1, scope="cta", semantic="release") } : LanguageExtra.Source)
+
+/-- error: language_extra spin: condition must contain exactly one language_extra call -/
+#guard_msgs in
+#check (triton { while ld(p) < ld(q) {} } : LanguageExtra.Source)
+
+/-- error: language_extra spin: condition must contain exactly one language_extra call -/
+#guard_msgs in
+#check (triton { while ld(ld(p)) != 1 {} } : LanguageExtra.Source)
+
 /-- error: atomic_cas spin: compare against the CAS expected value -/
 #guard_msgs in
 #check (triton { while atomic_cas(p, 0, 1, "sys", "acquire") != 1 { pass } } : LanguageExtra.Source)
@@ -195,8 +238,7 @@ theorem ldAcquireConflictsWithSignal (writer : Agent) :
 #guard_msgs in
 run_cmd do
   for body in ["x = laneid(1)", "x = __shfl_sync_i32(mask, value)",
-      "x = __shfl_up_sync_i32(mask, value)", "__syncthreads(1)",
-      "__fence(\"acq_rel\", \"sys\")", "x = load_v4_u32(p)"] do
+      "x = __shfl_up_sync_i32(mask, value)", "__syncthreads(1)"] do
     if let .ok stx := Parser.runParserCategory (← getEnv) `term ("triton { " ++ body ++ " }") then
       if (stx.find? fun n => n.isOfKind ``pendingExtraExpr || n.isOfKind ``pendingExtraStmt).isSome then
         throwError "unexpected language_extra form: {body}"
@@ -208,6 +250,25 @@ run_cmd do
         catch e => return some (← e.toMessageData.toString)
       unless error?.any (fun message => !message.isEmpty) do
         throwError "expected a diagnostic for {body}"
+
+#guard_msgs in
+run_cmd do
+  let .error message := Parser.runParserCategory (← getEnv) `term
+      "triton { __fence(\"acq_rel\", \"sys\") }"
+    | throwError "unexpected __fence parse"
+  unless message.endsWith ": expected '%', '*=', '+=', ',', '-=', '/=', ':=' or '='" do
+    throwError "unexpected __fence parser diagnostic: {message}"
+
+/-- error: random source helper requires an explicit tl.source_helper binding -/
+#guard_msgs in
+#check (triton { x = load_v4_u32(p) } : LanguageExtra.Source)
+
+#guard_msgs in
+run_cmd do
+  if let .ok stx := Parser.runParserCategory (← getEnv) `term
+      "triton { x = ld(p, semantic=\"acquire\", scope=\"sys\") }" then
+    if (stx.find? (·.isOfKind ``pendingExtraExpr)).isSome then
+      throwError "unexpected semantic-first ld surface"
 
 #axiomsClean syncthreadsCtaPhase
 #axiomsClean maskedAtomicAddReturnsPrevious
