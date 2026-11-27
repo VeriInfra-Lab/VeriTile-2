@@ -1211,6 +1211,21 @@ A3 how theirs were found.
 | Event interface | Each rank has two model-private words, initially zero and disjoint from the input, scatter buffer, CAS flags and output. After the last copy, its copy engine adds one with GPU release to the first word. K11 lanes wait for one with GPU acquire. Each K11 lane adds one with GPU release to the second word after its CTA wait; local K10 tiles wait with GPU acquire for the full lane count. The source projection erases these words and their operations. |
 | Beyond documentation | The named premise covers the representation of same-stream completion by these local operations. The one-CTA K11 uses model PID `[0]`, the copy engine uses a distinct local proxy `[1]`, and K10 block `b` uses `[b+2]`. Each rank has its own stream and words. The inter-rank payload path also requires the original system release/acquire CAS pair. Physical BF16 agreement with the real-valued S7 result remains an unproved obligation of [#157](https://github.com/VeriInfra-Lab/VeriTile-2/issues/157) and [#158](https://github.com/VeriInfra-Lab/VeriTile-2/issues/158). |
 
+The T05 pilot represents each sender's copy loop by one physical segment. It reads
+that sender's input for each destination and writes the corresponding disjoint
+scatter shard. In the default K10 grid, one CTA reduces each 256-by-64 tile.
+For destination rank `r`, the left fold starts with sender `(r + 1) mod n`
+and visits every sender once. The initial state supplies the input shards,
+zero CAS flags and zero stream words. The proof permits arbitrary initial
+scatter contents. [Copy addresses and frames](../../tests/lean/dist/Tutorial05HostCopy.lean) · [K10 indexing and reduction order](../../tests/lean/dist/Tutorial05K10.lean)
+
+`Whole.t05` proves the ordered S7 result for every complete execution and
+exhibits a complete race-free execution whenever the CTA has at least as many
+physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
+scatter cells and reads back 3/4 and 5/8. With only the receive CAS group
+removed, a two-rank execution reads a peer shard before its sender writes it.
+The failed hypothesis is the inter-rank ordering of that cell. [Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Acquire-deleted execution](../../tests/lean/dist/Tutorial05NoAcquire.lean)
+
 ### A1 `undocumented_scope_order_vocabulary`
 
 A1 is the remainder of the former `scope_order_vocabulary` after the user's
