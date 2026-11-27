@@ -1179,11 +1179,17 @@ were open in the first form of this block; the user decided each on
 
 ## 7. Named assumptions
 
-These entries are registered in `VeriTile/Dist/Assumptions.lean`. Import
+These entries and the separate translation-correctness entry N5′
+(`documented_atomic_update_lowering`, #43 and #608) are registered in
+`VeriTile/Dist/Assumptions.lean`. Import
 `VeriTile.Dist.Meta.PrintTrustAssumptions` and run `#print_trust_assumptions T`
 to see the names and classes of the registered assumptions reached from
 the type and proof of theorem `T` through their Lean dependencies. An
-unregistered declaration reached in `VeriTile.Dist.Assumption` is an error.
+unregistered declaration reached in `VeriTile.Dist.Assumption` is an error
+unless it is a theorem, a matcher or sparse-cases auxiliary recorded by Lean,
+or a definition with a Lean-reserved name. A reserved name alone does not
+exempt opaque or inductive declarations. Every reached type and available
+body is still inspected, including across imports.
 
 Each entry has the fields of the registry of ticket S5.3 as the map states
 them: name, statement, source or rationale, affected kernels. The class of
@@ -1228,7 +1234,7 @@ the freeze ticket S5.1 fixes them. A9, A10 and the present form of A5 come
 from the user's decisions of 2026-11-21 and have the same form; A5 was renamed
 then. Two fields are added: what goes beyond
 documentation, in one sentence, and the constructor of the signed event
-interface (`VeriTile/Staging/Dist/EventSpec.lean`) that carries the reading;
+interface (`VeriTile/Dist/Event.lean`) that carries the reading;
 ticket S2.6 fixes the map from primitives to events.
 
 Affected kernels were found by reading the cited lines at the pins on
@@ -1290,7 +1296,7 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Source or rationale | Documentation: `sync_threads` has the docstring "Synchronize all threads in a block." at both commits (E-TS15), and `sync_warp` has "Synchronize all threads in a warp." (E-TS18). These state a synchronization. Not stated: any order between memory accesses of different threads across the barrier; for the form with arguments, not even who takes part (A4). The CUDA Programming Guide states such an order for the CUDA C++ intrinsics (E-CU7, E-CU8), and TS-INSTR names those intrinsics at `71e7145`; no text at `9ba8a605` does, and no intrinsic is named that waits for `count` threads. Why the kernels need it: without it nothing orders the copies of the other threads ahead of what one thread publishes after the barrier, and the peer's accesses race with those copies. That is LIT-a08 (a warp copies, the block synchronizes, another lane publishes), marked N, and its form with the group barrier in K25, K26 and K28 (I8) |
 | Affected kernels | DeepEP version 1 port only. (a) K23 `notify_dispatch_main`, `DD:87` and `DD:114`; K28 `combine_main`, `DC:237` (receiver). (b) K25 `dispatch_main`, `DD:410`, `DD:461`, `DD:509`; K26 `cached_dispatch_main`, `DD:652`, `DD:703`, `DD:738`; K28, `DC:216`. (c) K25, `DD:317` and `DD:339`; K26, `DD:587` and `DD:608`; K28, `DC:180`, `DC:289`, `DC:348`. These are all calls of `T.sync_threads` and `T.sync_warp` in the directory (text search). No kernel of Triton-distributed: its `__syncthreads` is read by D8 |
 | Beyond documentation | That these three TileScale barriers are points of memory ordering among their participants: the text at `9ba8a605` states a synchronization and no order, and for the group form not even the participants |
-| Event interface | `Event.bump` and `Event.wait` on `Counter.phase c id`, in a mode that pairs between any two participants: an `atomic` mode at scope `cta` with a release side on the arrival and an acquire side on the return, so that `SyncEdge` holds from every arrival to every return of a phase. The header of `EventSpec.lean` describes the barrier as "a counter written and waited on at scope `cta`". No kind of `Counter` names a warp; which `phase` a warp barrier is, S2.6 fixes |
+| Event interface | `Event.bump` and `Event.wait` on `Counter.phase c id`, in a mode that pairs between any two participants: an `atomic` mode at scope `cta` with a release side on the arrival and an acquire side on the return, so that `SyncEdge` holds from every arrival to every return of a phase. The header of `VeriTile/Dist/Event.lean` describes the barrier as "a counter written and waited on at scope `cta`". No kind of `Counter` names a warp; which `phase` a warp barrier is, S2.6 fixes |
 
 ### A6 `deepep_v1_wait_scope_order`
 

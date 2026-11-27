@@ -7,11 +7,13 @@ checker `scopeConsistent` with `ScopeReliance`, through its soundness statement
 `TrustAssumption` and `TrustAssumptionClass` was signed on 2026-11-26 under the
 same decision, after the checker freezes constructors, fields and defaults of
 signed types (#594, #621), and moved to `VeriTile.Dist.Assumptions` for #58.
-The checker uses the signed event interface in EventSpec. A reliance names the
-release and acquire that a proof needs and the cell whose visibility it needs. S4.1 supplies the trace conditions,
-including the read-from condition that connects such a pair to happens-before.
+The checker uses the signed event interface in `VeriTile/Dist/Event/` (moved
+out of staging by S2.3–S2.5). A reliance names the release and acquire that a
+proof needs and the cell whose visibility it needs. S4.1 supplies the trace
+conditions, including the read-from condition that connects such a pair to
+happens-before.
 -/
-import VeriTile.Staging.Dist.EventSpec
+import VeriTile.Dist.Event.Access
 
 namespace VeriTile.Dist
 

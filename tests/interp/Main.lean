@@ -4,6 +4,7 @@ until the general-purpose carriers are registered. -/
 import VeriTile.Interp.Reflect
 import VeriTile.Interp.Run.Main
 import VeriTile.Interp.Run.GridOrder
+import tests.interp.HyperConnections
 import bench.examples.FlatVectorAdd.Kernels
 import bench.examples.FloatDTypeAdd.Kernels
 import bench.examples.VectorAdd.Kernels
@@ -175,6 +176,7 @@ private def floatDTypeAdd : KernelEntry where
 def exampleCli (args : List String) : IO UInt32 :=
   runCli [("VectorAdd", vectorAdd), ("OnlineSoftmax", softmax),
     ("FlatVectorAdd", flatVectorAdd), ("FloatDTypeAdd", floatDTypeAdd)] [("fp32-basic", runFP32)] args
+    (Examples.tensorExamples ++ Examples.hyperExamples)
 
 end VeriTile.Interp.Run
 

@@ -93,6 +93,12 @@ private theorem stats {n h} (p : Prefix n h) :
     simp only [List.countP_append, List.filterMap_append, List.getLast?_append, wp, rd, pub]
     rcases phaseCases (n := n) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> exact ⟨rfl,rfl,rfl⟩
 
+/-- The two-token sender never puts a third item, including on incomplete schedules. -/
+theorem prefix_put_bound {n h} (p : Prefix n h) : h.countP (Q1 rel).isPut ≤ (Q1 rel).items := by
+  rw [(stats p).1]
+  change (if 6 < n then 2 else if 0 < n then 1 else 0) ≤ 2
+  split_ifs <;> decide
+
 private theorem slotWrite {n h k i} (p : Prefix n h) (atPut : queue.view.Put h k i) :
     (k = 0 ∧ Prefix 0 (h.take i) ∧ h[i]? = some (milestone 0)) ∨
     (k = 1 ∧ Prefix 6 (h.take i) ∧ h[i]? = some (milestone 6)) := by

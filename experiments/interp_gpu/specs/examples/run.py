@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from interp import tensorfile
 
 
-def check_kernel(kernel):
+def check_kernel(kernel, arguments):
     source, function = kernel["source"].rsplit("::", 1)
     path = Path(source)
     if path.is_absolute() or not (ROOT / path).resolve().is_relative_to(ROOT):
@@ -33,6 +33,11 @@ def check_kernel(kernel):
                   for node in functions for dec in node.decorator_list]
     if not any(ast.unparse(dec) == "triton.jit" for dec in decorators):
         raise ValueError(f"{kernel['name']}: kernel.source is not a top-level @triton.jit function: {kernel['source']}")
+
+    runtime = [arg.arg for arg in functions[0].args.args
+               if not arg.annotation or ast.unparse(arg.annotation) != "tl.constexpr"]
+    if runtime != [arg["parameter"] for arg in arguments]:
+        raise ValueError(f"{kernel['name']}: runtime arguments must follow the source order {runtime}")
 
     # Lean declaration namespaces use VeriTile.Bench.Examples, while Lake module
     # paths for these mirrors start at bench/examples. Resolve the actual
@@ -64,38 +69,48 @@ def check_layout(path, descriptor):
 
 def run_case(spec, case, runner, work):
     kernel = spec["kernel"]["name"]
-    output, = spec["output_buffers"]
+    outputs = spec["output_buffers"]
+    names = [out["name"] for out in outputs]
     inputs = case["inputs"]
-    for arg in spec["arguments"]:
-        if "value" in arg:
-            raise ValueError(f"{kernel}: scalar argument {arg['parameter']!r} is unsupported by the file runner")
-    ports = [arg["buffer"] for arg in spec["arguments"]]
-    if (len(ports) != len(inputs) + 1 or set(ports[:-1]) != inputs.keys()
-            or ports[-1] != output["name"] or case["expected"].keys() != {output["name"]}):
-        raise ValueError(f"{kernel}: file runner requires ordered inputs followed by one output")
-    paths = [ROOT / inputs[port]["file"] for port in ports[:-1]]
-    for port, path in zip(ports, paths):
+    ports = [arg["buffer"] for arg in spec["arguments"] if "buffer" in arg]
+    if (len(set(ports)) != len(ports) or len(set(names)) != len(names)
+            or set(ports) != inputs.keys() | set(names) or set(names) != case["expected"].keys()):
+        raise ValueError(f"{kernel}: file arguments must match all declared inputs and outputs")
+    input_ports = [port for port in ports if port in inputs]
+    if not input_ports:
+        raise ValueError(f"{kernel}: at least one input is required")
+    paths = [ROOT / inputs[port]["file"] for port in input_ports]
+    for port, path in zip(input_ports, paths):
         check_layout(path, inputs[port])
     # These bindings derive their constexpr from the first input shape.
     # Reject stale specializations even if the runner could execute a different one.
-    shape = inputs[ports[0]]["shape"]
+    shape = inputs[input_ports[0]]["shape"]
     grid = spec["grid"]
     if kernel == "VectorAdd" and (grid[0] == 0 or spec["constexpr"] != {"BLOCK_SIZE": shape[0] // grid[0]}):
         raise ValueError("VectorAdd: BLOCK_SIZE must match the block bound by the registry")
     if kernel == "OnlineSoftmax" and spec["constexpr"] != {"N": shape[-1]}:
         raise ValueError("OnlineSoftmax: N must match the row width bound by the registry")
-    constants = []
-    if kernel in ("FlatVectorAdd", "FloatDTypeAdd"):
+    flags = []
+    if kernel not in ("VectorAdd", "OnlineSoftmax"):
         for key, value in spec["constexpr"].items():
-            constants.extend(["--constexpr", f"{key}={value}"])
-    destination = work / "result.tensor"
+            flags.extend(["--constexpr", f"{key}={value}"])
+    for arg in spec["arguments"]:
+        if "value" in arg:
+            flags.extend(["--scalar", f"{arg['parameter']}={arg['value']}"])
+    destination = work / ("result.tensor" if len(outputs) == 1 else "results")
     subprocess.run([runner, "--carrier", spec["launch"]["carrier"], "--grid",
-                    ",".join(map(str, grid)), *constants, kernel, *paths, destination], check=True)
-    check_layout(destination, output)
-    expected = ROOT / case["expected"][output["name"]]
-    if destination.read_bytes() != expected.read_bytes():
-        raise ValueError(f"{kernel}: output differs from {expected}")
-    print(f"{kernel} {case['class']} {output['name']} {tensorfile.read(destination).sha256()}")
+                    ",".join(map(str, grid)), *flags, kernel, *paths, destination], check=True)
+    if len(outputs) > 1 and {p.name for p in destination.iterdir()} != {name + ".tensor" for name in names}:
+        raise ValueError(f"{kernel}: result files differ from declared outputs")
+    for out in outputs:
+        name = out["name"]
+        actual = destination if len(outputs) == 1 else destination / (name + ".tensor")
+        check_layout(actual, out)
+        expected = ROOT / case["expected"][name]
+        check_layout(expected, out)
+        if actual.read_bytes() != expected.read_bytes():
+            raise ValueError(f"{kernel}: output {name} differs from {expected}")
+        print(f"{kernel} {case['class']} {name} {tensorfile.read(actual).sha256()}")
 
 
 def main():
@@ -108,7 +123,7 @@ def main():
         try:
             spec = json.loads(path.read_text())
             validator.validate(spec)
-            check_kernel(spec["kernel"])
+            check_kernel(spec["kernel"], spec["arguments"])
             for case in spec["input_classes"]:
                 with tempfile.TemporaryDirectory(prefix="veritile-spec-") as work:
                     run_case(spec, case, args.runner.resolve(), Path(work))
