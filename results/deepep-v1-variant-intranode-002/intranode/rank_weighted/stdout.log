@@ -1,0 +1,388 @@
+== repeat 0 ==
+deepep-source-sha256 {"files": {"buffer.py": "0995a22fe843f13c3c1e51ecbe31c3ee82b33394c58bc933b84ad8501b4cdaf2", "deepep_utils.py": "f9a36515a811feaa96b883c5923df3092ff41ada0047b9088314dcc22a99951b", "internode/get_dispatch_layout.py": "8c651207ad3e45686793d1e04600f6697afdec530f60b87f8c4f44e6e04f7dd5", "intranode/combine.py": "83efd6d7c0077b1bf77025326c9ad91e356448b7a85a8b772011e7108a91067a", "intranode/dispatch.py": "702ab6eea39a1888f34bee2134641e4dbf3fe659a710820634c62361b7897cd4", "intranode/example_intranode.py": "e2ea81b02f5de174407c3713dc894d783d78ba4c21d16d948d6a2ee41058684f", "intranode/get_dispatch_layout.py": "dfc27ef2071de71c133afcef25e71893e6c12609bc7231cd7b801ce1265971fd", "intranode/test_intranode.py": "4ed4e0c7e695dd6a3f916b525f9316499d18441320e48a48d105fd108cdce17e"}, "rank": 1}
+deepep-source-sha256 {"files": {"buffer.py": "0995a22fe843f13c3c1e51ecbe31c3ee82b33394c58bc933b84ad8501b4cdaf2", "deepep_utils.py": "f9a36515a811feaa96b883c5923df3092ff41ada0047b9088314dcc22a99951b", "internode/get_dispatch_layout.py": "8c651207ad3e45686793d1e04600f6697afdec530f60b87f8c4f44e6e04f7dd5", "intranode/combine.py": "83efd6d7c0077b1bf77025326c9ad91e356448b7a85a8b772011e7108a91067a", "intranode/dispatch.py": "702ab6eea39a1888f34bee2134641e4dbf3fe659a710820634c62361b7897cd4", "intranode/example_intranode.py": "e2ea81b02f5de174407c3713dc894d783d78ba4c21d16d948d6a2ee41058684f", "intranode/get_dispatch_layout.py": "dfc27ef2071de71c133afcef25e71893e6c12609bc7231cd7b801ce1265971fd", "intranode/test_intranode.py": "4ed4e0c7e695dd6a3f916b525f9316499d18441320e48a48d105fd108cdce17e"}, "rank": 0}
+2026-11-29 03:18:23  [TileLang:tilelang.env:WARNING]: Loading tilelang libs from dev root: /data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/build
+2026-11-29 03:18:23  [TileLang:tilelang.env:WARNING]: Loading tilelang libs from dev root: /data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/build
+2026-11-29 03:18:28  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `get_dispatch_layout_main` with `out_idx=None`
+2026-11-29 03:18:31  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `get_dispatch_layout_main`
+rank 0: {'num_tokens_per_rank': (2,), 'num_tokens_per_expert': (8,), 'is_token_in_rank': (40, 2)}
+rank 0: layout [29, 24] [12, 11, 10, 7, 4, 9, 8, 7]
+2026-11-29 03:18:28  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `get_dispatch_layout_main` with `out_idx=None`
+2026-11-29 03:18:31  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `get_dispatch_layout_main`
+rank 1: {'num_tokens_per_rank': (2,), 'num_tokens_per_expert': (8,), 'is_token_in_rank': (40, 2)}
+rank 1: layout [29, 28] [9, 11, 12, 4, 9, 9, 5, 11]
+2026-11-29 03:18:31  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `notify_dispatch_main` with `out_idx=None`
+2026-11-29 03:18:34  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `notify_dispatch_main`
+2026-11-29 03:18:34  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `dispatch_main` with `out_idx=None`
+2026-11-29 03:18:38  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `dispatch_main`
+rank 1: {'recv_x': (52, 64), 'recv_src_idx': (52,), 'recv_topk_idx': (52, 2), 'recv_topk_weights': (52, 2)}
+2026-11-29 03:18:31  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `notify_dispatch_main` with `out_idx=None`
+2026-11-29 03:18:34  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `notify_dispatch_main`
+2026-11-29 03:18:34  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `dispatch_main` with `out_idx=None`
+2026-11-29 03:18:38  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `dispatch_main`
+rank 0: {'recv_x': (58, 64), 'recv_src_idx': (58,), 'recv_topk_idx': (58, 2), 'recv_topk_weights': (58, 2)}
+2026-11-29 03:18:39  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `cached_notify_combine_main` with `out_idx=None`
+2026-11-29 03:18:42  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `cached_notify_combine_main`
+2026-11-29 03:18:42  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_start_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/intranode/combine.py", line 278, in combine_main
+    token_start_idx = T.min(num_tokens_per_channel * responsible_channel, num_recv_tokens)
+2026-11-29 03:18:42  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_end_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-cuds3zkm/combine-cta/intranode/combine.py", line 279, in combine_main
+    token_end_idx = T.min(token_start_idx + num_tokens_per_channel, num_recv_tokens)
+2026-11-29 03:18:42  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `combine_main` with `out_idx=None`
+2026-11-29 03:18:46  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `combine_main`
+rank 0: {'combined_x': (40, 64), 'combined_topk_weights': (40, 2)}
+2026-11-29 03:18:39  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `cached_notify_combine_main` with `out_idx=None`
+2026-11-29 03:18:42  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `cached_notify_combine_main`
+2026-11-29 03:18:43  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_start_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/intranode/combine.py", line 278, in combine_main
+    token_start_idx = T.min(num_tokens_per_channel * responsible_channel, num_recv_tokens)
+2026-11-29 03:18:43  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_end_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-m1l86drs/combine-cta/intranode/combine.py", line 279, in combine_main
+    token_end_idx = T.min(token_start_idx + num_tokens_per_channel, num_recv_tokens)
+2026-11-29 03:18:43  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `combine_main` with `out_idx=None`
+2026-11-29 03:18:46  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `combine_main`
+rank 1: {'combined_x': (40, 64), 'combined_topk_weights': (40, 2)}
+NCCL version 2.27.5+cuda12.9
+== repeat 1 ==
+deepep-source-sha256 {"files": {"buffer.py": "0995a22fe843f13c3c1e51ecbe31c3ee82b33394c58bc933b84ad8501b4cdaf2", "deepep_utils.py": "f9a36515a811feaa96b883c5923df3092ff41ada0047b9088314dcc22a99951b", "internode/get_dispatch_layout.py": "8c651207ad3e45686793d1e04600f6697afdec530f60b87f8c4f44e6e04f7dd5", "intranode/combine.py": "83efd6d7c0077b1bf77025326c9ad91e356448b7a85a8b772011e7108a91067a", "intranode/dispatch.py": "702ab6eea39a1888f34bee2134641e4dbf3fe659a710820634c62361b7897cd4", "intranode/example_intranode.py": "e2ea81b02f5de174407c3713dc894d783d78ba4c21d16d948d6a2ee41058684f", "intranode/get_dispatch_layout.py": "dfc27ef2071de71c133afcef25e71893e6c12609bc7231cd7b801ce1265971fd", "intranode/test_intranode.py": "4ed4e0c7e695dd6a3f916b525f9316499d18441320e48a48d105fd108cdce17e"}, "rank": 1}
+deepep-source-sha256 {"files": {"buffer.py": "0995a22fe843f13c3c1e51ecbe31c3ee82b33394c58bc933b84ad8501b4cdaf2", "deepep_utils.py": "f9a36515a811feaa96b883c5923df3092ff41ada0047b9088314dcc22a99951b", "internode/get_dispatch_layout.py": "8c651207ad3e45686793d1e04600f6697afdec530f60b87f8c4f44e6e04f7dd5", "intranode/combine.py": "83efd6d7c0077b1bf77025326c9ad91e356448b7a85a8b772011e7108a91067a", "intranode/dispatch.py": "702ab6eea39a1888f34bee2134641e4dbf3fe659a710820634c62361b7897cd4", "intranode/example_intranode.py": "e2ea81b02f5de174407c3713dc894d783d78ba4c21d16d948d6a2ee41058684f", "intranode/get_dispatch_layout.py": "dfc27ef2071de71c133afcef25e71893e6c12609bc7231cd7b801ce1265971fd", "intranode/test_intranode.py": "4ed4e0c7e695dd6a3f916b525f9316499d18441320e48a48d105fd108cdce17e"}, "rank": 0}
+2026-11-29 03:18:51  [TileLang:tilelang.env:WARNING]: Loading tilelang libs from dev root: /data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/build
+2026-11-29 03:18:51  [TileLang:tilelang.env:WARNING]: Loading tilelang libs from dev root: /data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/build
+2026-11-29 03:18:55  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `get_dispatch_layout_main` with `out_idx=None`
+2026-11-29 03:18:58  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `get_dispatch_layout_main`
+rank 1: {'num_tokens_per_rank': (2,), 'num_tokens_per_expert': (8,), 'is_token_in_rank': (40, 2)}
+rank 1: layout [29, 28] [9, 11, 12, 4, 9, 9, 5, 11]
+2026-11-29 03:18:55  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `get_dispatch_layout_main` with `out_idx=None`
+2026-11-29 03:18:58  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `get_dispatch_layout_main`
+rank 0: {'num_tokens_per_rank': (2,), 'num_tokens_per_expert': (8,), 'is_token_in_rank': (40, 2)}
+rank 0: layout [29, 24] [12, 11, 10, 7, 4, 9, 8, 7]
+2026-11-29 03:18:58  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `notify_dispatch_main` with `out_idx=None`
+2026-11-29 03:19:01  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `notify_dispatch_main`
+2026-11-29 03:19:02  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `dispatch_main` with `out_idx=None`
+2026-11-29 03:19:05  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `dispatch_main`
+rank 0: {'recv_x': (58, 64), 'recv_src_idx': (58,), 'recv_topk_idx': (58, 2), 'recv_topk_weights': (58, 2)}
+2026-11-29 03:18:58  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `notify_dispatch_main` with `out_idx=None`
+2026-11-29 03:19:01  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `notify_dispatch_main`
+2026-11-29 03:19:02  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `dispatch_main` with `out_idx=None`
+2026-11-29 03:19:05  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `dispatch_main`
+rank 1: {'recv_x': (52, 64), 'recv_src_idx': (52,), 'recv_topk_idx': (52, 2), 'recv_topk_weights': (52, 2)}
+2026-11-29 03:19:06  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `cached_notify_combine_main` with `out_idx=None`
+2026-11-29 03:19:09  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `cached_notify_combine_main`
+2026-11-29 03:19:10  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_start_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/intranode/combine.py", line 278, in combine_main
+    token_start_idx = T.min(num_tokens_per_channel * responsible_channel, num_recv_tokens)
+2026-11-29 03:19:10  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_end_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-yv267lvu/combine-cta/intranode/combine.py", line 279, in combine_main
+    token_end_idx = T.min(token_start_idx + num_tokens_per_channel, num_recv_tokens)
+2026-11-29 03:19:10  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `combine_main` with `out_idx=None`
+2026-11-29 03:19:13  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `combine_main`
+rank 1: {'combined_x': (40, 64), 'combined_topk_weights': (40, 2)}
+2026-11-29 03:19:06  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `cached_notify_combine_main` with `out_idx=None`
+2026-11-29 03:19:09  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `cached_notify_combine_main`
+2026-11-29 03:19:10  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_start_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/intranode/combine.py", line 278, in combine_main
+    token_start_idx = T.min(num_tokens_per_channel * responsible_channel, num_recv_tokens)
+2026-11-29 03:19:10  [TileLang:tilelang.language.v2.builder:WARNING]: Immutable value `token_end_idx` is re-bound. If you want to modify its value, please use T.alloc_var to make it a variable!
+Stack (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "<repo>/scripts/gpurun/__main__.py", line 45, in <module>
+    raise SystemExit(main())
+  File "<repo>/scripts/gpurun/__main__.py", line 27, in main
+    return dist.rank_main(args.work)
+  File "<repo>/scripts/gpurun/dist.py", line 344, in rank_main
+    code = run.child_main(work, rank_body)
+  File "<repo>/scripts/gpurun/run.py", line 249, in child_main
+    body(work)
+  File "<repo>/scripts/gpurun/dist.py", line 340, in rank_body
+    run.call_entry(test, root, test['entry'], inputs, work / 'run' / f'rank{rank}', rank, ranks)
+  File "<repo>/scripts/gpurun/run.py", line 219, in call_entry
+    function(*leading, {name: to_torch(t) for name, t in inputs.items()}, outputs, test.get('launch', {}))
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 54, in run_combine
+    run_variant(rank, ranks, inputs, outputs, launch, combine=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/dispatch_variant.py", line 75, in run_variant
+    run_port(patched, rank, ranks, inputs, outputs, launch, verify_origin=True)
+  File "<repo>/experiments/interp_gpu/deepep_v1/harness.py", line 108, in run_port
+    combined_x, combined_topk_weights = buffer.combine(returned, handle, recv_topk_weights)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/buffer.py", line 307, in combine
+    recv_x, recv_topk_weights = intranode_combine(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/intranode/combine.py", line 392, in intranode_combine
+    kernel = combine_kernel(
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 424, in __call__
+    kernel = self.compile(*args, **kwargs, **tune_params)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 358, in compile
+    func = self.get_tir(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/jit/__init__.py", line 306, in get_tir
+    tir = self.func(*args, **kwargs)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/intranode/combine.py", line 119, in combine_kernel
+    @T.prim_func
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 1006, in prim_func
+    return impl(func) if func is not None else impl
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/src/tilescale-deepep/tilelang/language/v2/builder.py", line 996, in impl
+    ir_gen.gen(builder)(**annot)
+  File "/data0/<user>/workspace/.local/veritile/gpu-node/tmp/deepep-rank-l2vvr0vi/combine-cta/intranode/combine.py", line 279, in combine_main
+    token_end_idx = T.min(token_start_idx + num_tokens_per_channel, num_recv_tokens)
+2026-11-29 03:19:10  [TileLang:tilelang.jit.kernel:INFO]: TileLang begins to compile kernel `combine_main` with `out_idx=None`
+2026-11-29 03:19:13  [TileLang:tilelang.jit.kernel:INFO]: TileLang completes to compile kernel `combine_main`
+rank 0: {'combined_x': (40, 64), 'combined_topk_weights': (40, 2)}
+NCCL version 2.27.5+cuda12.9
