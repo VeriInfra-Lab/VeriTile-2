@@ -59,6 +59,15 @@ opaque deepep_v1_calls_read_by_main_rows : Prop
 with an operand function and return value. -/
 opaque documented_atomic_update_lowering : Prop
 
+/-- A11. The `cta` scope of DeepEP v1's intranode TileScale port denotes one CUDA thread block. -/
+opaque deepep_v1_cta_scope_is_block : Prop
+
+/-- A12. T05's ordinary current stream orders the local copy engine, K11 and K10. -/
+opaque t05_current_stream_order : Prop
+
+/-- Q8(a), a named reading of M2 for launches with one agent per CTA. -/
+opaque triton_cta_single_barrier_participant : Prop
+
 end Assumption
 
 namespace TrustAssumptions
@@ -129,6 +138,16 @@ def deepep_v1_calls_read_by_main_rows : TrustAssumption :=
     "PrimitiveSources.md §7 A10"
     ["K23", "K24", "K25", "K26", "K27", "K28"]
 
+def deepep_v1_cta_scope_is_block : TrustAssumption :=
+  semantic `deepep_v1_cta_scope_is_block Assumption.deepep_v1_cta_scope_is_block
+    "PrimitiveSources.md §7 A11; TileScale 9ba8a605, examples/distributed/deepseek_deepep/intranode only."
+    ["K28"]
+
+def t05_current_stream_order : TrustAssumption :=
+  semantic `t05_current_stream_order Assumption.t05_current_stream_order
+    "PrimitiveSources.md §7 A12; Triton-distributed 7908e4ea, ordinary current stream."
+    ["K10", "K11"]
+
 def documented_atomic_update_lowering : TrustAssumption where
   name := `documented_atomic_update_lowering
   statement := Assumption.documented_atomic_update_lowering
@@ -137,10 +156,19 @@ def documented_atomic_update_lowering : TrustAssumption where
     "only at the boundary that lowers " ++
     "a documented source-level atomic to a distributed emission. A producer identifies its " ++
     "primitive, pinned contract, operand function and return behaviour; a plain load, " ++
-    "computation and store never becomes one atomic event. At main `90f8e34ed` no front end " ++
-    "produces this payload."
+    "computation and store never becomes one atomic event. Source-to-S2 producers exist " ++
+    "(#608), but no front end produces an `AccessValue.update` payload. " ++
+    "Discharged only by #82, the source-to-S3 bridge."
   affectedKernels := []
   assumptionClass := .translationCorrectness
+
+def triton_cta_single_barrier_participant : TrustAssumption :=
+  semantic `triton_cta_single_barrier_participant Assumption.triton_cta_single_barrier_participant
+    ("TritonDistSubset.md M2, reading Q8(a) of #82. When the whole CTA is one agent, " ++
+      "the CTA is the single participant of Counter.phase c 0 for __syncthreads. " ++
+      "Races between threads inside the CTA are not visible at this granularity. " ++
+      "A CTA with thread programs cannot also use this CTA-level barrier.")
+    ["K1", "Triton-distributed tutorial 01"]
 
 /-- The built-in registry entries, pairing each statement and its metadata. -/
 def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
@@ -154,7 +182,10 @@ def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
       (``Assumption.p2p_native_atomic_supported, ``p2p_native_atomic_supported),
       (``Assumption.grid_barrier_cooperative_sync, ``grid_barrier_cooperative_sync),
       (``Assumption.deepep_v1_calls_read_by_main_rows, ``deepep_v1_calls_read_by_main_rows),
-      (``Assumption.documented_atomic_update_lowering, ``documented_atomic_update_lowering)]
+      (``Assumption.deepep_v1_cta_scope_is_block, ``deepep_v1_cta_scope_is_block),
+      (``Assumption.t05_current_stream_order, ``t05_current_stream_order),
+      (``Assumption.documented_atomic_update_lowering, ``documented_atomic_update_lowering),
+      (``Assumption.triton_cta_single_barrier_participant, ``triton_cta_single_barrier_participant)]
 
 end TrustAssumptions
 end VeriTile.Dist

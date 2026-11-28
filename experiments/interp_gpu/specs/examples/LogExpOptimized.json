@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "LogExpOptimized",
+    "lean": "VeriTile.Bench.Examples.LogExp.optimizedKernel",
+    "source": "bench/examples/LogExp/LogExp.py::log_exp_guarded"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "source-rounded"
+  },
+  "constexpr": {
+    "blockSize": 4
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "yReg",
+      "buffer": "yReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "boundary",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp32",
+          "shape": [
+            8
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/log-exp-input.tensor"
+        }
+      },
+      "expected": {
+        "yReg": "tests/interp/fixtures/tensor_examples/LogExpOptimized-output.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "yReg",
+      "dtype": "fp32",
+      "shape": [
+        8
+      ]
+    }
+  ]
+}

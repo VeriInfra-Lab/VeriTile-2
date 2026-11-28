@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FusedSwiglu",
+    "lean": "VeriTile.Bench.Examples.FusedSwiglu.Kernels.swiglu_fused_kernel",
+    "source": "bench/examples/FusedSwiglu/FusedSwiglu.py::swiglu_fused"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "source-rounded"
+  },
+  "constexpr": {
+    "ncols": 5,
+    "BLOCK_N": 4
+  },
+  "arguments": [
+    {
+      "parameter": "X",
+      "buffer": "X"
+    },
+    {
+      "parameter": "Y",
+      "buffer": "Y"
+    },
+    {
+      "parameter": "OUT",
+      "buffer": "OUT"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "boundary",
+      "inputs": {
+        "X": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/swiglu-x.tensor"
+        },
+        "Y": {
+          "dtype": "fp32",
+          "shape": [
+            5
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/swiglu-y.tensor"
+        }
+      },
+      "expected": {
+        "OUT": "tests/interp/fixtures/tensor_examples/swiglu-out.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "OUT",
+      "dtype": "bf16",
+      "shape": [
+        5
+      ]
+    }
+  ]
+}

@@ -27,15 +27,49 @@ the rows a rank did not receive keep the sentinel.
 
 `judge.py` computes what each of them must hold.
 """
+from dataclasses import replace
 import os
+from pathlib import Path
 import sys
 
 
 def run(rank, ranks, inputs, outputs, launch):
-    import torch
     from gpurun import dist
-    sys.path.insert(0, str(dist.deepep_port()))  # the port's files import each other as top-level modules
+    return run_port(dist.deepep_port(), rank, ranks, inputs, outputs, launch)
+
+
+def make_buffer(buffer_class, group, num_topk, hidden, launch):
+    args = (group, 2**30, num_topk, launch['num_experts'], hidden)
+    if 'ring' not in launch:
+        return buffer_class(*args)
+    # EPBuffer allocates with its own SM count. Both kernel configs must agree with it.
+    from deepep_utils import Config
+    ring = launch['ring']
+    config = dict(num_sms=ring['num_sms'], num_max_nvl_chunked_recv_tokens=ring['recv_tokens'])
+    dispatch = replace(Config.get_dispatch_config(group.size()), **config)
+    combine = replace(Config.get_combine_config(group.size()),
+                      num_max_nvl_chunked_send_tokens=ring['combine_send_tokens'], **config)
+    # gpurun creates a fresh process per rank, so this class-level setting is local to this run.
+    buffer_class.set_num_sms(ring['num_sms'])
+    buf = buffer_class(*args, dispatch_cfg=dispatch, combine_cfg=combine)
+    def sizes(cfg):
+        return f'{cfg.num_max_nvl_chunked_send_tokens}/{cfg.num_max_nvl_chunked_recv_tokens}'
+
+    sys.stdout.write(f'deepep-ring rank={group.rank()} channels={buf.num_channels} '
+                     f'dispatch={sizes(buf.dispatch_cfg)} combine={sizes(buf.combine_cfg)}\n')
+    sys.stdout.flush()
+    return buf
+
+
+def run_port(port, rank, ranks, inputs, outputs, launch, *, verify_origin=False):
+    import torch
+    sys.path.insert(0, str(port))  # the port's files import each other as top-level modules
     from buffer import EPBuffer
+    if verify_origin:
+        for name in ('buffer', 'deepep_utils', 'intranode.get_dispatch_layout', 'intranode.dispatch', 'intranode.combine'):
+            expected = Path(port, *name.split('.')).with_suffix('.py').resolve()
+            if Path(sys.modules[name].__file__).resolve() != expected:
+                raise ValueError(f'{name} was imported outside the selected variant')
     from tilelang.distributed.utils import init_dist
 
     # init_dist reads WORLD_SIZE and RANK as the node count and this node's rank; the launcher set them per rank.
@@ -57,7 +91,7 @@ def run(rank, ranks, inputs, outputs, launch):
 
     # A clone is an allocation of its own, as the inputs of the port's test are.
     x, topk_idx, topk_weights = (inputs[name][rank].clone() for name in ('x', 'topk_idx', 'topk_weights'))
-    buffer = EPBuffer(group, 2**30, topk_idx.shape[1], launch['num_experts'], x.shape[1])
+    buffer = make_buffer(EPBuffer, group, topk_idx.shape[1], x.shape[1], launch)
 
     num_tokens_per_rank, num_tokens_per_expert, is_token_in_rank = buffer.get_dispatch_layout(topk_idx)
     keep({'num_tokens_per_rank': num_tokens_per_rank, 'num_tokens_per_expert': num_tokens_per_expert,
