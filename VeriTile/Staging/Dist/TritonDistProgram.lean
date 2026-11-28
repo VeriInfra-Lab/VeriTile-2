@@ -71,13 +71,17 @@ noncomputable def projectFlat (args : LaunchArgs)
   let c ← args.agent.cta?
   projectFlatGo args cuts pc { state with pids := DistState.programIds c.pid }
 
-/-- The signed flat execution consumes the closed projection. This is the
-S3.3 bridge, so the readback names #45 until its proof lands. -/
+/-- A successful flat projection supplies the body run by `AgentProgram.ofBody`.
+Its traces are the slices of that body, using the signed S3.3 statement (#45).
+Agreement with the cursor program is tracked by #724. -/
 theorem flat_steps (args : LaunchArgs) (pc : Cursor) (state : BlockState) (cuts : Nat)
-    (flat : List (Stmt ⊕ Emission)) (_projection : projectFlat args cuts pc state = some flat)
     (trace : List (Segment ⊕ Event)) :
-    (AgentProgram.ofBody args.agent).Steps flat trace ↔ trace = slice args.agent flat :=
-  AgentProgram.ofBody_steps args.agent flat trace
+    (projectFlat args cuts pc state).map
+      (fun flat => (AgentProgram.ofBody args.agent).Steps flat trace) =
+    (projectFlat args cuts pc state).map (fun flat => trace = slice args.agent flat) := by
+  cases projectFlat args cuts pc state with
+  | none => rfl
+  | some flat => exact congrArg some (propext (AgentProgram.ofBody_steps args.agent flat trace))
 
 /-- The plain-kernel entry point uses the existing algorithm body directly.
 Atomics are left to the S3 bridge in #696. -/

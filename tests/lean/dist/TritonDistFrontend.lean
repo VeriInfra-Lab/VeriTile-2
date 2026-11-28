@@ -397,6 +397,74 @@ private noncomputable def producerFlat (r : DL.WaitReading) : Option (List (Stmt
   projectFlat (launchArgs Tutorial01.producer r) 10
     (producerBody "input" "queue" "signal").start default
 
+-- The two producer rounds share code but have different barrier phases and signal values.
+private def producerRound (iteration phase threshold notification : Nat) : List (Stmt ⊕ Emission) :=
+  let nat := Op.ref .nat []
+  let ptr := Op.ref .ptr []
+  let number := fun name (value : Op .nat []) => Sum.inl (Stmt.assign .nat [] name value)
+  let pointer := fun name (value : Op .ptr []) => Sum.inl (Stmt.assign .ptr [] name value)
+  let base := fun (region : RegionName) => Op.ptrAdd .nil (.ptrBase region) (.constNat 0)
+  -- A CTA's first peer is view tag 5, packed with the original prefix length zero.
+  let peer := fun (region : RegionName) =>
+    base ⟨String.ofList (List.replicate 30 '@' ++ region.name.toList)⟩
+  let cta : Cta := ⟨0, [0]⟩
+  let emit := fun event => Sum.inr (⟨.cta cta, event, .noValue⟩ : Emission)
+  let flag : Counter := .word ⟨.global 1, "signal", 0⟩
+  let barrier := Counter.phase cta 0
+  [number "i" (.constNat iteration),
+   number "queueOffset" (.mod .nat .nil (nat "i") (.constNat 1)),
+   number "queueRepeat" (.floorDiv .nat .nil (nat "i") (.constNat 1)),
+   pointer "__triton_dist_site3_arg0" (base "signal"),
+   number "__triton_dist_site3_arg1" (nat "peer"),
+   pointer "__triton_dist_site3_result" (peer "signal"),
+   pointer "__triton_dist_site2_arg0"
+     (.ptrAdd .nil (ptr "__triton_dist_site3_result") (nat "queueOffset")),
+   number "__triton_dist_site2_arg1" (.constNat 1),
+   number "__triton_dist_site2_arg2" (.mul .nat .nil (nat "queueRepeat") (.constNat 2)),
+   emit (.wait flag .eq threshold (.atomic .gpu .acquire)),
+   number "__triton_dist_site2_result" (.constNat 2),
+   number "token" (nat "__triton_dist_site2_result"),
+   pointer "__triton_dist_site4_arg0" (ptr "input"),
+   pointer "__triton_dist_site4_result" (ptr "__triton_dist_site4_arg0"),
+   pointer "input" (ptr "__triton_dist_site4_result"),
+   .inl (.assign .real [] "data"
+     (.load .real (.ptr (.ptrAdd .nil (ptr "input") (nat "i"))) .none)),
+   pointer "__triton_dist_site5_arg0" (base "queue"),
+   number "__triton_dist_site5_arg1" (nat "peer"),
+   pointer "__triton_dist_site5_result" (peer "queue"),
+   .inl (.store .real []
+     (.ptr (.ptrAdd .nil (ptr "__triton_dist_site5_result") (nat "queueOffset")))
+     (.ref .real [] "data") .none),
+   emit (.bump ⟨barrier, .add, 1, .atomic .cta .release⟩),
+   emit (.wait barrier .ge phase (.atomic .cta .acquire)),
+   emit (.fence (.shmem .release)),
+   pointer "__triton_dist_site8_arg0" (.ptrAdd .nil (.ptrBase ("signal" : RegionName)) (nat "queueOffset")),
+   number "__triton_dist_site8_arg1" (nat "peer"),
+   number "__triton_dist_site8_arg2"
+     (.add .nat .nil (.mul .nat .nil (nat "queueRepeat") (.constNat 2)) (.constNat 1)),
+   emit (.bump ⟨flag, .set, notification, .atomic .sys .release⟩)]
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem tutorial01ProducerFull :
+    let nat := Op.ref .nat []
+    producerFlat .eq = some
+      ([.inl (.assign .nat [] "__triton_dist_site0_result" (.constNat 0)),
+        .inl (.assign .nat [] "rank" (nat "__triton_dist_site0_result")),
+        .inl (.assign .nat [] "__triton_dist_site1_result" (.constNat 2)),
+        .inl (.assign .nat [] "numRanks" (nat "__triton_dist_site1_result")),
+        .inl (.assign .nat [] "peer"
+          (.mod .nat .nil (.add .nat .nil (nat "rank") (.constNat 1)) (nat "numRanks"))),
+        .inl (.assign .ptr [] "input" (.ptrAdd .nil (.ptrBase ("input" : RegionName)) (.constNat 0))),
+        .inl (.assign .nat [] "__triton_dist_control_6_stop" (.constNat 2))] ++
+        producerRound 0 1 0 1 ++ producerRound 1 2 2 3) := by rfl'
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem producerRequiresWholeCta :
+    projectFlat { launchArgs Tutorial01.producer with wholeCta := Bool.false } 10
+      (producerBody "input" "queue" "signal").start default = none := by rfl'
+
 private noncomputable def consumerFlat (r : DL.WaitReading) : Option (List (Stmt ⊕ Emission)) :=
   projectFlat (launchArgs Tutorial01.consumer r) 10
     (consumerBody "output" "queue" "signal").start default
@@ -438,6 +506,8 @@ theorem plainProjectionRejectsAtomic : (projectPlain atomicKernel).isNone = Bool
 #print axioms waitBothOrders
 #print axioms peerLoad
 #print axioms tutorial01Producer
+#print axioms tutorial01ProducerFull
+#print axioms producerRequiresWholeCta
 #print axioms tutorial01Consumer
 
 #print axioms mixedSites
