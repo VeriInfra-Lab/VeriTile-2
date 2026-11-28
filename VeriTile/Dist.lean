@@ -23,6 +23,8 @@ import VeriTile.Dist.ThreadGuard
 import VeriTile.Dist.Spec.ReduceScatter
 import VeriTile.Dist.Spec.AllToAll
 import VeriTile.Dist.Segment
+import VeriTile.Dist.Exec
+import VeriTile.Dist.Slice
 import VeriTile.Dist.Frontend.TritonDist.Segments
 import VeriTile.Dist.Assumptions
 import VeriTile.Dist.Meta.PrintTrustAssumptions
