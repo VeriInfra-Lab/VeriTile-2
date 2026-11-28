@@ -172,7 +172,7 @@ private def roundedRowEntry (widthKey : String) (dtype : DType) (scalarPerRow : 
     let [t] := ts | throw "expected one matrix"
     checkInput t .fp32 [rows,width]
     let shape := if scalarPerRow then [rows] else [rows,width]
-    runFloatFiles Binary64.sourceRoundedAlgebra dims (kernel width) [("xReg",t)]
+    runSourceRoundedFiles dims (kernel width) [("xReg",t)]
       [⟨"yReg",dtype,shape,none⟩]
 
 private def logExpEntry (kernel : Nat → QKernel) : FileEntry where
@@ -186,7 +186,7 @@ private def logExpEntry (kernel : Nat → QKernel) : FileEntry where
     let shape := [(← gridX dims) * b]
     let [t] := ts | throw "expected one vector"
     checkInput t .fp32 shape
-    runFloatFiles Binary64.sourceRoundedAlgebra dims (kernel b) [("xReg",t)]
+    runSourceRoundedFiles dims (kernel b) [("xReg",t)]
       [⟨"yReg",.fp32,shape,none⟩]
 
 private def swigluEntry (kernel : Nat → Nat → QKernel) : FileEntry where
@@ -201,7 +201,7 @@ private def swigluEntry (kernel : Nat → Nat → QKernel) : FileEntry where
     unless n > 0 && b > 0 && grid == (n + b - 1) / b do
       throw "SwiGLU expects ceil(ncols/BLOCK_N) programs over nonempty vectors"
     for t in ts do checkInput t .fp32 [n]
-    runFloatFiles Binary64.sourceRoundedAlgebra dims (kernel n b)
+    runSourceRoundedFiles dims (kernel n b)
       ((["X","Y"] : List RegionName).zip ts) [⟨"OUT",.bf16,[n],none⟩]
 
 def tensorExamples : List (String × ExampleBinding FileEntry) := [
