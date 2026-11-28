@@ -116,6 +116,7 @@ if [ "$lean" = 1 ]; then
              "lake build tests.lean.dist.AtomicUpdateBoundary"
              "lake build tests.lean.dist.TritonDistFrontend"
              "lake build tests.lean.dist.SegmentSlicing"
+             "lake build tests.lean.dist.Exec"
              "lake build tests.lean.dist.SegmentFootprint"
              "python3 scripts/check_trust_kernel_labels.py"
              "python3 scripts/test_trust_kernel_labels.py ElaboratedLabels"

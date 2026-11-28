@@ -522,6 +522,7 @@ globs = [
   "tests.lean.dist.AtomicUpdateBoundary",
   "tests.lean.dist.TritonDistFrontend",
   "tests.lean.dist.SegmentSlicing",
+  "tests.lean.dist.Exec",
   "tests.lean.dist.SegmentFootprint",
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
