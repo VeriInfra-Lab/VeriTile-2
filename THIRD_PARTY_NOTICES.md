@@ -46,7 +46,7 @@ The holder-neutral [MIT text](licenses/MIT.txt) follows [SPDX v3.26.0](https://g
 | `a05` | [08-overlapping-gemm-reduce-scatter.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/08-overlapping-gemm-reduce-scatter.py) |
 | `a06` | [common_ops.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py) |
 | `b01`, `b04` | [triton-dist.semantics.rst](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/docs/python-api/triton-dist.semantics.rst) |
-| `b02`, `b03`, `b13` | [01-distributed-notify-wait.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/01-distributed-notify-wait.py) |
+| `b02`, `b03`, `b13`, `tests/lean/dist/TritonDistFrontend.lean` | [01-distributed-notify-wait.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/01-distributed-notify-wait.py) |
 | `b07`, `b08` | [07-overlapping-allgather-gemm.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/07-overlapping-allgather-gemm.py) |
 | `b10`, `c01` | [03-inter-node-allgather.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/03-inter-node-allgather.py) |
 | `c05`, `scripts/census/fixtures/04-deepseek-infer-all2all.py.txt` | [04-deepseek-infer-all2all.py](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/04-deepseek-infer-all2all.py) |

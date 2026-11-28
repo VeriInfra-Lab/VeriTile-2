@@ -53,7 +53,7 @@ def check_links(root, documents):
 DERIVED_SOURCES = {
     'tests/dist_litmus': ('**/*.py',),
     'VeriTile/Dist/Frontend/TritonExt': ('Swizzle.lean', 'SourceHelpers.lean', 'ProcedureHelpers.lean', 'SignedSum.lean'),
-    'tests/lean/dist': ('SwizzleSource.lean', 'SourceHelpers.lean', 'ProcedureHelpers.lean', 'ElementHelper.lean', 'P2PTransferViews.lean'),
+    'tests/lean/dist': ('SwizzleSource.lean', 'SourceHelpers.lean', 'ProcedureHelpers.lean', 'ElementHelper.lean', 'P2PTransferViews.lean', 'TritonDistFrontend.lean'),
     'bench/examples/VectorAdd': ('VectorAdd.py', 'Kernels.lean'),
     'experiments/interp_gpu/deepep_v1': ('*.patch', 'combine-cta.cu'),
     'experiments/interp_gpu/smoke': ('kernels.py',),

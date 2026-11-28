@@ -1,5 +1,10 @@
+-- Source: ByteDance-Seed/Triton-distributed@7908e4ea9010bb2238f9f05b28c904fd4b71c60a tutorials/01-distributed-notify-wait.py:83-116,123-146
+-- Licence: MIT
+-- Changes: transcribed to Lean; producer and consumer excerpts for two inputs and one scalar slot
 import VeriTile.Dist.Frontend.TritonDist.Segments
 import VeriTile.Triton.DSL.CallSignature
+import VeriTile.Staging.Dist.TritonDistProgram
+import tests.lean.dist.Tutorial01
 
 namespace VeriTile.Tests.TritonDistFrontend
 
@@ -17,6 +22,11 @@ run_cmd do
   let `(triton { $stmts:tritonStmt* }) ← `(triton { while x < n { } })
     | throwError "expected the base while production"
   liftTermElabM <| liftMacroM <| discard (RawBodyControl.normalize stmts[0]!.raw)
+
+/-- error: affine while requires a final counter increment -/
+#guard_msgs in
+#check (with_triton_signature ({} : CallSignature) in
+  triton { while x < n { } } : ComputeKernel)
 
 #guard_msgs in
 run_cmd do
@@ -85,7 +95,7 @@ private def nestedShape (nodes : List Node) : Bool :=
   | [.code [.assign .nat [] "__triton_dist_control_0_stop" _],
      .loop "i" (.counted "__triton_dist_control_0_stop") [
        .code [.assign .bool [] "__triton_dist_control_0_0_0_condition" _],
-       .branch "__triton_dist_control_0_0_0_condition" [.site ⟨0, .shmem .fence, [], none, none⟩] _],
+       .branch "__triton_dist_control_0_0_0_condition" [.site ⟨0, .shmem .fence, [], none, none, []⟩] _],
      .code [.forLoop "j" 1 _]] => Bool.true
   | _ => Bool.false
 
@@ -152,11 +162,11 @@ example : Body := triton {
   x = dl.rank(1)
 }
 
-/-- error: dl.consume_token: expected a token bound by an earlier dl.wait in this block -/
+/-- error: dl.consume_token: expected a token bound by an earlier dl.wait in this agent -/
 #guard_msgs in
 example : Body := triton { x = dl.consume_token(2, missingToken) }
 
-/-- error: dl.consume_token: expected a token bound by an earlier dl.wait in this block -/
+/-- error: dl.consume_token: expected a token bound by an earlier dl.wait in this agent -/
 #guard_msgs in
 example (p : RegionName) : Body := triton {
   tok = dl.wait(p, 1, "gpu", "acquire")
@@ -209,6 +219,67 @@ private def spinEvents (s : CallSite) : Option (List Event) := do
   let .step events ← call.lower spinContext | none
   return events
 
+private def nestedToken (p : RegionName) : Body := triton {
+  tok = dl.wait(p, 1, "gpu", "acquire")
+  for i in range(1) {
+    x = dl.consume_token(i, tok)
+  }
+}
+
+theorem enclosingWaitLink (p : RegionName) :
+    (nestedToken p).nodes.any (fun n => match n with
+      | .loop _ _ ns => ns.any fun child => match child with
+        | .site site => site.waitSource == some 0
+        | _ => Bool.false
+      | _ => Bool.false) = Bool.true := rfl
+
+/-- error: dl.consume_token: expected a token bound by an earlier dl.wait in this agent -/
+#guard_msgs in
+example (p : RegionName) : Body := triton {
+  for i in range(1) { tok = dl.wait(p, 1, "gpu", "acquire") }
+  x = dl.consume_token(2, tok)
+}
+
+/-- error: dl.consume_token: expected a token bound by an earlier dl.wait in this agent -/
+#guard_msgs in
+example (p : RegionName) : Body := triton {
+  tok = dl.wait(p, 1, "gpu", "acquire")
+  for tok in range(1) { x = dl.consume_token(2, tok) }
+}
+
+private def implicitPorts (p : RegionName) : Body := triton {
+  v = ld(p)
+  st(p, v)
+}
+
+theorem basePortMetadata (p : RegionName) :
+    ((implicitPorts p).inputs, (implicitPorts p).outputs) = ([p], []) := rfl
+
+/--
+error: unexpected syntax
+  triton {r = dl.rank()x = dl.extract()}
+-/
+#guard_msgs in
+example : Body := triton {
+  r = dl.rank()
+  x = dl.extract()
+}
+
+/-- error: TritonDist: duplicate cut marker for site 1 -/
+#guard_msgs in
+run_cmd do
+  -- Marker 1 is present at two positions in the recovered base list.
+  match checkCutCoverage [0, 1] [0, 1, 1] with
+  | .ok () => pure ()
+  | .error msg => throwError "{msg}"
+
+/-- error: TritonDist: missing cut marker for site 1 -/
+#guard_msgs in
+run_cmd do
+  match checkCutCoverage [0, 1] [0] with
+  | .ok () => pure ()
+  | .error msg => throwError "{msg}"
+
 set_option maxRecDepth 4096 in
 theorem a3Spins (p : RegionName) :
     (flatSites (spins p)).map spinEvents =
@@ -227,6 +298,218 @@ example : Body := triton {
   tl.async_wait()
 }
 
+-- Q8 excludes mixed CTA and thread-program granularity.
+/-- error: TritonDist: CTA-level __syncthreads requires a whole-CTA agent -/
+#guard_msgs in
+example : Body := triton {
+  __syncthreads()
+  with dl.simt_exec_region() as (lane, size) {
+    __syncthreads()
+  }
+}
+
+private def launchArgs (a : Agent) (reading : DL.WaitReading := .eq) : LaunchArgs :=
+  { agent := a, numRanks := 2, symmetric := fun _ => Bool.true
+    waitReading := reading, order := fun _ _ => Equiv.refl _, wholeCta := Bool.true }
+
+private def flatEvents (program : List (Stmt ⊕ Emission)) : List Event :=
+  program.filterMap fun item => item.getRight?.map (·.event)
+
+private def twoWords (p : RegionName) : Body := triton {
+  token = dl.wait(p, 2, "gpu", "acquire", waitValue=3)
+}
+
+private def signalWord (offset : Nat) : Counter := .word ⟨.global 0, "signal", offset⟩
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem waitBothOrders :
+    let cfg := launchArgs Tutorial01.producer .ge
+    let reversed := { cfg with order := fun _ _ => ⟨Fin.rev, Fin.rev, Fin.rev_rev, Fin.rev_rev⟩ }
+    let cursor := (twoWords "signal").start
+    let first := Event.wait (signalWord 0) .ge 3 (.atomic .gpu .acquire)
+    let second := Event.wait (signalWord 1) .ge 3 (.atomic .gpu .acquire)
+    (projectFlat cfg 2 cursor default).map flatEvents = some [first, second] ∧
+    (projectFlat reversed 2 cursor default).map flatEvents = some [second, first] :=
+  by constructor <;> rfl'
+
+private def symmLoad (p : RegionName) : Body := triton {
+  peerPtr = dl.symm_at(p, 1)
+  v = tl.load(peerPtr, dtype=tl.uint64)
+}
+
+private def readDistinctRanks : BlockState :=
+  { (default : BlockState) with mem := fun region _ =>
+      ⟨TileDType.nat, if (ViewName.address Tutorial01.producer region 0).space = Space.global 1
+        then 19 else 7⟩ }
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem peerLoad :
+    (((symmLoad "queue").start.prepare (launchArgs Tutorial01.producer) readDistinctRanks).bind
+      fun cut => (cut.evaluated.state.regs .nat [] "v").map (·.data PUnit.unit)) = some 19 := by rfl'
+
+private def producerBody (inputPtr queuePtr signalPtr : RegionName) : Body := triton {
+  rank = dl.rank()
+  numRanks = dl.num_ranks()
+  peer = (rank + $((1 : Nat))) % numRanks
+  input = inputPtr + $((0 : Nat))
+  tl.for i in 2 {
+    queueOffset = i % $((1 : Nat))
+    queueRepeat = i // $((1 : Nat))
+    token = dl.wait(dl.symm_at(signalPtr, peer) + queueOffset, 1, "gpu", "acquire",
+      waitValue=queueRepeat * $((2 : Nat)))
+    input = dl.consume_token(input, token)
+    data = tl.load(input + i)
+    tl.store(dl.symm_at(queuePtr, peer) + queueOffset, data)
+    __syncthreads()
+    libshmem_device.fence()
+    dl.notify(signalPtr + queueOffset, peer, signal=queueRepeat * $((2 : Nat)) + $((1 : Nat)),
+      sig_op="set", comm_scope="intra_node")
+  }
+}
+
+private def consumerBody (outputPtr queuePtr signalPtr : RegionName) : Body := triton {
+  rank = dl.rank()
+  queueBase = queuePtr + $((0 : Nat))
+  tl.for i in 2 {
+    queueOffset = i % $((1 : Nat))
+    queueRepeat = i // $((1 : Nat))
+    token = dl.wait(signalPtr + queueOffset, 1, "gpu", "acquire",
+      waitValue=queueRepeat * $((2 : Nat)) + $((1 : Nat)))
+    queueBase = dl.consume_token(queueBase, token)
+    data = tl.load(queueBase + queueOffset)
+    tl.store(outputPtr + i, data)
+    __syncthreads()
+    libshmem_device.fence()
+    dl.notify(signalPtr + queueOffset, rank, signal=queueRepeat * $((2 : Nat)) + $((2 : Nat)),
+      sig_op="set", comm_scope="intra_node")
+  }
+}
+
+private def t01Events (cmp : Cmp) (a : Agent) : List Event :=
+  (Tutorial01.events cmp (fun _ => 0) a).filterMap (fun item =>
+    match item.event with
+    | .access .. => none
+    | event => some event)
+
+private noncomputable def producerFlat (r : DL.WaitReading) : Option (List (Stmt ⊕ Emission)) :=
+  projectFlat (launchArgs Tutorial01.producer r) 10
+    (producerBody "input" "queue" "signal").start default
+
+-- The two producer rounds share code but have different barrier phases and signal values.
+private def producerRound (iteration phase threshold notification : Nat) : List (Stmt ⊕ Emission) :=
+  let nat := Op.ref .nat []
+  let ptr := Op.ref .ptr []
+  let number := fun name (value : Op .nat []) => Sum.inl (Stmt.assign .nat [] name value)
+  let pointer := fun name (value : Op .ptr []) => Sum.inl (Stmt.assign .ptr [] name value)
+  let base := fun (region : RegionName) => Op.ptrAdd .nil (.ptrBase region) (.constNat 0)
+  -- A CTA's first peer is view tag 5, packed with the original prefix length zero.
+  let peer := fun (region : RegionName) =>
+    base ⟨String.ofList (List.replicate 30 '@' ++ region.name.toList)⟩
+  let cta : Cta := ⟨0, [0]⟩
+  let emit := fun event => Sum.inr (⟨.cta cta, event, .noValue⟩ : Emission)
+  let flag : Counter := .word ⟨.global 1, "signal", 0⟩
+  let barrier := Counter.phase cta 0
+  [number "i" (.constNat iteration),
+   number "queueOffset" (.mod .nat .nil (nat "i") (.constNat 1)),
+   number "queueRepeat" (.floorDiv .nat .nil (nat "i") (.constNat 1)),
+   pointer "__triton_dist_site3_arg0" (base "signal"),
+   number "__triton_dist_site3_arg1" (nat "peer"),
+   pointer "__triton_dist_site3_result" (peer "signal"),
+   pointer "__triton_dist_site2_arg0"
+     (.ptrAdd .nil (ptr "__triton_dist_site3_result") (nat "queueOffset")),
+   number "__triton_dist_site2_arg1" (.constNat 1),
+   number "__triton_dist_site2_arg2" (.mul .nat .nil (nat "queueRepeat") (.constNat 2)),
+   emit (.wait flag .eq threshold (.atomic .gpu .acquire)),
+   number "__triton_dist_site2_result" (.constNat 2),
+   number "token" (nat "__triton_dist_site2_result"),
+   pointer "__triton_dist_site4_arg0" (ptr "input"),
+   pointer "__triton_dist_site4_result" (ptr "__triton_dist_site4_arg0"),
+   pointer "input" (ptr "__triton_dist_site4_result"),
+   .inl (.assign .real [] "data"
+     (.load .real (.ptr (.ptrAdd .nil (ptr "input") (nat "i"))) .none)),
+   pointer "__triton_dist_site5_arg0" (base "queue"),
+   number "__triton_dist_site5_arg1" (nat "peer"),
+   pointer "__triton_dist_site5_result" (peer "queue"),
+   .inl (.store .real []
+     (.ptr (.ptrAdd .nil (ptr "__triton_dist_site5_result") (nat "queueOffset")))
+     (.ref .real [] "data") .none),
+   emit (.bump ⟨barrier, .add, 1, .atomic .cta .release⟩),
+   emit (.wait barrier .ge phase (.atomic .cta .acquire)),
+   emit (.fence (.shmem .release)),
+   pointer "__triton_dist_site8_arg0" (.ptrAdd .nil (.ptrBase ("signal" : RegionName)) (nat "queueOffset")),
+   number "__triton_dist_site8_arg1" (nat "peer"),
+   number "__triton_dist_site8_arg2"
+     (.add .nat .nil (.mul .nat .nil (nat "queueRepeat") (.constNat 2)) (.constNat 1)),
+   emit (.bump ⟨flag, .set, notification, .atomic .sys .release⟩)]
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem tutorial01ProducerFull :
+    let nat := Op.ref .nat []
+    producerFlat .eq = some
+      ([.inl (.assign .nat [] "__triton_dist_site0_result" (.constNat 0)),
+        .inl (.assign .nat [] "rank" (nat "__triton_dist_site0_result")),
+        .inl (.assign .nat [] "__triton_dist_site1_result" (.constNat 2)),
+        .inl (.assign .nat [] "numRanks" (nat "__triton_dist_site1_result")),
+        .inl (.assign .nat [] "peer"
+          (.mod .nat .nil (.add .nat .nil (nat "rank") (.constNat 1)) (nat "numRanks"))),
+        .inl (.assign .ptr [] "input" (.ptrAdd .nil (.ptrBase ("input" : RegionName)) (.constNat 0))),
+        .inl (.assign .nat [] "__triton_dist_control_6_stop" (.constNat 2))] ++
+        producerRound 0 1 0 1 ++ producerRound 1 2 2 3) := by rfl'
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem producerRequiresWholeCta :
+    projectFlat { launchArgs Tutorial01.producer with wholeCta := Bool.false } 10
+      (producerBody "input" "queue" "signal").start default = none := by rfl'
+
+private noncomputable def consumerFlat (r : DL.WaitReading) : Option (List (Stmt ⊕ Emission)) :=
+  projectFlat (launchArgs Tutorial01.consumer r) 10
+    (consumerBody "output" "queue" "signal").start default
+
+-- K1 represents its queue accesses by explicit access events. The composed
+-- source keeps the queue load/store as Triton code, so compare the waits,
+-- CTA phase pairs, fences and notifies to the synchronization skeleton.
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem tutorial01Producer :
+    (producerFlat .eq).map flatEvents = some (t01Events .eq Tutorial01.producer) ∧
+    (producerFlat .ge).map flatEvents = some (t01Events .ge Tutorial01.producer) :=
+  by constructor <;> rfl'
+
+set_option maxRecDepth 8192 in
+set_option maxHeartbeats 6000000 in
+theorem tutorial01Consumer :
+    (consumerFlat .eq).map flatEvents = some (t01Events .eq Tutorial01.consumer) ∧
+    (consumerFlat .ge).map flatEvents = some (t01Events .ge Tutorial01.consumer) :=
+  by constructor <;> rfl'
+
+private def plainKernel : Kernel :=
+  ⟨[], [], [.assign .nat [] "x" (.constNat 3)]⟩
+
+theorem singlePlainSegment :
+    (projectPlain plainKernel).map (slice Tutorial01.producer) =
+      some [.inl (Segment.ofStmts Tutorial01.producer plainKernel.body)] :=
+  projectPlain_noSync Tutorial01.prodCta plainKernel rfl
+
+private def atomicKernel : Kernel :=
+  ⟨[], [], [.forLoop "i" 1 [.atomicAdd .nat [] (.region "counter" (.constNat 0))
+    (.constNat 1) .none]]⟩
+
+theorem plainProjectionRejectsAtomic : (projectPlain atomicKernel).isNone = Bool.true := rfl
+
+#print axioms singlePlainSegment
+#print axioms plainProjectionRejectsAtomic
+
+#print axioms waitBothOrders
+#print axioms peerLoad
+#print axioms tutorial01Producer
+#print axioms tutorial01ProducerFull
+#print axioms producerRequiresWholeCta
+#print axioms tutorial01Consumer
+
 #print axioms mixedSites
 #print axioms mixedRegisterFlow
 #print axioms controlRegisters
@@ -234,6 +517,8 @@ example : Body := triton {
 #print axioms operandEvaluationOrder
 #print axioms waitLink
 #print axioms a3Spins
+#print axioms enclosingWaitLink
+#print axioms basePortMetadata
 
 end
 end VeriTile.Tests.TritonDistFrontend
