@@ -1401,7 +1401,7 @@ scatter contents. [Copy addresses and frames](../../tests/lean/dist/Tutorial05Ho
 
 The source-facing theorem `Whole.t05` takes an ordinary invocation of the
 pinned program. Its trust report lists A3 (spin loops), A8 (native peer
-atomics), and `t05_current_stream_order`. The underlying machine theorem
+atomics), and A12 (`t05_current_stream_order`). The underlying machine theorem
 `Whole.model_t05` proves the ordered S7 result for every complete execution and
 exhibits a complete race-free execution whenever the CTA has at least as many
 physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
