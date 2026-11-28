@@ -14,7 +14,9 @@ def fixture():
 
 class InstructionScanTests(unittest.TestCase):
     def test_current_fixture(self):
-        subprocess.run([sys.executable, str(Path(scan.__file__)), "--check"], check=True, capture_output=True)
+        result = subprocess.run([sys.executable, str(Path(scan.__file__)), "--check"],
+                                check=True, capture_output=True, text=True)
+        self.assertIn("55 CUDA template emitters accounted for by the reverse scan", result.stdout)
         self.assertEqual(scan.check(fixture()), [])
 
     def test_unclassified_instruction_fails(self):
