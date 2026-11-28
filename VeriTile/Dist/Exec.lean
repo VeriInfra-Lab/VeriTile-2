@@ -298,12 +298,12 @@ theorem FireGroup.deterministic {l : Launch P}
       exact ⟨rfl,rfl⟩
 
 private theorem FireGroup.splitAt {l : Launch P} {a : Agent} {pre post : List Emission}
-    (full : FireGroup l a s (pre ++ post) m vals) :
+    (wholeGroup : FireGroup l a s (pre ++ post) m vals) :
     ∃ mid before after, FireGroup l a s pre mid before ∧ FireGroup l a mid post m after := by
   induction pre generalizing s vals with
-  | nil => exact ⟨s, [], vals, .nil _,full⟩
+  | nil => exact ⟨s, [], vals, .nil _,wholeGroup⟩
   | cons x xs ih =>
-    cases full with
+    cases wholeGroup with
     | cons acc free ordered fire rest =>
       obtain ⟨mid,before,after,front,back⟩ := ih rest
       exact ⟨mid,_,after,.cons acc free ordered fire front,back⟩
