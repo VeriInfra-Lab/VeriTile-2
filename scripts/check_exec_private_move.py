@@ -84,7 +84,8 @@ def main():
             continue
         if normalize(raw) != before[original]:
             raise ValueError(f"{name}: content differs from signed {original} after decision-v renames")
-        print(f"{name} -> {original}\t{digest(before[original])}\tbyte-identical")
+        print(f"{name} -> {original}\tsigned_sha256={digest(before[original])}"
+              f"\tnew_sha256={digest(raw)}\tbyte-identical after normalization")
     print(f"{len(rows)} signed statements; {len(before)} baseline and {len(after)} post-move definitions verified")
 
 
