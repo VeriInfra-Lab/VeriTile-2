@@ -6,9 +6,10 @@ line, drafted by ticket S3.1 (#43) and revised to the user's decisions of
 2026-11-13. Part 1 is signed on 2026-11-23: its five theorems, each with the
 definitions under it (`documents/dist/FrozenStatements.tsv`,
 `FrozenDefinitions.tsv`). The user approved the choices N2, N3 and N4 below as
-taken; the agent recorded the signature on the user's delegation. The stubs of
-part 1 are under signed statements: the ticket that defines one changes its
-recorded fingerprint, and the coordinator reviews and records that change.
+taken; the agent recorded the signature on the user's delegation. S3.3 (#45)
+replaced the part-1 stub `Segment.ofStmts` with a definition whose footprints
+are computed from the statements; that changed recorded fingerprints, which the
+coordinator records after the user re-signs them.
 Part 2 is signed on 2026-11-27 (user decision 三 of 2026-11-25, recorded on
 #43): the six statements `AgentProgram.Step.deterministic`,
 `AgentProgram.ofBody_step_noSync`, `slice_noSync`, `slice_sync`,
@@ -41,10 +42,13 @@ declaration of part 2 or an `Event`.
   flat body as one program (`AgentProgram.ofBody`, `slice`) and the statements
   about them.
 
-Part 2 proves the flat slice equations, step determinism and the sequence of
-segments and events. Its no-sync step equation uses the part-1 run-view bridge,
-which still awaits the implementation of `Segment.ofStmts`. #48 owns the later
-move of the signed program declarations. `EventControlFlow.md` below is
+Every theorem of part 1 is proved. Part 2 proves the flat slice equations,
+step determinism, the no-sync step equation and the sequence of segments and
+events; only `exec_noSync_eq_exec` (S3.4, #46) is still a statement with
+`sorry`. The ticket named in a docstring moves that declaration to
+`VeriTile/Dist/` under the same name and type, proves it there and deletes it
+here in the same change; #48 owns the later move of the signed program
+declarations. `EventControlFlow.md` below is
 `documents/dist/EventControlFlow.md`; K1 to K28 are its kernel rows.
 
 Decisions (user decision, 2026-11-13, recorded on #43):

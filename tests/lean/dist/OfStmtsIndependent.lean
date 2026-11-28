@@ -6,7 +6,10 @@ cell `x[0]` and CTA `[1]` exactly the cell `x[1]`; neither reads a cell. Their
 reservations are `Independent`, and both can take S4's `step.segment`.
 
 Negative companion: when both CTAs run `x[0] = 1.0`, both write `x[0]`, and no
-two reservations of their segments are `Independent`. -/
+two reservations of their segments are `Independent`.
+
+Load case: CTA `[0]` running `x[program_id(0)] = y[program_id(0)]` reads
+exactly `y[0]` and writes exactly `x[0]`. -/
 import VeriTile.Staging.Dist.JudgmentSpec
 
 namespace VeriTile.Dist.OfStmtsIndependentTests
@@ -192,5 +195,61 @@ theorem atZero_not_independent (ra rb : Resources)
   have hw1 : (⟨.global 0, x, 0⟩ : Addr) ∈ rb.writes :=
     hb.2.2 (by rw [(atZero_footprint c1 rfl).2]; rfl)
   exact Set.disjoint_left.mp hd hw0 (Or.inr hw1)
+
+/-! ## Load case: the read side of the footprint -/
+
+/-- The global buffer the load case reads. -/
+def y : RegionName := ⟨"y"⟩
+
+/-- `x[program_id(0)] = y[program_id(0)]`. -/
+def copyByPid : List Stmt :=
+  [.store .real [] (.region x (.programId 0)) (.load .real (.region y (.programId 0)) .none) .none]
+
+theorem address_y (c : Cta) (hc : c.rank = 0) (i : Nat) :
+    ViewName.address (.cta c) y i = ⟨.global 0, y, i⟩ := by
+  have h := ViewName.address_name (.cta c) ⟨.global 0, y, i⟩ (ViewName.visible_global _ 0 y i)
+  have hy : ViewName.ofSpace (.cta c) (.global (Agent.cta c).rankOf) y = y :=
+    ViewName.plain_home _ y (by decide)
+  simp only [Agent.rankOf, hc] at hy
+  simpa only [ViewName.name, hy] using h
+
+/-- CTA `[0]` running `copyByPid` in `σ₀` reads exactly `y[0]` and writes
+exactly `x[0]`. -/
+theorem copyByPid_footprint :
+    (Segment.ofStmts (.cta c0) copyByPid).reads σ₀ = {⟨.global 0, y, 0⟩} ∧
+    (Segment.ofStmts (.cta c0) copyByPid).writes σ₀ = {⟨.global 0, x, 0⟩} := by
+  constructor
+  · ext p
+    simp only [Segment.ofStmts, copyByPid, stmtsFoot_singleton, stmtFoot, memReads, maskReads,
+      opReads, accessCells, MaskOpt.Active, evalOp, Set.mem_setOf_eq, Set.mem_singleton_iff,
+      Set.mem_union, Set.mem_empty_iff_false, Option.some.injEq]
+    constructor
+    · rintro ⟨q, hq, rfl⟩
+      simp only [false_or, or_false] at hq
+      obtain ⟨offs, rfl, i, -, rfl⟩ := hq
+      show ViewName.address (.cta c0) y _ = _
+      rw [address_y c0 rfl]
+      rfl
+    · rintro rfl
+      refine ⟨(y, 0), ?_, address_y c0 rfl 0⟩
+      simp only [false_or, or_false]
+      exact ⟨_, rfl, (), trivial, rfl⟩
+  · ext p
+    simp only [Segment.ofStmts, copyByPid, stmtsFoot_singleton, stmtFoot, accessCells,
+      MaskOpt.Active, evalOp, Set.mem_setOf_eq, Set.mem_singleton_iff, Option.some.injEq]
+    constructor
+    · rintro ⟨q, ⟨offs, rfl, i, -, rfl⟩, rfl⟩
+      show ViewName.address (.cta c0) x _ = _
+      rw [address_x c0 rfl]
+      rfl
+    · rintro rfl
+      refine ⟨_, ⟨_, rfl, (), trivial, rfl⟩, ?_⟩
+      show ViewName.address (.cta c0) x _ = _
+      rw [address_x c0 rfl]
+      rfl
+
+#print axioms byPid_independent_and_enabled
+#print axioms atZero_not_independent
+#print axioms copyByPid_footprint
 
 end VeriTile.Dist.OfStmtsIndependentTests
