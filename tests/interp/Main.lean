@@ -179,16 +179,49 @@ private def basicExamples : List (String × ExampleBinding KernelEntry) := [
   ("FlatVectorAdd", bind_example% flatVectorProgram => flatVectorAdd),
   ("FloatDTypeAdd", bind_example% floatAddProgram => floatDTypeAdd)]
 
-def exampleCli (args : List String) : IO UInt32 := do
-  let files := Examples.tensorExamples ++ Examples.hyperExamples
+private def exampleCliWithFiles (files : List (String × ExampleBinding FileEntry))
+    (args : List String) : IO UInt32 := do
+  let runners {α : Type} (entries : List (String × ExampleBinding α)) : List (String × α) :=
+    entries.map fun (key, entry) => (key, entry.entry)
   if args == ["--example-sources"] then
+    match validateFileRegistry (runners files) with
+    | .error message =>
+      IO.eprintln message
+      return 1
+    | .ok () => pure ()
     let sources {α : Type} (entries : List (String × ExampleBinding α)) : List (String × Lean.Json) :=
       entries.map fun (key, entry) => (key, Lean.Json.str entry.source)
     IO.println (Lean.Json.mkObj (sources basicExamples ++ sources files)).compress
     return 0
-  let runners {α : Type} (entries : List (String × ExampleBinding α)) : List (String × α) :=
-    entries.map fun (key, entry) => (key, entry.entry)
   runCli (runners basicExamples) [("fp32-basic", runFP32)] args (runners files)
+
+def exampleCli (args : List String) : IO UInt32 :=
+  exampleCliWithFiles (Examples.tensorExamples ++ Examples.hyperExamples) args
+
+-- Pin both actual CLI startup paths with a registry that must never execute.
+private def invalidFileBinding : ExampleBinding FileEntry where
+  source := "unused"
+  entry := {
+    inputs := [], outputs := [], carrier := "source-rounded"
+    sourceRoundedProbe := some (.mk [] [] [
+      .assign .real [] "bad" (.alg (.add .real .nil (.const 1) (.const 2)))])
+    run := fun _ _ _ => .error "must not launch" }
+
+/--
+info: invalid: kernel outside source-rounded precision/operation fragment
+---
+info: 1
+-/
+#guard_msgs in
+#eval runCli [] [] ["--help"] [("invalid", invalidFileBinding.entry)]
+
+/--
+info: invalid: kernel outside source-rounded precision/operation fragment
+---
+info: 1
+-/
+#guard_msgs in
+#eval exampleCliWithFiles [("invalid", invalidFileBinding)] ["--example-sources"]
 
 end VeriTile.Interp.Run
 

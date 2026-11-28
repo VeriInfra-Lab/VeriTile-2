@@ -333,6 +333,15 @@ def runSourceRoundedGrid (k : QKernel) (dims : List Nat) (initial : State Float)
 #guard sourceRoundedAlgebra.reduceSum (some .fp32) (shape := [3]) ⟨0, by decide⟩ false
   (fun i => if i.1.val == 2 then 1 else 1 / 16777216) PUnit.unit == 1 + 1 / 8388608
 
+-- Pin the typed path independently of the untyped reduction and its guards.
+private def typedSumProbe (oneLane : Nat) : Option Float :=
+  (sourceRoundedAlgebra.reduceSumTyped (some .fp32) .fp32 (shape := [3]) ⟨0, by decide⟩ false
+    (fun i => Structural.ofFloat .fp32 (if i.1.val == oneLane then 1 else 1 / 16777216 : Float))).map
+    (fun values => Structural.toFloat .fp32 (values PUnit.unit))
+
+#guard typedSumProbe 0 == some 1
+#guard typedSumProbe 2 == some (1 + 1 / 8388608)
+
 -- Unsupported optional operations must not inherit the binary64 methods.
 #guard (sourceRoundedAlgebra.fma .fp32).isNone
 #guard (sourceRoundedAlgebra.fmaTyped .fp32).isNone
@@ -355,6 +364,35 @@ def runSourceRoundedGrid (k : QKernel) (dims : List Nat) (initial : State Float)
   (fun _ => Structural.ofFloat .fp32 (0 : Float))).isNone
 
 private def probe (e : QOp d sh) : QKernel := .mk [] [] [.assign d sh "probe" (.alg e)]
+
+-- Each check is pinned separately, without the enclosing assignment that
+-- would otherwise mask a broken arithmetic check with a transport rejection.
+private def unsupportedFloats : List FloatDType := [.fp16, .f8e4, .f8e5]
+
+#guard unsupportedFloats.all fun d => !opOK (some .fp32) (.constFloat d 1)
+#guard unsupportedFloats.all fun d =>
+  !opOK none (.load d.toTileDType (.region "x" (.constNat 0)) .none)
+-- An FP16/F8 cast source is itself inadmissible, so test storageOK directly.
+#guard unsupportedFloats.all fun d => !storageOK d
+#guard unsupportedFloats.all fun d => !opOK none (.ref d.toTileDType [] "x")
+
+-- Reject a hidden untyped add even in a mask, inactive loop, or dead branch.
+private def untypedAdd : QOp .real [] :=
+  .add .real .nil (.ref .real [] "x") (.ref .real [] "y")
+
+private def badMask : QOp .bool [] := .lt .real .nil untypedAdd (.const 0)
+private def badBody : List QStmt := [.assign .real [] "bad" (.alg untypedAdd)]
+
+#guard !sourceRoundedAdmits (probe (.load .fp32 (.region "x" (.constNat 0)) (.mask badMask)))
+#guard !sourceRoundedAdmits (probe (.load .fp32 (.region "x" (.constNat 0))
+  (.maskOther badMask (.constFloat .fp32 0))))
+#guard !sourceRoundedAdmits (probe (.load .fp32 (.region "x" (.constNat 0))
+  (.maskOther (.constBool false) (.castFloat .real .fp32 untypedAdd))))
+#guard !sourceRoundedAdmits (.mk [] [] [.forLoop "i" 0 badBody])
+#guard !sourceRoundedAdmits (.mk [] [] [.forRange "i" 0 0 1 badBody])
+#guard !sourceRoundedAdmits (.mk [] [] [.forRangeDyn "i" (.constNat 0) (.constNat 0) (.constNat 1) badBody])
+#guard !sourceRoundedAdmits (.mk [] [] [.forRangeInt "i" (.constInt 0) (.constInt 0) (.constNat 1) badBody])
+#guard !sourceRoundedAdmits (.mk [] [] [.ifThenElse (.constBool true) [] badBody])
 
 -- Rejection is at the instantiated registration, not a NaN substitute.
 #guard !sourceRoundedAdmits (probe (.castFloat .real .fp16 (.withPrecision .real .fp32 (.const 1))))

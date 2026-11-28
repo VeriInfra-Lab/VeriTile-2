@@ -21,8 +21,7 @@
       "properties": {
         "carrier": {"$ref": "#/definitions/name"},
         "num_warps": {"type": "integer", "minimum": 1},
-        "num_stages": {"type": "integer", "minimum": 1},
-        "enable_fp_fusion": {"type": "boolean"}
+        "num_stages": {"type": "integer", "minimum": 1}
       },
       "description": "carrier selects the interpreter implementation. The optional parameters configure a corresponding Triton launch."
     },

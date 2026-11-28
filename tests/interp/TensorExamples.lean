@@ -164,6 +164,7 @@ private def roundedRowEntry (widthKey : String) (dtype : DType) (scalarPerRow : 
   inputs := ["xReg"]
   outputs := ["yReg"]
   carrier := "source-rounded"
+  sourceRoundedProbe := some (kernel 4)
   run cfg dims ts := do
     cfg.check [widthKey] []
     let rows ← gridX dims
@@ -179,6 +180,7 @@ private def logExpEntry (kernel : Nat → QKernel) : FileEntry where
   inputs := ["xReg"]
   outputs := ["yReg"]
   carrier := "source-rounded"
+  sourceRoundedProbe := some (kernel 4)
   run cfg dims ts := do
     cfg.check ["blockSize"] []
     let b ← naturalSetting cfg.constants "blockSize"
@@ -193,6 +195,8 @@ private def swigluEntry (kernel : Nat → Nat → QKernel) : FileEntry where
   inputs := ["X","Y"]
   outputs := ["OUT"]
   carrier := "source-rounded"
+  -- Nontrivial block with an inactive tail lane.
+  sourceRoundedProbe := some (kernel 5 4)
   run cfg dims ts := do
     cfg.check ["ncols","BLOCK_N"] []
     let n ← naturalSetting cfg.constants "ncols"
@@ -221,5 +225,7 @@ def tensorExamples : List (String × ExampleBinding FileEntry) := [
   ("SoftmaxReciprocal", bind_example% reciprocalSoftmax => roundedRowEntry "blockSize" .bf16 Bool.false),
   ("SoftmaxStable", bind_example% stableSoftmax => roundedRowEntry "B" .bf16 Bool.false),
   ("StableLogSumExp", bind_example% stableLSE => roundedRowEntry "blockSize" .bf16 Bool.true)]
+
+#guard validateFileRegistry (tensorExamples.map fun (name, binding) => (name, binding.entry)) == .ok ()
 
 end VeriTile.Interp.Run.Examples

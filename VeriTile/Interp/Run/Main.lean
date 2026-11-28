@@ -2,6 +2,7 @@
 the outer executable. Kernel bindings and their shape checks stay with the
 registry, keeping bench imports outside the interpreter library. -/
 import VeriTile.Interp.Run.Grid
+import VeriTile.Interp.Carrier.Float
 import VeriTile.Interp.Run.TensorIO
 import Lean.Data.Json.Parser
 
@@ -47,7 +48,37 @@ structure FileEntry where
   inputs : List RegionName
   outputs : List RegionName
   carrier : String
+  /-- Representative specialization of the same mirror used at launch.
+  Source-rounded entries must provide one; each actual launch is still checked. -/
+  sourceRoundedProbe : Option QKernel := none
   run : Settings → List Nat → List Tensor → Except String (List Tensor)
+
+/-- Validate each source-rounded file registration at registry load, even
+when the command only requests metadata or selects another carrier. -/
+def validateFileRegistry (entries : List (String × FileEntry)) : Except String Unit := do
+  for (name, entry) in entries do
+    if entry.carrier == "source-rounded" then
+      let some k := entry.sourceRoundedProbe |
+        throw s!"{name}: source-rounded registration has no admission probe"
+      unless Binary64.sourceRoundedAdmits k do
+        throw s!"{name}: kernel outside source-rounded precision/operation fragment"
+
+private def registryProbe (carrier : String) (probe : Option QKernel) : FileEntry where
+  inputs := []
+  outputs := []
+  carrier := carrier
+  sourceRoundedProbe := probe
+  run := fun _ _ _ => .error "registry validation must not launch a kernel"
+
+private def unsupportedRegistration : QKernel := .mk [] [] [
+  .assign .real [] "bad" (.alg (.add .real .nil (.const 1) (.const 2)))]
+
+#guard validateFileRegistry [("invalid", registryProbe "source-rounded" (some unsupportedRegistration))] ==
+  .error "invalid: kernel outside source-rounded precision/operation fragment"
+#guard validateFileRegistry [("missing", registryProbe "source-rounded" none)] ==
+  .error "missing: source-rounded registration has no admission probe"
+#guard validateFileRegistry [("binary64", registryProbe "binary64" none),
+    ("valid", registryProbe "source-rounded" (some (.mk [] [] [])))] == .ok ()
 
 private def usage (kernels : List (String × KernelEntry)) (entries : List (String × FileEntry))
     (carriers : List String) : String :=
@@ -107,10 +138,11 @@ private def parseSettings (args : List String) (settings : Settings := {}) :
 def runCli (kernels : List (String × KernelEntry)) (carriers : List (String × RunCarrier))
     (args : List String) (entries : List (String × FileEntry) := []) : IO UInt32 := do
   let help := usage kernels entries (carriers.map Prod.fst ++ entries.map (·.2.carrier))
-  if args == ["--help"] then
-    IO.println help
-    return (0 : UInt32)
   try
+    IO.ofExcept (validateFileRegistry entries)
+    if args == ["--help"] then
+      IO.println help
+      return (0 : UInt32)
     let "--carrier" :: carrier :: "--grid" :: grid :: rest := args | throw <| IO.userError help
     let (settings, positional) ← IO.ofExcept (parseSettings rest)
     let kernel :: files := positional | throw <| IO.userError help
