@@ -16,7 +16,7 @@ knowledge of weak memory.
 
 Vocabulary: [PrimitiveSources.md](PrimitiveSources.md) for the primitives,
 their patterns, the evidence items `E-…`, the rules W1 to W6, the decisions D1
-to D8, the inferences I1 to I11 and the assumptions A1 to A11;
+to D8, the inferences I1 to I11 and the assumptions A1 to A12;
 [`Event.lean`](../../VeriTile/Dist/Event.lean) for `Event`, `Mode` and `Counter`,
 with the pattern (a) lemmas in [`Access.lean`](../../VeriTile/Dist/Event/Access.lean)
 and pattern (b) in [`Counter.lean`](../../VeriTile/Dist/Event/Counter.lean);
@@ -44,7 +44,7 @@ now compares the frozen 3.6.5 manual with its earlier `latest` (3.8.0) evidence.
 | Mark | Meaning |
 | --- | --- |
 | Q | Decided by the quoted sentences alone |
-| R(x) | Decided only under x, a reading, decision or assumption of `PrimitiveSources.md`. D5 is a reading that the project counts as documented; A1 to A11 are registered assumptions; D1, D3 and D6 are decisions between conflicting or incomplete sources; D7 limits what the NVSHMEM fence orders, and D8 orders accesses across a participating block barrier |
+| R(x) | Decided only under x, a reading, decision or assumption of `PrimitiveSources.md`. D5 is a reading that the project counts as documented; A1 to A12 are registered assumptions; D1, D3 and D6 are decisions between conflicting or incomplete sources; D7 limits what the NVSHMEM fence orders, and D8 orders accesses across a participating block barrier |
 | N | Not decided by documentation. The row says what is missing and takes the weakest treatment (W1 to W6) |
 | D2 | The two readings of decision D2 give different outcome sets. Both are given and none is chosen |
 

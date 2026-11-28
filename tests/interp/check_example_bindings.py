@@ -1,4 +1,4 @@
-"""Run examples whose qualified declaration exists but belongs to another binding."""
+"""Exercise file-runner and example-spec binding mismatches through the driver."""
 import json
 from pathlib import Path
 import subprocess
@@ -31,6 +31,23 @@ def main():
             if run.returncode != 1 or expected not in run.stderr:
                 raise SystemExit(f"{name}: expected a registration mismatch; got {run.returncode}\n{run.stderr}")
         print(f"{name}: rejected {replacement}", flush=True)
+
+    runner = ROOT / ".lake/build/bin/veritile-run"
+    bindings = json.loads(subprocess.check_output([runner, "--example-sources"]))
+    bindings["MissingExample"] = bindings["VectorAdd"]
+    with tempfile.TemporaryDirectory() as work:
+        extra = Path(work) / "extra-runner"
+        extra.write_text("#!/usr/bin/env python3\nimport sys\n"
+                         "assert sys.argv[1:] == ['--example-sources']\n"
+                         f"print({json.dumps(bindings)!r})\n")
+        extra.chmod(0o755)
+        run = subprocess.run(["uv", "run", "--no-project", "--python", "3.11", "--script",
+                              str(EXAMPLES / "run.py"), "--runner", str(extra)],
+                             cwd=ROOT, capture_output=True, text=True)
+        expected = "file-runner bindings without an example spec: MissingExample"
+        if run.returncode != 1 or run.stderr.strip().splitlines()[-1:] != [expected]:
+            raise SystemExit(f"expected the missing-spec diagnostic, got {run.returncode}\n{run.stderr}")
+        print(expected, flush=True)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,8 @@ import tests.lean.dist.Tutorial05CAS
 
 The rank-local copy engine, the K11 CTA and K10 logical tile b have distinct model
 owners [1], [0] and [b+2]. The two stream words are auxiliary state at a fresh
-region. They are erased from the source observation. No shadow edge connects ranks.
+region. No source segment or K11 operation reads or writes them
+(Shadow.reached_segments_disjoint and Shadow.k11_disjoint). No shadow edge connects ranks.
 The concrete projection has two representative CTA participants. A whole-launch
 proof must instantiate the CTA/join with every physical participating lane,
 including lanes that skip the conditional CAS. No complete T05 Run is claimed here. -/
@@ -68,8 +69,8 @@ theorem noRemoteStreamPair (l : Launch P) (p : Addr) (diff : a.rankOf ≠ b.rank
   intro hh; exact diff hh.2.2.1
 
 -- Independent controls, on actual concrete locations, owners and counter identities.
--- Fresh ghost instrumentation words are projected out of the source-visible
--- memory. This uses no M2 rendezvous ID/roster and no physical source flag.
+-- Output reads only output cells. The stream words use a separate region
+-- from those cells and the physical source flags.
 def mark (r : Nat) (stage : Bool) : Addr := ⟨.global r,"T05.stream.shadow",if stage then 1 else 0⟩
 def streamCounter (r : Nat) (stage : Bool) : Counter := .word (mark r stage)
 def cuts (r : Nat) : History := [copied r,rel (host r) (streamCounter r false),

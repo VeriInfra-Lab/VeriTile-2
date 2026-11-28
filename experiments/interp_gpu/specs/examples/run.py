@@ -136,10 +136,20 @@ def main():
             raise ValueError("expected a JSON object of file-runner bindings")
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"cannot read example bindings from {runner}: {exc}\n")
+    specs = []
     for path in args.spec or sorted(HERE.glob("*.json")):
         try:
             spec = json.loads(path.read_text())
             validator.validate(spec)
+            specs.append((path, spec))
+        except (ValueError, OSError, ValidationError) as exc:
+            parser.exit(1, f"{path}: {exc}\n")
+    if not args.spec:
+        missing = sorted(registered_sources.keys() - {spec["kernel"]["name"] for _, spec in specs})
+        if missing:
+            parser.exit(1, "file-runner bindings without an example spec: " + ", ".join(missing) + "\n")
+    for path, spec in specs:
+        try:
             check_kernel(spec["kernel"], spec["arguments"], registered_sources)
             for case in spec["input_classes"]:
                 with tempfile.TemporaryDirectory(prefix="veritile-spec-") as work:
