@@ -56,7 +56,13 @@ NAMED = {
 # src/cuda/transform/lower_shared_tmem.cc L94 and L489 at the pin.
 PASS = {"alloc_tmem": ["tl.ptx_init_tensor_memory"], "deallocate_tmem": ["tl.ptx_deallocate_tensor_memory"]}
 # Exports whose chain reaches an instruction but whose device code is not that instruction.
+# These composite routes reach device code through the copy lowering pass.
+REVERSE_KEPT = {
+    'copy': 'Composite TMEM copy. Buffer direction and element packing select a load or store specialization. The device wrapper waits for completion.',
+    'copy_cluster': 'Composite cluster copy. The destination-block annotation selects the intrinsic `tl.tma_store_cluster`. Its device function maps the remote addresses, fences the proxy and issues a bulk copy.',
+}
 KEPT = {
+    **REVERSE_KEPT,
     "clc_get_first_ctaid_x": "composite: decodes a CLC response, then a proxy fence",
     "clc_get_first_ctaid_y": "composite: decodes a CLC response, then a proxy fence",
     "clc_get_first_ctaid_z": "composite: decodes a CLC response, then a proxy fence",
@@ -161,8 +167,9 @@ class Scan:
                 used.add(r["export"])
                 rows.append((r["export"], ",".join(intrinsics) or "-", ",".join(functions) or "-",
                              ",".join(found) or "-", status, basis))
-        if KEPT.keys() - used:
-            raise ValueError(f"KEPT names no longer reach an instruction: {sorted(KEPT.keys() - used)}")
+        missing = KEPT.keys() - REVERSE_KEPT.keys() - used
+        if missing:
+            raise ValueError(f"KEPT names no longer reach an instruction: {sorted(missing)}")
         return rows
 
 
@@ -180,10 +187,27 @@ def signed_list():
     return re.findall(r'"(\w+)"', statement[:statement.index(":= by")].split("=", 1)[1])
 
 
+def check_kept_table(document):
+    table = document.partition("**Checked and kept.**")[2].lstrip().split("\n\n", 1)[0]
+    reasons = {}
+    for row in table.splitlines():
+        cells = row.split("|")
+        if len(cells) == 4:
+            for name in re.findall(r"`(\w+)`", cells[1]):
+                reasons.setdefault(name, []).append(cells[2].strip().split(" [", 1)[0])
+    errors = []
+    for name in KEPT:
+        if len(reasons.get(name, [])) != 1:
+            errors.append(f"{name}: expected one disposition in the document's kept table")
+        elif name in REVERSE_KEPT and reasons[name][0] != KEPT[name]:
+            errors.append(f"{name}: documented reason differs from its reverse-scan disposition")
+    return errors
+
+
 def check(rows):
     """Errors of a fixture: each row is excluded by the rule or kept with its reason, and the
     excluded rows are the signed theorem's list and the matrix's `never` rows."""
-    errors = []
+    errors = check_kept_table((ROOT / "documents/TileLangSubset.md").read_text())
     for r in rows:
         name = r["export"]
         if excluded(name):
@@ -216,9 +240,7 @@ def main():
     if errors:
         parser.exit(1, "\n".join(errors) + "\n")
     mine = [r["export"] for r in rows if r["status"] == "excluded"]
-    # These two composite tile operators are lowered by copy.cc. Their
-    # device paths are recorded by the reverse scan, outside the forward pass.
-    accounted = set(mine) | KEPT.keys() | {"copy", "copy_cluster"}
+    accounted = set(mine) | KEPT.keys()
     try:
         count = reverse.check(args.sources[0] if args.sources else None, allowed_exports=accounted)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:

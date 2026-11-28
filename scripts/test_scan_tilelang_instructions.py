@@ -19,6 +19,14 @@ class InstructionScanTests(unittest.TestCase):
         self.assertIn("55 CUDA template emitters accounted for by the reverse scan", result.stdout)
         self.assertEqual(scan.check(fixture()), [])
 
+    def test_reverse_kept_table_must_name_and_explain_both_copies(self):
+        document = (scan.ROOT / 'documents/TileLangSubset.md').read_text()
+        for name in ('copy', 'copy_cluster'):
+            row = next(line for line in document.splitlines() if line.startswith(f'| `{name}` | Composite'))
+            for changed in (document.replace(row, ''), document.replace(row, f'| `{name}` | Different reason. |')):
+                with self.subTest(name=name):
+                    self.assertTrue(any(name in e for e in scan.check_kept_table(changed)))
+
     def test_unclassified_instruction_fails(self):
         rows = fixture() + [dict(zip(scan.HEADER, ("planted_call", "tl.planted", "planted",
                                                     "wgmma.fence", "kept", "unlisted")))]
