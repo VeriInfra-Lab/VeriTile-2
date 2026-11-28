@@ -1,4 +1,5 @@
 import tests.lean.dist.IndexQueueCapacityTwoShape
+import tests.lean.dist.IndexQueueCapacityTwoWitness
 import tests.lean.dist.IndexQueueGeneral
 
 namespace VeriTile.Tests.G1QueueRefinement.CapacityTwo
@@ -28,6 +29,21 @@ theorem cell_refines (w : CellWrites) (s : DistState)
     (ht : (s.cell tail).readAs .nat = some 0) (hh : (s.cell head).readAs .nat = some 0) :
     queue.cellView.Refines (launch 1 w) s :=
   IndexQueue.cellView_of_refines (shaped w s ht hh) (release_refines w s ht hh)
+
+/-- The actual run orders the first take before the third put on their shared slot. -/
+theorem completedReuse (w : CellWrites) (s : DistState)
+    (ht : (s.cell tail).readAs .nat = some 0) (hh : (s.cell head).readAs .nat = some 0) :
+    ∃ sched final, Run (launch 1 w) ((launch 1 w).initial s) sched final ∧ Complete final ∧
+      queue.view.Take final.history 0 9 ∧ queue.view.Put final.history 2 17 ∧
+      HB (launch 1 w) final.history (queue.slotOf 0) 9 17 := by
+  obtain ⟨sched, final, run, done, first, _, _, third, _⟩ := completeRun w s
+  obtain ⟨j, taken, _, ordered⟩ := (release_refines w s ht hh sched final run).2 0 17 third
+  have before := NthAt.ordinal_lt taken first
+  have after := NthAt.ordinal_lt first taken
+  have same : j = 9 := by omega
+  exact ⟨sched, final, run, done, first, third, same ▸ ordered⟩
+
+#print axioms completedReuse
 
 #print axioms launchSound
 #print axioms release_refines
