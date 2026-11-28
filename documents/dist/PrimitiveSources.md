@@ -1481,6 +1481,19 @@ N5′ remains an open translation-correctness assumption.
 Discharged only by #82, the source-to-S3 bridge. No S3 payload is
 constructed by these tests.
 
+### Q8(a) `triton_cta_single_barrier_participant`
+
+| Field | Value |
+| --- | --- |
+| Name | `triton_cta_single_barrier_participant` |
+| Class | semantic source |
+| Status | Registered under [the user's list-t decision Q8(a) on #695](https://github.com/VeriInfra-Lab/VeriTile-2/issues/695). |
+| Statement | When the whole CTA is one agent, that CTA is the single participant of `Counter.phase c 0` for `__syncthreads`. Races between threads inside the CTA are outside this projection. A CTA with thread programs cannot also use this CTA-level barrier. |
+| Source or rationale | [TritonDistSubset.md](TritonDistSubset.md), M2, interpreted at whole-CTA granularity by Q8(a). |
+| Affected kernels | K1, Triton-distributed Tutorial 01. |
+| Beyond documentation | The single participant represents the CTA as a whole. The projection carries no information about races between its threads. |
+| Event interface | The CTA emits a phase-counter increment of one at CTA release, then waits with CTA acquire for the current phase on `Counter.phase c 0`. |
+
 ## 8. Counts
 
 | Section | Rows | documented | named assumption | weakest | out of scope |
