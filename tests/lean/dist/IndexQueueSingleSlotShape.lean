@@ -1,15 +1,13 @@
 import tests.lean.dist.IndexQueueSingleSlotModel
 
-namespace VeriTile.Tests.G1QueueRefinement.Dispatch
+namespace VeriTile.Tests.G1QueueRefinement.MilestonePrefix
 open VeriTile.Dist
-open VeriTile.Tests.DeepEPChannel (sender receiver tail head slot rel acq segOcc writeSlot publishTail
-  loadTail waitRoom readSlot)
-open VeriTile.Triton (MemCell)
+variable {quiet : Occurrence → Prop} {event : Nat → Occurrence} {limit : Nat}
 
 -- Every position has a protocol phase just before it. Repeated unsuccessful polls
 -- or empty segments may separate two adjacent milestones by any number of entries.
-theorem prefixBefore {n h} (p : Prefix n h) {i : Nat} {x : Occurrence} (hx : h[i]? = some x) :
-    ∃ m, Prefix m (h.take i) ∧ (Noise x ∨ (m < n ∧ x = milestone m)) := by
+theorem before {n h} (p : MilestonePrefix quiet event limit n h) {i : Nat} {x : Occurrence} (hx : h[i]? = some x) :
+    ∃ m, MilestonePrefix quiet event limit m (h.take i) ∧ (quiet x ∨ (m < n ∧ x = event m)) := by
   induction p generalizing i x with
   | start => simp at hx
   | @noise n h y prev quiet ih =>
@@ -44,8 +42,8 @@ theorem prefixBefore {n h} (p : Prefix n h) {i : Nat} {x : Occurrence} (hx : h[i
       | succ k => simp [d] at hx
 
 /-- Retrieve a particular milestone, even when identical poll events also arise as noise. -/
-theorem prefixLocate {n h} (p : Prefix n h) {m : Nat} (hm : m < n) :
-    ∃ i, i < h.length ∧ h[i]? = some (milestone m) ∧ Prefix m (h.take i) := by
+theorem locate {n h} (p : MilestonePrefix quiet event limit n h) {m : Nat} (hm : m < n) :
+    ∃ i, i < h.length ∧ h[i]? = some (event m) ∧ MilestonePrefix quiet event limit m (h.take i) := by
   induction p with
   | start => omega
   | @noise n h y prev quiet ih =>
@@ -60,11 +58,50 @@ theorem prefixLocate {n h} (p : Prefix n h) {m : Nat} (hm : m < n) :
       exact ⟨i, by simp; omega, by rwa [List.getElem?_append_left hi],
         by rwa [List.take_append_of_le_length (Nat.le_of_lt hi)]⟩
 
-theorem prefixBound {n h} (p : Prefix n h) : n ≤ 11 := by
+theorem bound {n h} (p : MilestonePrefix quiet event limit n h) : n ≤ limit := by
   induction p with
-  | start => decide
+  | start => exact Nat.zero_le _
   | noise _ _ ih => exact ih
   | advance _ bound _ => omega
+
+theorem earlier {phase j m : Nat} {h : History} (before : MilestonePrefix quiet event limit phase (h.take j)) (hm : m < phase) :
+    ∃ i, i < j ∧ h[i]? = some (event m) ∧ MilestonePrefix quiet event limit m (h.take i) := by
+  obtain ⟨i,hi,hx,past⟩ := before.locate hm
+  have earlier : i < j := by simp only [List.length_take] at hi; omega
+  rw [List.getElem?_take_of_lt earlier] at hx
+  rw [List.take_take, Nat.min_eq_left (Nat.le_of_lt earlier)] at past
+  exact ⟨i, earlier, hx, past⟩
+
+end VeriTile.Tests.G1QueueRefinement.MilestonePrefix
+
+namespace VeriTile.Tests.G1QueueRefinement.Dispatch
+open VeriTile.Dist
+open VeriTile.Tests.DeepEPChannel (sender receiver tail head slot rel acq segOcc writeSlot publishTail
+  loadTail waitRoom readSlot)
+open VeriTile.Triton (MemCell)
+
+private theorem milestones : Prefix n h ↔ MilestonePrefix Noise milestone 11 n h := by
+  constructor <;> intro trace <;> induction trace with
+  | start => exact .start
+  | noise _ q ih => exact .noise ih q
+  | advance _ lt ih => exact .advance ih lt
+
+theorem prefixBefore {n h} (p : Prefix n h) {i : Nat} {x : Occurrence} (hx : h[i]? = some x) :
+    ∃ m, Prefix m (h.take i) ∧ (Noise x ∨ (m < n ∧ x = milestone m)) := by
+  obtain ⟨m, before, event⟩ := (milestones.mp p).before hx
+  exact ⟨m, milestones.mpr before, event⟩
+
+theorem prefixLocate {n h} (p : Prefix n h) {m : Nat} (hm : m < n) :
+    ∃ i, i < h.length ∧ h[i]? = some (milestone m) ∧ Prefix m (h.take i) := by
+  obtain ⟨i, lt, eq, before⟩ := (milestones.mp p).locate hm
+  exact ⟨i, lt, eq, milestones.mpr before⟩
+
+theorem prefixBound {n h} (p : Prefix n h) : n ≤ 11 := (milestones.mp p).bound
+
+private theorem earlierMilestone {phase j m : Nat} {h : History} (before : Prefix phase (h.take j)) (hm : m < phase) :
+    ∃ i, i < j ∧ h[i]? = some (milestone m) ∧ Prefix m (h.take i) := by
+  obtain ⟨i, lt, eq, past⟩ := (milestones.mp before).earlier hm
+  exact ⟨i, lt, eq, milestones.mpr past⟩
 
 private theorem phaseCases {n : Nat} (bound : n < 11) :
     n = 0 ∨ n = 1 ∨ n = 2 ∨ n = 3 ∨ n = 4 ∨ n = 5 ∨
@@ -142,14 +179,6 @@ private theorem ackValue {m v} (bounded : m < 11)
     (ev : milestone m = .issued receiver ⟨receiver, .access .store head rel, .store v⟩) :
     v.readAs .nat = some (takes m) := by
   rcases phaseCases (n := m) (by omega) with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> cases ev <;> rfl
-
-private theorem earlierMilestone {phase j m : Nat} {h : History} (before : Prefix phase (h.take j)) (hm : m < phase) :
-    ∃ i, i < j ∧ h[i]? = some (milestone m) ∧ Prefix m (h.take i) := by
-  obtain ⟨i,hi,hx,past⟩ := prefixLocate before hm
-  have earlier : i < j := by simp only [List.length_take] at hi; omega
-  rw [List.getElem?_take_of_lt earlier] at hx
-  rw [List.take_take, Nat.min_eq_left (Nat.le_of_lt earlier)] at past
-  exact ⟨i, earlier, hx, past⟩
 
 /-- These are precisely the eight shape fields. Reachability supplies the prefix
 phase, and completion rules out stopping before the second acknowledgement. -/
