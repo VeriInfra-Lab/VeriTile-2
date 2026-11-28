@@ -23,6 +23,8 @@ class NormalizeTests(unittest.TestCase):
 
     def test_only_the_constant_name_is_rewritten(self):
         self.assertEqual(normalize(MOVED), MOVED)
+        no_levels = f"(C {MOVED} 0)"
+        self.assertEqual(normalize(no_levels), no_levels)
         self.assertEqual(normalize(f"(J {MOVED} 0 (C {MOVED} []))"),
                          f"(J {MOVED} 0 (C {SIGNED} []))")
 
