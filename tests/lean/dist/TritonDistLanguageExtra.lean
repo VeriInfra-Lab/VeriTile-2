@@ -1,4 +1,4 @@
-import VeriTile.Dist.Frontend.TritonDist.LanguageExtra
+import VeriTile.Staging.Dist.TritonDistProgram
 import VeriTile.Meta.StatementAudit
 
 namespace VeriTile.Tests.TritonDistLanguageExtra
@@ -155,17 +155,101 @@ theorem ldAcquirePlainWaits :
 example : observe (triton { value = ld_acquire(p, "sys") }) =
     [some [(0, .access .load word .plain, none, some 19)]] := rfl
 
-theorem ldAcquireNoSync (reach : ShmemReach) (writer : Agent × Event) :
-    ¬ SyncEdge reach word writer (thread, .wait (.word word) .ge 8 .plain) :=
-  not_syncEdge_of_plain (Or.inr rfl)
+section InterNodePolling
+open VeriTile.Triton
 
-theorem ldAcquireConflictsWithSignal (writer : Agent) :
-    Conflict
-      (thread, .wait (.word word) .ge 8 .plain)
-      (writer, .bump ⟨.word word, .set, 8, .shmem .release⟩) :=
-  conflict_of_plain (kind := .load) (kind' := .store) (p := word)
-    (mode := .shmem .release) (by simp [Event.accesses])
-    (by simp [Event.accesses, Bump.accesses, SignalOp.kind]) (Or.inr rfl)
+set_option maxRecDepth 8192
+set_option maxHeartbeats 6000000
+
+-- Reduced polling and writer shapes from Triton-distributed 7908e4ea,
+-- all_to_all_vdev_2d_offset_inter_node.py:183–202,203–231,235–237,288–292.
+-- Use two nodes with two ranks each. Rank 3 writes the data flag on relay
+-- rank 1, which rank 0 polls at the slot for source node 1.
+private def exchangePoll (flag : RegionName) (worldSize : Nat) : Body := triton {
+  while ld_acquire(flag, "sys") != $((2 : Nat)) * $(worldSize) { pass }
+}
+
+private def dataPoll (flags : RegionName) (relay node pushPids : Nat) : Body := triton {
+  remote = dl.symm_at(flags, $(relay))
+  while ld_acquire(remote + $(node), "sys") < $(pushPids) { pass }
+}
+
+private noncomputable def projectPoll (reader : Agent) (body : Body) : Option (Agent × Event) := do
+  let args : LaunchArgs := {
+    agent := reader, numRanks := 4, symmetric := fun _ => Bool.true
+    waitReading := .eq, order := fun _ _ => Equiv.refl _, wholeCta := Bool.false }
+  let flat ← projectFlat args 1 body.start default
+  let [emission] := flat.filterMap Sum.getRight? | none
+  return (emission.actor, emission.event)
+
+private def exchangeFlag : Addr := ⟨.global 1, "metadata", 0⟩
+private def dataFlag : Addr := ⟨.global 1, "data", 1⟩
+
+private noncomputable def exchangeReader : Agent × Event :=
+  (projectPoll (.cta ⟨1, [0]⟩) (exchangePoll exchangeFlag.region 4)).get (by rfl')
+
+private noncomputable def dataReader : Agent × Event :=
+  (projectPoll (.thread ⟨0, [2]⟩ 0 0) (dataPoll dataFlag.region 1 1 8)).get (by rfl')
+
+private def writerContext (issuer : Agent) (flag : Addr) : Shmem.Context where
+  issuer := issuer
+  peCount := 4
+  symmetric := fun _ => Bool.true
+  evalNat := fun expr =>
+    match expr[0][0].getAtomVal with
+    | "1" => some 1
+    | "8" => some 8
+    | _ => none
+  evalByteRange := fun expr bytes => do
+    guard (bytes = 8)
+    match expr[0].getId with
+    | `dst => some [⟨.global issuer.rankOf, "recv", 0⟩]
+    | `src => some [⟨.global issuer.rankOf, "send", 0⟩]
+    | _ => none
+  evalSignalWord := fun expr =>
+    if expr[0].getId == `flag then some { flag with space := .global issuer.rankOf } else none
+  collectiveReady := fun _ => Bool.true
+
+private def lowerSignalWriter (ctx : Shmem.Context) (source : Shmem.Source) :
+    Option (Agent × Event) := do
+  let [site] := source.sites | none
+  match ← site.call.lower ctx with
+  | .event event => return (ctx.issuer, event)
+  -- The asynchronous transfer writes the signal when it completes.
+  | .transfer plan => return (plan.issuer, .complete plan.transfer)
+  | .barrier _ => none
+
+private def exchangeWriter : Agent × Event :=
+  (lowerSignalWriter (writerContext (.group ⟨0, [0]⟩ 1) exchangeFlag) (triton {
+    libshmem_device.putmem_signal_nbi_warp(dst, src, 8, flag, 1,
+      libshmem_device.NVSHMEM_SIGNAL_ADD, 1)
+  })).get (by rfl)
+
+private def dataWriter : Agent × Event :=
+  (lowerSignalWriter (writerContext (.thread ⟨3, [1]⟩ 0 0) dataFlag) (triton {
+    libshmem_device.signal_op(flag, 1, libshmem_device.NVSHMEM_SIGNAL_ADD, 1)
+  })).get (by rfl)
+
+theorem ldAcquireNoSync (reach : ShmemReach) :
+    (¬ SyncEdge reach exchangeFlag exchangeWriter exchangeReader) ∧
+    (¬ SyncEdge reach dataFlag dataWriter dataReader) := by
+  constructor
+  · exact not_syncEdge_of_plain (c := .word exchangeFlag) (Or.inr (by rfl'))
+  · exact not_syncEdge_of_plain (c := .word dataFlag) (Or.inr (by rfl'))
+
+theorem ldAcquireConflictsWithSignal :
+    Conflict exchangeReader exchangeWriter ∧ Conflict dataReader dataWriter := by
+  constructor
+  · exact conflict_of_plain (kind := .load) (kind' := .update) (p := exchangeFlag)
+      (mode := .shmem .release)
+      (by rw [show exchangeReader.2.accesses = [(.load, exchangeFlag, .plain)] by rfl']; simp)
+      (by decide) (Or.inr rfl)
+  · exact conflict_of_plain (kind := .load) (kind' := .update) (p := dataFlag)
+      (mode := .shmem .release)
+      (by rw [show dataReader.2.accesses = [(.load, dataFlag, .plain)] by rfl']; simp)
+      (by decide) (Or.inr rfl)
+
+end InterNodePolling
 
 /-- error: tid: axis must be a literal 0, 1 or 2 -/
 #guard_msgs in
