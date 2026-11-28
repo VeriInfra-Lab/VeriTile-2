@@ -20,7 +20,7 @@ Each claim carries one of three marks, as in `DeepEPInventory.md`:
 - **U** (unchecked): not established. Section 9 lists every such item.
 
 Vocabulary: `PrimitiveSources.md` for the primitives, their patterns (a, b, c)
-and the rules W1 to W6, assumptions A1 to A11 and decisions D4 to D8; `VeriTile/Dist/Agent.lean` for the
+and the rules W1 to W6, assumptions A1 to A12 and decisions D4 to D8; `VeriTile/Dist/Agent.lean` for the
 agents (rank, CTA, group, thread).
 
 ## 1. Summary
