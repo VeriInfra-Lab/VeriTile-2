@@ -120,7 +120,7 @@ inductive PC where
 
 /-- Only the explicit-actor, grouped form is the source lowering. The
 comparison variants below expose the lost actor or the intermediate PC. A missing actor is a genuine refusal. -/
-private def lower (own : Ownership) (grouping : Grouping) (owner : Agent)
+private noncomputable def lower (own : Ownership) (grouping : Grouping) (owner : Agent)
     (segments : Nat → Segment) (cuts : List Cut) : Option (AgentProgram PC) :=
   if !fits own owner cuts then none else some {
     segment := fun pc => match pc with
@@ -143,7 +143,7 @@ private def lower (own : Ownership) (grouping : Grouping) (owner : Agent)
 -- separate scheduling point, exposed by the negative K11 comparison below.
 private def c : Cta := ⟨0,[0]⟩
 private def dummyPut : Transfer := ⟨[],[],true,none⟩
-private def programs (own : Ownership) (g : Grouping) : List Bool :=
+private noncomputable def programs (own : Ownership) (g : Grouping) : List Bool :=
   let owner := Agent.cta c
   let build := fun a cs => (lower own g a (fun _ => Segment.ofStmts a []) cs).isSome
   [build owner (k1 c 1 true .eq 0 2 32 0 128 1),
@@ -171,7 +171,7 @@ example (g : Grouping) : (lower .program g (.thread c 0 1)
     (fun _ => Segment.ofStmts (.thread c 0 1) []) (k3 c true 1 3 128 4 dummyPut)).isSome := by
   cases g <;> decide
 
-private def k11Program (g : Grouping) : AgentProgram PC :=
+private noncomputable def k11Program (g : Grouping) : AgentProgram PC :=
   (lower .program g (.thread c 0 1) (fun _ => Segment.ofStmts (.thread c 0 1) []) (k11Thread c 1 0 2 128)).get
     (by cases g <;> decide)
 

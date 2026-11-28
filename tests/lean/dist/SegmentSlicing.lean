@@ -50,6 +50,7 @@ theorem cannotSkipCut (ctx : LanguageExtra.Context Nat) (es : List Emission) (at
 
 #print axioms AgentProgram.Step.deterministic
 #print axioms AgentProgram.ofBody_steps
+#print axioms AgentProgram.ofBody_step_noSync
 #print axioms noSyncKernel
 #print axioms adjacentCuts
 #print axioms cannotSkipCut
