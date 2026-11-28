@@ -29,7 +29,7 @@ OUTPUT = ROOT / 'site/src/lib/vector-add-record.json'
 
 def fingerprint():
     paths = {ROOT / name for name in (
-        'lean-toolchain', 'lakefile.toml', 'lake-manifest.json', 'site/scripts/record-home-demo.py',
+        'lean-toolchain', 'lake-manifest.json', 'site/scripts/record-home-demo.py',
     )}
     # The toolchain and manifest pin imports provided outside the repository.
     pending = list(PROOF_SOURCES)

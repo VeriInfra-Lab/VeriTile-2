@@ -132,9 +132,9 @@ python3 site/scripts/record-home-demo.py --check
 ```
 
 `src/lib/vector-add-record.json` stores these results. Its fingerprint covers
-the example, library Lean sources, toolchain, dependency manifest, lakefile,
-and recorder. The homepage build refuses a stale record. Failed variants are
-created in a temporary directory; the canonical example is never mutated.
+the example, its transitive local Lean imports, the toolchain, the dependency
+manifest, and the recorder. The homepage build refuses a stale record. Failed
+variants are created in a temporary directory; the canonical example is never mutated.
 Regeneration requires Python 3 and the Lean dependencies; building the site
 from a current record does not require Lean.
 
