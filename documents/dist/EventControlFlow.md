@@ -9,7 +9,7 @@ synchronization or communication event, the control flow that encloses it and
 the sequential agents that execute it. It is the evidence for two open choices
 of `VeriTile/Staging/Dist/SegmentSpec.lean`: who owns a segment (choice 5) and
 what slicing returns (choices 6 and 7). It also says which `Event`
-constructors of `VeriTile/Staging/Dist/EventSpec.lean` each kernel needs. It
+constructors of `VeriTile/Dist/Event.lean` each kernel needs. It
 states facts and no recommendation.
 
 Each claim carries one of three marks, as in `DeepEPInventory.md`:
@@ -20,7 +20,7 @@ Each claim carries one of three marks, as in `DeepEPInventory.md`:
 - **U** (unchecked): not established. Section 9 lists every such item.
 
 Vocabulary: `PrimitiveSources.md` for the primitives, their patterns (a, b, c)
-and the rules W1 to W6, assumptions A1 to A10 and decisions D4 to D8; `VeriTile/Dist/Agent.lean` for the
+and the rules W1 to W6, assumptions A1 to A11 and decisions D4 to D8; `VeriTile/Dist/Agent.lean` for the
 agents (rank, CTA, group, thread).
 
 ## 1. Summary
@@ -178,7 +178,7 @@ events).
 | `initiate`, `complete` | K2, K3, K4, K18 (`putmem_signal_block`), K4, K6 (`putmem_signal_nbi_block`), K6 (`putmem_nbi_block`), K12, K20 (`putmem_block`) | |
 | `Cmp` | `eq` (`NVSHMEM_CMP_EQ`, `T03:74`, `T04:274`), `ge` (`T.wait_ge`, `DD:334`), `ne` (`T.wait_ne`, `DD:431`); `dl.wait` under D6 | `le`, `gt`, `lt` |
 | `Counter` | `word`; `phase` (`__syncthreads`, `T.sync_threads`); `rendezvous` (`T.sync_blocks`, `T.barrier_blocks`) | `delivered`: no kernel of the two sets calls `quiet` |
-| `Mode` | `plain`; `atomic` at scope `sys` and `gpu`; CTA-scoped phase edges under D8/A5; `shmem` | For explicit load/store scope arguments, `cta` occurs only in K28 (`T.st` and `T.ld` with `scope="cta"`, `DC:255`, `DC:284`, `DC:286`), where A1 assumes nothing for it, so these accesses are `plain` (W1) |
+| `Mode` | `plain`; `atomic` at scope `sys` and `gpu`; atomic CTA release/acquire in K28 under A11 (`T.st` at `DC:255`, `T.ld` at `DC:284` and `DC:286`); CTA-scoped phase edges under D8/A5; `shmem` | |
 
 `dl.wait` of K17 waits on `rank_end - rank_beg + 1` words in one call
 (`T07:178-185`); K1 passes 1 (`T01:91`, `T01:129`).
@@ -298,7 +298,7 @@ Six of the seven kernels read the thread index with `T.get_thread_binding()`
 | K25 | `dispatch_main` (`DD:270`) | `num_sms` blocks, 768 threads (`DD:255`, `DD:300`) | B-id (`DD:306`); B-thread (many); sender: L-data (`DD:332`, `DD:343`); receiver: L-sched (`DD:451`, `DD:452`) and loops bounded by loaded values (`DD:467`, `DD:481`, `DD:493`) | Groups per peer rank; warps and elected lanes inside a group (section 1.3) | No. Sender group: fixed once `is_token_in_rank` is fixed. Receiver group: depends on the schedule A4/A5 order the participating groups/warps. A6/A10 give waits system/acquire; A7/A8 distinguish the four unsuffixed GPU-scope loads of K25/K26 from the system-scope repair. The receiver spin has a body outside A3. |
 | K26 | `cached_dispatch_main` (`DD:547`) | as K25 (`DD:534`, `DD:571`) | as K25: `DD:576`; `DD:601`, `DD:612`; `DD:693`, `DD:694`, `DD:709`, `DD:722` | as K25 | No, as K25 Same as K25 under A4–A8 and A10, including the two volatile loads in this kernel; its receiver spin has a body. |
 | K27 | `cached_notify_combine_main` (`DC:25`) | `num_sms // 2 + 1` blocks, `max(128, 32 * num_ranks)` threads (`DC:19-20`, `DC:32`) | B-id (`DC:35`); in the other blocks L-count (`DC:52`) and a branch on the thread and the counter (`DC:55`) | Block 0: CTA. Other blocks: one warp per rank; a warp whose index is `num_ranks` or more returns (`DC:42-45`) | Per thread: yes. Block 0: rendezvous, two clears, rendezvous. Other blocks: one plain load per lane and round A10 supplies the matching inter-block primitive readings. |
-| K28 | `combine_main` (`DC:120`) | `num_sms` blocks, 768 threads (`DC:109`, `DC:141`) | B-id (`DC:147`); B-thread (many); sender: L-data (`DC:171`), L-count inside a round (`DC:183`); receiver: L-sched (`DC:242`, `DC:285`), L-count over tokens (`DC:276`), L-data (`DC:310`, `DC:331`) | Sender: groups of warps per destination rank. Receiver: lanes of warp 0 and 23 reduction warps (section 1.3) | No. Sender group: fixed once the prefix matrices are fixed. Receiver: depends on the schedule A4/A5 order participating groups, whole blocks and unmasked warps. A6/A10 give system/acquire to covered waits; the receiver spin has a body outside A3 and CTA-scope strings retain W1. |
+| K28 | `combine_main` (`DC:120`) | `num_sms` blocks, 768 threads (`DC:109`, `DC:141`) | B-id (`DC:147`); B-thread (many); sender: L-data (`DC:171`), L-count inside a round (`DC:183`); receiver: L-sched (`DC:242`, `DC:285`), L-count over tokens (`DC:276`), L-data (`DC:310`, `DC:331`) | Sender: groups of warps per destination rank. Receiver: lanes of warp 0 and 23 reduction warps (section 1.3) | No. Sender group: fixed once the prefix matrices are fixed. Receiver: depends on the schedule A4/A5 order participating groups, whole blocks and unmasked warps. A6/A10 give system/acquire to covered waits; the receiver spin has a body outside A3, and A11 covers the explicit CTA release/acquire calls in this pinned intranode kernel. |
 
 ## 5. Events of each kernel
 
@@ -630,7 +630,8 @@ not called from `reduce_scatter_2d_op` or below (`RS:793-831`).
 4. **Ordinary accesses to CTA-shared memory in the receiver of K28**
    (`DC:247`, `DC:261-262`, `DC:343-345`, `DC:350`) are made by different
    warps with no barrier between them. Under W1 and I1 of
-   `PrimitiveSources.md` such a pair conflicts (I).
+   `PrimitiveSources.md` such a pair conflicts (I). The [#636 combine variant](../../experiments/interp_gpu/deepep_v1/CombineVariant.md)
+   uses CTA-scoped release stores and acquire loads for these accesses.
 5. **Tutorial 03, signal buffer.** Each signal tensor is created with shape
    `(1, )` (`T03:276-278`) and one of them is passed as `symm_flag`
    (`T03:103`, `T03:185`). The kernels index `symm_flag + peer`, `symm_flag +

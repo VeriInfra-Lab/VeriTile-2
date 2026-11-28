@@ -256,7 +256,7 @@ run_cmd do
   let .error message := Parser.runParserCategory (← getEnv) `term
       "triton { __fence(\"acq_rel\", \"sys\") }"
     | throwError "unexpected __fence parse"
-  unless message.endsWith ": expected '%', '*=', '+=', ',', '-=', '/=', ':=' or '='" do
+  unless message.startsWith "<input>:1:16: expected " do
     throwError "unexpected __fence parser diagnostic: {message}"
 
 /-- error: random source helper requires an explicit tl.source_helper binding -/

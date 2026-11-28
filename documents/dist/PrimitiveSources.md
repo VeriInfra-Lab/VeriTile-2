@@ -50,8 +50,8 @@ bundles Triton at another commit, `f797708`; the one Triton passage that is
 cited here has the same text at both (E-TR1). The DeepEP version 1 port is
 read at TileScale `9ba8a605` (full hash
 `9ba8a605d347f600a95d0275e2639cb00122c084`, branch `wt/deepep-internode`),
-directory `examples/distributed/deepseek_deepep/intranode/`. Only A3 to A8 and A10 of
-section 7 and their evidence (E-TS15 to E-TS19) cite that commit; every row of
+directory `examples/distributed/deepseek_deepep/intranode/`. A3 to A8, A10 and A11 of
+section 7 and the earlier evidence (E-TS15 to E-TS19) cite that commit; every row of
 section 5.5 is at `71e7145`, and A10 says how such a row reads a call of the
 port.
 
@@ -914,8 +914,8 @@ version 1 port at `9ba8a605` is read by the row of the same name through A10.
 | `get_warp` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
 | `put_block` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
 | `get_block` | a | E-TS1, E-TS3 | TS-API, TS-COMM | weakest (W1) | As above |
-| `ld` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`, `relaxed`. With `weak` (the default), `volatile`, `cta` or `nc=True`: W1. With `volatile` in the DeepEP version 1 port only: A7 |
-| `st` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `release`, `relaxed`. With `weak` (the default), `volatile` or `cta`: W1 |
+| `ld` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`, `relaxed`. With `weak` (the default), `volatile`, `cta` or `nc=True`: W1. In the DeepEP version 1 port, A7 covers `volatile`; in the pinned intranode directory, A11 covers `scope="cta"` with `sem="acquire"`. |
+| `st` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `release`, `relaxed`. With `weak` (the default), `volatile` or `cta`: W1, except for the A11 release stores with `scope="cta"` in the pinned DeepEP version 1 intranode directory. |
 | `atom_add` | a | E-TS5, E-TS13 | TS-API, TS-COMM | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `relaxed`, `acquire`, `release`, `acq_rel`. The return value is documented (docstring at the pinned commit) |
 | `wait_eq` | b | E-TS6, E-TS13 | TS-API, TS-SYNC | named assumption (A1) | Clause (c), for every string: `gpu`, `sys`, `acquire`. With `volatile`: a poll by plain loads (W1) |
 | `wait_ne` | b | E-TS6 | TS-API, TS-SYNC | named assumption (A1) | As above. The call of the DeepEP version 1 port at `9ba8a605`, which has no scope and no semantics: A6; its `peer` argument: A10 |
@@ -1232,9 +1232,9 @@ out is said in the statement, and what follows when two entries meet is in
 section 6 (I7 to I11). The names were chosen in this revision (ticket S2.7);
 the freeze ticket S5.1 fixes them. A9, A10 and the present form of A5 come
 from the user's decisions of 2026-11-21 and have the same form; A5 was renamed
-then. Two fields are added: what goes beyond
+then. On 2026-11-27 the user registered A11 for CTA-scoped accesses in the pinned DeepEP intranode port and A12 for the two rank-local stream handoffs in ordinary T05. Two fields are added: what goes beyond
 documentation, in one sentence, and the constructor of the signed event
-interface (`VeriTile/Staging/Dist/EventSpec.lean`) that carries the reading;
+interface (`VeriTile/Dist/Event.lean`) that carries the reading;
 ticket S2.6 fixes the map from primitives to events.
 
 Affected kernels were found by reading the cited lines at the pins on
@@ -1296,7 +1296,7 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Source or rationale | Documentation: `sync_threads` has the docstring "Synchronize all threads in a block." at both commits (E-TS15), and `sync_warp` has "Synchronize all threads in a warp." (E-TS18). These state a synchronization. Not stated: any order between memory accesses of different threads across the barrier; for the form with arguments, not even who takes part (A4). The CUDA Programming Guide states such an order for the CUDA C++ intrinsics (E-CU7, E-CU8), and TS-INSTR names those intrinsics at `71e7145`; no text at `9ba8a605` does, and no intrinsic is named that waits for `count` threads. Why the kernels need it: without it nothing orders the copies of the other threads ahead of what one thread publishes after the barrier, and the peer's accesses race with those copies. That is LIT-a08 (a warp copies, the block synchronizes, another lane publishes), marked N, and its form with the group barrier in K25, K26 and K28 (I8) |
 | Affected kernels | DeepEP version 1 port only. (a) K23 `notify_dispatch_main`, `DD:87` and `DD:114`; K28 `combine_main`, `DC:237` (receiver). (b) K25 `dispatch_main`, `DD:410`, `DD:461`, `DD:509`; K26 `cached_dispatch_main`, `DD:652`, `DD:703`, `DD:738`; K28, `DC:216`. (c) K25, `DD:317` and `DD:339`; K26, `DD:587` and `DD:608`; K28, `DC:180`, `DC:289`, `DC:348`. These are all calls of `T.sync_threads` and `T.sync_warp` in the directory (text search). No kernel of Triton-distributed: its `__syncthreads` is read by D8 |
 | Beyond documentation | That these three TileScale barriers are points of memory ordering among their participants: the text at `9ba8a605` states a synchronization and no order, and for the group form not even the participants |
-| Event interface | `Event.bump` and `Event.wait` on `Counter.phase c id`, in a mode that pairs between any two participants: an `atomic` mode at scope `cta` with a release side on the arrival and an acquire side on the return, so that `SyncEdge` holds from every arrival to every return of a phase. The header of `EventSpec.lean` describes the barrier as "a counter written and waited on at scope `cta`". No kind of `Counter` names a warp; which `phase` a warp barrier is, S2.6 fixes |
+| Event interface | `Event.bump` and `Event.wait` on `Counter.phase c id`, in a mode that pairs between any two participants: an `atomic` mode at scope `cta` with a release side on the arrival and an acquire side on the return, so that `SyncEdge` holds from every arrival to every return of a phase. The header of `VeriTile/Dist/Event.lean` describes the barrier as "a counter written and waited on at scope `cta`". No kind of `Counter` names a warp; which `phase` a warp barrier is, S2.6 fixes |
 
 ### A6 `deepep_v1_wait_scope_order`
 
@@ -1363,6 +1363,61 @@ warp barriers, so the entry now holds three TileScale barriers.
 | Beyond documentation | That documentation written for another commit, on another branch, describes the calls of the port |
 | Event interface | None of its own: each call has the event of its row |
 
+### A11 `deepep_v1_cta_scope_is_block`
+
+| Field | Value |
+| --- | --- |
+| Name | `deepep_v1_cta_scope_is_block` |
+| Class | semantic source |
+| Status | Registered by the user's decision of 2026-11-27. [Decision on #636](https://github.com/VeriInfra-Lab/VeriTile-2/issues/636#issuecomment-7206156826) |
+| Statement | Within TileScale `9ba8a605d347f600a95d0275e2639cb00122c084`, directory `examples/distributed/deepseek_deepep/intranode/`, including the #636 variant of that port, the `cta` scope argument of a port `T.ld` or `T.st` denotes `cuda::thread_scope_block`. Each covered call is one atomic load or store at block scope. A1(c) supplies the order from the operation’s semantics argument: acquire for these loads and release for these stores. A11 excludes all other semantics strings with `scope="cta"`. |
+| Source or rationale | Not stated: E-TS13 records that the source accepts `cta`, but the documentation gives it no block-scope atomic meaning. Why the kernels need it: under W1 and I1, conflicting accesses to K28’s three CTA-shared arrays can race. In particular, no happens-before edge (`HB`) runs from warp 0’s publication of `shared_channel_tail_idx` to the reduction warps’ reads of the published slots. The [compilation record](../../experiments/interp_gpu/deepep_v1/CombineVariant.md) shows the instructions emitted for the variant. |
+| Affected kernels | K28, `combine_main` (text search). The original calls are DC 255, 284 and 286. The variant also spells out the acquire loads at DC 247/261/262 and the release stores at DC 343–345/350. |
+| Beyond documentation | The scope mapping is an assumption restricted to this port directory and pin. A1 retains its existing domain. |
+| Event interface | A covered load at `p` yields `Event.access .load p (.atomic .cta .acquire)`; a covered store yields `Event.access .store p (.atomic .cta .release)`. This scope mapping supplies no ordering edge between distinct blocks and no DRF conclusion. |
+
+### A12 `t05_current_stream_order`
+
+| Field | Value |
+| --- | --- |
+| Name | `t05_current_stream_order` |
+| Class | semantic source |
+| Status | Accepted by the user on 2026-11-27. [T05 single-launch decision](https://github.com/VeriInfra-Lab/VeriTile-2/issues/664#issuecomment-7215198422) · [Decision on rank-local scope and the counterexample](https://github.com/VeriInfra-Lab/VeriTile-2/pull/675#issuecomment-7219845498) |
+| Statement | In the ordinary T05 path at Triton-distributed `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`, each rank submits its peer copies, K11, and K10 to the same local CUDA stream. Every one of its copies completes before its own K11 lanes start. All of those lanes return from the final CTA barrier before its own K10 tiles start. |
+| Source or rationale | The host selects its current stream and issues the three operations in sequence. The copy loop selects each peer and writes the sender's slice into that peer's scatter buffer. K10 uses the same stream. [T05 copy loop and host calls](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L175-L221) · [K10 stream context](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/tutorials/05-intra-node-reduce-scatter.py#L136-L141) · [K11 CAS and CTA barrier](https://github.com/ByteDance-Seed/Triton-distributed/blob/7908e4ea9010bb2238f9f05b28c904fd4b71c60a/python/triton_dist/kernels/nvidia/common_ops.py#L154-L168) · [CUDA stream ordering](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html#cuda-stream-ordering) |
+| Affected kernels | K11, `barrier_all_intra_node_atomic_cas_block`, and K10, `kernel_ring_reduce`, in this T05 host invocation. |
+| Event interface | Each rank has two model-private words, initially zero and disjoint from the input, scatter buffer, CAS flags and output. After the last copy, its copy engine adds one with GPU release to the first word. K11 lanes wait for one with GPU acquire. Each K11 lane adds one with GPU release to the second word after its CTA wait; local K10 tiles wait with GPU acquire for the full lane count. The two words are disjoint from all source cells. No source segment or K11 operation reads or writes either word, and `Output` reads only output cells. It orders nothing between ranks: the two words of rank r are private to rank r, and the only inter-rank ordering in T05 is the K11 system-scope CAS release/acquire pair. |
+| Beyond documentation | The named premise covers the representation of same-stream completion by these local operations. The one-CTA K11 uses model PID `[0]`, the copy engine uses a distinct local proxy `[1]`, and K10 block `b` uses `[b+2]`. Each rank has its own stream and words. The inter-rank payload path also requires the original system release/acquire CAS pair. Physical BF16 agreement with the real-valued S7 result remains an unproved obligation of [#157](https://github.com/VeriInfra-Lab/VeriTile-2/issues/157) and [#158](https://github.com/VeriInfra-Lab/VeriTile-2/issues/158). |
+
+The T05 pilot represents each sender's copy loop by one physical segment. It reads
+that sender's input for each destination and writes the corresponding disjoint
+scatter shard. In the default K10 grid, one CTA reduces each 256-by-64 tile.
+For destination rank `r`, the left fold starts with sender `(r + 1) mod n`
+and visits every sender once. The initial state supplies the input shards,
+zero CAS flags and zero stream words. The proof permits arbitrary initial
+scatter contents. [Copy addresses and frames](../../tests/lean/dist/Tutorial05HostCopy.lean) · [K10 indexing and reduction order](../../tests/lean/dist/Tutorial05K10.lean)
+
+The source-facing theorem `Whole.t05` takes an ordinary invocation of the
+pinned program. Its trust report lists A3 (spin loops), A8 (native peer
+atomics), and `t05_current_stream_order`. The underlying machine theorem
+`Whole.model_t05` proves the ordered S7 result for every complete execution and
+exhibits a complete race-free execution whenever the CTA has at least as many
+physical lanes as ranks. The two-rank, 128-lane client starts with zero-valued
+scatter cells and reads back 3/4 and 5/8. The two-rank counterexample deletes
+the whole receive CAS loop, including the system-acquire wait `w1` and the
+relaxed reset `s0`. A K10 tile can then read a peer shard before its sender
+writes it. Separately, `Stream.relaxedCASNoDirect` retains the receive loop
+in its local event trace and weakens only the wait to relaxed. The release
+and that wait then have no direct happens-before edge on the payload.
+[Public theorem and clients](../../tests/lean/dist/Tutorial05.lean) · [Whole-loop deletion](../../tests/lean/dist/Tutorial05NoAcquire.lean) · [Relaxed-wait endpoint proof](../../tests/lean/dist/Tutorial05Stream.lean)
+
+A second control keeps both CAS loops and skips just the copy-completion wait
+for K11 lane zero of rank one. That lane publishes its flag before rank one's
+copy, so rank zero can observe it, complete its CTA barrier and stream wait,
+and read the stale peer shard. Rank one's first copy then conflicts with the
+read. `Whole.copy_wait_matters` checks all 32 steps and the original launch's
+race freedom on the same inputs. [Copy-wait schedule](../../tests/lean/dist/Tutorial05NoAcquire.lean)
+
 ### Atomic updates (N5′)
 
 The translation-correctness entry `documented_atomic_update_lowering` (#43,
@@ -1428,7 +1483,7 @@ is discharged. No S3 payload is constructed by these tests.
 By pattern: a 52, b 47, c 60, none 51.
 
 Of the 14 rows under a named assumption, 12 are under A1, one (`dl.notify`)
-is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9.
+is under A2 and one (`common_ops.barrier_on_this_grid`) is under A9. A11 adds no row and moves no row between treatments: it qualifies the existing A1 entries for `ld` and `st` in §5.5. A12 records the two local stream handoffs in the T05 host; it adds no primitive row.
 
 Before the decisions of 2026-11-12 the table had 202 rows: 79 documented, 19
 under a named assumption, 79 weakest and 25 out of scope. Seven rows moved

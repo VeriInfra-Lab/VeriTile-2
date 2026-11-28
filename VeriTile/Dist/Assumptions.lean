@@ -59,6 +59,12 @@ opaque deepep_v1_calls_read_by_main_rows : Prop
 with an operand function and return value. -/
 opaque documented_atomic_update_lowering : Prop
 
+/-- A11. The `cta` scope of DeepEP v1's intranode TileScale port denotes one CUDA thread block. -/
+opaque deepep_v1_cta_scope_is_block : Prop
+
+/-- A12. T05's ordinary current stream orders the local copy engine, K11 and K10. -/
+opaque t05_current_stream_order : Prop
+
 end Assumption
 
 namespace TrustAssumptions
@@ -129,6 +135,16 @@ def deepep_v1_calls_read_by_main_rows : TrustAssumption :=
     "PrimitiveSources.md §7 A10"
     ["K23", "K24", "K25", "K26", "K27", "K28"]
 
+def deepep_v1_cta_scope_is_block : TrustAssumption :=
+  semantic `deepep_v1_cta_scope_is_block Assumption.deepep_v1_cta_scope_is_block
+    "PrimitiveSources.md §7 A11; TileScale 9ba8a605, examples/distributed/deepseek_deepep/intranode only."
+    ["K28"]
+
+def t05_current_stream_order : TrustAssumption :=
+  semantic `t05_current_stream_order Assumption.t05_current_stream_order
+    "PrimitiveSources.md §7 A12; Triton-distributed 7908e4ea, ordinary current stream."
+    ["K10", "K11"]
+
 def documented_atomic_update_lowering : TrustAssumption where
   name := `documented_atomic_update_lowering
   statement := Assumption.documented_atomic_update_lowering
@@ -154,6 +170,8 @@ def builtinTrustAssumptionDeclarations : Array (Name × Name) :=
       (``Assumption.p2p_native_atomic_supported, ``p2p_native_atomic_supported),
       (``Assumption.grid_barrier_cooperative_sync, ``grid_barrier_cooperative_sync),
       (``Assumption.deepep_v1_calls_read_by_main_rows, ``deepep_v1_calls_read_by_main_rows),
+      (``Assumption.deepep_v1_cta_scope_is_block, ``deepep_v1_cta_scope_is_block),
+      (``Assumption.t05_current_stream_order, ``t05_current_stream_order),
       (``Assumption.documented_atomic_update_lowering, ``documented_atomic_update_lowering)]
 
 end TrustAssumptions

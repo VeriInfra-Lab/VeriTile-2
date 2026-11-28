@@ -1,0 +1,2 @@
+# TileScale's generated CUDA ends in a blank line; its SHA-256 binds every byte.
+combine-cta.cu whitespace=-blank-at-eof

@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from interp import tensorfile
 
 
-def check_kernel(kernel, arguments):
+def check_kernel(kernel, arguments, registered_sources):
     source, function = kernel["source"].rsplit("::", 1)
     path = Path(source)
     if path.is_absolute() or not (ROOT / path).resolve().is_relative_to(ROOT):
@@ -43,12 +43,21 @@ def check_kernel(kernel, arguments):
     # paths for these mirrors start at bench/examples. Resolve the actual
     # declaration in the compiled environment, including its declared name.
     name = kernel["lean"]
+    registered = registered_sources.get(kernel["name"])
+    if registered is None:
+        raise ValueError(f"{kernel['name']}: no such file-runner registration")
+    if name != registered:
+        raise ValueError(f"{kernel['name']}: kernel.lean must name the registered mirror source "
+                         f"{registered}, got {name}")
     prefix = "VeriTile.Bench.Examples."
     parts = name.removeprefix(prefix).split(".")
-    if not name.startswith(prefix) or len(parts) < 3 or not all(
+    if not name.startswith(prefix) or len(parts) < 2 or not all(
             re.fullmatch(r"[A-Za-z_][A-Za-z0-9_']*", part) for part in parts):
         raise ValueError(f"{kernel['name']}: invalid qualified kernel.lean example name: {name}")
-    module_path = Path("bench", "examples", *parts[:-1])
+    # Kernel definitions may live directly in the family's namespace even
+    # though the actual module is the family's Kernels.lean (e.g. LogExp).
+    module_path = Path("bench", "examples", *parts[:-1]) if len(parts) > 2 else Path(
+        "bench", "examples", parts[0], "Kernels")
     if not (ROOT / module_path.with_suffix(".lean")).is_file():
         raise ValueError(f"{kernel['name']}: kernel.lean file does not exist: {module_path}.lean")
     if path.parent != module_path.parent:
@@ -119,14 +128,22 @@ def main():
     parser.add_argument("--runner", type=Path, default=ROOT / ".lake/build/bin/veritile-run")
     args = parser.parse_args()
     validator = Draft7Validator(json.loads((HERE.parent / "schema.json").read_text()))
+    runner = args.runner.resolve()
+    try:
+        registered_sources = json.loads(subprocess.check_output(
+            [runner, "--example-sources"], text=True))
+        if not isinstance(registered_sources, dict):
+            raise ValueError("expected a JSON object of file-runner bindings")
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        parser.exit(1, f"cannot read example bindings from {runner}: {exc}\n")
     for path in args.spec or sorted(HERE.glob("*.json")):
         try:
             spec = json.loads(path.read_text())
             validator.validate(spec)
-            check_kernel(spec["kernel"], spec["arguments"])
+            check_kernel(spec["kernel"], spec["arguments"], registered_sources)
             for case in spec["input_classes"]:
                 with tempfile.TemporaryDirectory(prefix="veritile-spec-") as work:
-                    run_case(spec, case, args.runner.resolve(), Path(work))
+                    run_case(spec, case, runner, Path(work))
         except (ValueError, OSError, SyntaxError, ValidationError, subprocess.CalledProcessError) as exc:
             parser.exit(1, f"{path}: {exc}\n")
 

@@ -185,61 +185,62 @@ private def ptrSyntax (ptr : TSyntax `shmemPtr) : Syntax :=
   | `(shmemPtr| $expr:tritonExpr) => expr.raw
   | _ => ptr.raw
 
-private def quoteCopy (dst src : TSyntax `shmemPtr) (bytes pe : TSyntax `tritonExpr) (kind : TSyntax `term) :
-    TermElabM (TSyntax `term) := do
-  let dst ← quoteDistSyntax (ptrSyntax dst)
-  let src ← quoteDistSyntax (ptrSyntax src)
-  let bytes ← quoteDistSyntax bytes
-  let pe ← quoteDistSyntax pe
+private def quoteCopy (operand : QuoteOperand) (dst src : TSyntax `shmemPtr) (bytes pe : TSyntax `tritonExpr)
+    (kind : TermElabM (TSyntax `term)) : TermElabM (TSyntax `term) := do
+  let dst ← operand .address (ptrSyntax dst)
+  let src ← operand .address (ptrSyntax src)
+  let bytes ← operand .nat bytes
+  let kind ← kind
+  let pe ← operand .nat pe
   `(Call.copy $kind $dst $src $bytes $pe)
 
-private def quoteSignalCopy (dst src : TSyntax `shmemPtr) (bytes word value op pe : TSyntax `tritonExpr)
+private def quoteSignalCopy (operand : QuoteOperand) (dst src : TSyntax `shmemPtr) (bytes word value op pe : TSyntax `tritonExpr)
     (kind : TSyntax `term) : TermElabM (TSyntax `term) := do
-  let word ← quoteDistSyntax word
-  let value ← quoteDistSyntax value
-  let op ← signalOpTerm op
-  let kind ← `($kind $word $value $op)
-  quoteCopy dst src bytes pe kind
+  quoteCopy operand dst src bytes pe (do
+    let word ← operand .address word
+    let value ← operand .nat value
+    let op ← signalOpTerm op
+    `($kind $word $value $op))
 
-private def quoteCall (st : TSyntax `shmemCallStmt) : TermElabM (TSyntax `term) := do
+def quoteCall (operand : QuoteOperand) (st : TSyntax `shmemCallStmt) : TermElabM (TSyntax `term) := do
   match st with
   | `(shmemCallStmt| libshmem_device.barrier_all_block()) => `(Call.barrier)
   | `(shmemCallStmt| libshmem_device.fence()) => `(Call.fence)
   | `(shmemCallStmt| libshmem_device.getmem_block(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $pe:tritonExpr)) => do
-    quoteCopy dst src bytes pe (← `(CopyKind.get Bool.false))
+    quoteCopy operand dst src bytes pe `(CopyKind.get Bool.false)
   | `(shmemCallStmt| libshmem_device.getmem_nbi_block(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $pe:tritonExpr)) => do
-    quoteCopy dst src bytes pe (← `(CopyKind.get Bool.true))
+    quoteCopy operand dst src bytes pe `(CopyKind.get Bool.true)
   | `(shmemCallStmt| libshmem_device.putmem_block(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $pe:tritonExpr)) => do
-    quoteCopy dst src bytes pe (← `(CopyKind.put Bool.false))
+    quoteCopy operand dst src bytes pe `(CopyKind.put Bool.false)
   | `(shmemCallStmt| libshmem_device.putmem_nbi_block(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $pe:tritonExpr)) => do
-    quoteCopy dst src bytes pe (← `(CopyKind.put Bool.true))
+    quoteCopy operand dst src bytes pe `(CopyKind.put Bool.true)
   | `(shmemCallStmt| libshmem_device.putmem_signal_block(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $word:tritonExpr,
       $value:tritonExpr, $op:tritonExpr, $pe:tritonExpr)) => do
-    quoteSignalCopy dst src bytes word value op pe (← `(CopyKind.signalBlock Bool.false))
+    quoteSignalCopy operand dst src bytes word value op pe (← `(CopyKind.signalBlock Bool.false))
   | `(shmemCallStmt| libshmem_device.putmem_signal_nbi_block(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $word:tritonExpr,
       $value:tritonExpr, $op:tritonExpr, $pe:tritonExpr)) => do
-    quoteSignalCopy dst src bytes word value op pe (← `(CopyKind.signalBlock Bool.true))
+    quoteSignalCopy operand dst src bytes word value op pe (← `(CopyKind.signalBlock Bool.true))
   | `(shmemCallStmt| libshmem_device.putmem_signal_nbi_warp(
       $dst:shmemPtr, $src:shmemPtr, $bytes:tritonExpr, $word:tritonExpr,
       $value:tritonExpr, $op:tritonExpr, $pe:tritonExpr)) => do
-    quoteSignalCopy dst src bytes word value op pe (← `(CopyKind.signalWarp))
+    quoteSignalCopy operand dst src bytes word value op pe (← `(CopyKind.signalWarp))
   | `(shmemCallStmt| libshmem_device.signal_op(
       $word:tritonExpr, $value:tritonExpr, $op:tritonExpr, $pe:tritonExpr)) => do
-    let word ← quoteDistSyntax word
-    let value ← quoteDistSyntax value
-    let pe ← quoteDistSyntax pe
+    let word ← operand .address word
+    let value ← operand .nat value
+    let pe ← operand .nat pe
     let op ← signalOpTerm op
     `(Call.signalOp $word $value $pe $op)
   | `(shmemCallStmt| libshmem_device.signal_wait_until(
       $word:tritonExpr, $cmp:tritonExpr, $value:tritonExpr)) => do
-    let word ← quoteDistSyntax word
-    let value ← quoteDistSyntax value
+    let word ← operand .address word
+    let value ← operand .nat value
     let cmp ← cmpTerm cmp
     `(Call.signalWait $word $value $cmp)
   | _ => throwErrorAt st "unsupported NVSHMEM call"
@@ -248,7 +249,7 @@ private partial def quoteSites (stx : Syntax) (path : List Nat)
     (sites : Array (TSyntax `term)) : TermElabM (Array (TSyntax `term)) := do
   let mut sites := sites
   if stx.isOfKind ``pendingShmemStmt then
-    let call ← quoteCall ⟨stx[0]⟩
+    let call ← quoteCall quoteSourceOperand ⟨stx[0]⟩
     let path := quote path.reverse
     sites := sites.push (← `(Site.mk $path $call))
   for i in [:stx.getNumArgs] do
@@ -262,11 +263,8 @@ open Lean Elab Term
 
 @[scoped term_elab VeriTile.Triton.DSL.tritonBlock]
 def elaborateShmem : TermElab := fun stx expected => do
+  checkFamilySource stx expected ``Shmem.Source .shmem
   let sites ← Shmem.quoteSites stx [] #[]
-  if sites.isEmpty then throwUnsupportedSyntax
-  checkPendingCalls stx (some "#80")
-  if let some dl := stx.find? (fun s => s.isOfKind ``dlExpr || s.isOfKind ``dlStmt) then
-    throwErrorAt dl "mixed dl and NVSHMEM blocks require the segment frontend (#82)"
   checkDistSourceCalls stx
   let block ← quoteDistSyntax stx
   elabTerm (← `(Shmem.Source.mk $block [$sites,*])) expected

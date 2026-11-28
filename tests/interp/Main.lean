@@ -125,30 +125,30 @@ example : launchOrder [2, 0, 3] = [] := by decide
   let initial := gridProbeState.setReg "local" .nat [] (fun _ => 7)
   return (runGrid fp32 probe [2] initial).map (fun t => (t.read "seen" 1).read .nat) == some 7
 
-private def vectorAdd : KernelEntry where
+private def vectorAdd (kernel : Nat → QKernel) : KernelEntry where
   inputs := ["x", "y"]
   output := "out"
   bind := fun dims shape => do
     let x ← programs dims
     let [size] := shape | throw "VectorAdd needs vectors"
     unless size > 0 && size % x == 0 do throw "vector length must be a positive multiple of grid X"
-    return vectorProgram.mirror (size / x)
+    return kernel (size / x)
 
-private def softmax : KernelEntry where
+private def softmax (kernel : Nat → QKernel) : KernelEntry where
   inputs := ["x"]
   output := "y"
   bind := fun dims shape => do
     let x ← programs dims
     let [rows, cols] := shape | throw "OnlineSoftmax needs a matrix"
     unless rows == x && cols > 0 do throw "OnlineSoftmax needs one program per row and a nonempty row"
-    return softmaxProgram.mirror cols
+    return kernel cols
 
 private def vectorLength (shape : List Nat) : Except String Nat := do
   let [length] := shape | throw "expected one-dimensional vector inputs"
   unless length > 0 do throw "expected nonempty vector inputs"
   return length
 
-private def flatVectorAdd : KernelEntry where
+private def flatVectorAdd (kernel : Nat → Nat → QKernel) : KernelEntry where
   inputs := ["x", "y"]
   output := "out"
   bind := fun _ _ => throw "FlatVectorAdd requires blockSize and nElements"
@@ -159,9 +159,9 @@ private def flatVectorAdd : KernelEntry where
     let some length := constants.lookup "nElements" | throw "FlatVectorAdd requires nElements"
     unless constants.length == 2 && width > 0 && length == size && blocks == (length + width - 1) / width do
       throw "FlatVectorAdd needs nElements equal to the tensor length and grid X = ceil(nElements/blockSize)"
-    return flatVectorProgram.mirror width length
+    return kernel width length
 
-private def floatDTypeAdd : KernelEntry where
+private def floatDTypeAdd (kernel : Nat → QKernel) : KernelEntry where
   inputs := ["x", "y"]
   output := "out"
   bind := fun _ _ => throw "FloatDTypeAdd requires BLOCK_SIZE"
@@ -171,12 +171,24 @@ private def floatDTypeAdd : KernelEntry where
     let [("BLOCK_SIZE", width)] := constants | throw "FloatDTypeAdd requires only BLOCK_SIZE"
     unless width > 0 && blocks * width == size do
       throw "FloatDTypeAdd needs grid X * BLOCK_SIZE equal to the tensor length"
-    return floatAddProgram.mirror width
+    return kernel width
 
-def exampleCli (args : List String) : IO UInt32 :=
-  runCli [("VectorAdd", vectorAdd), ("OnlineSoftmax", softmax),
-    ("FlatVectorAdd", flatVectorAdd), ("FloatDTypeAdd", floatDTypeAdd)] [("fp32-basic", runFP32)] args
-    (Examples.tensorExamples ++ Examples.hyperExamples)
+private def basicExamples : List (String × ExampleBinding KernelEntry) := [
+  ("VectorAdd", bind_example% vectorProgram => vectorAdd),
+  ("OnlineSoftmax", bind_example% softmaxProgram => softmax),
+  ("FlatVectorAdd", bind_example% flatVectorProgram => flatVectorAdd),
+  ("FloatDTypeAdd", bind_example% floatAddProgram => floatDTypeAdd)]
+
+def exampleCli (args : List String) : IO UInt32 := do
+  let files := Examples.tensorExamples ++ Examples.hyperExamples
+  if args == ["--example-sources"] then
+    let sources {α : Type} (entries : List (String × ExampleBinding α)) : List (String × Lean.Json) :=
+      entries.map fun (key, entry) => (key, Lean.Json.str entry.source)
+    IO.println (Lean.Json.mkObj (sources basicExamples ++ sources files)).compress
+    return 0
+  let runners {α : Type} (entries : List (String × ExampleBinding α)) : List (String × α) :=
+    entries.map fun (key, entry) => (key, entry.entry)
+  runCli (runners basicExamples) [("fp32-basic", runFP32)] args (runners files)
 
 end VeriTile.Interp.Run
 

@@ -139,21 +139,6 @@ structure Source where
   block : Syntax
   sites : List Site
 
-private partial def quoteSource (stx : Syntax) : TermElabM (TSyntax `term) := do
-  match stx with
-  | .missing => `(Syntax.missing)
-  | .atom _ token =>
-    let token := quote token
-    `(Syntax.atom SourceInfo.none $token)
-  | .ident _ spelling name _ =>
-    let spelling := quote spelling.toString
-    let name := quote name.eraseMacroScopes
-    `(Syntax.ident SourceInfo.none (String.toRawSubstring $spelling) $name [])
-  | .node _ kind args =>
-    let args ← args.mapM quoteSource
-    let kind := quote kind
-    `(Syntax.node SourceInfo.none $kind #[$args,*])
-
 private def literal (parameter : String) (arg : TSyntax `tritonExpr) : TermElabM String := do
   let `(tritonExpr| $s:str) := arg
     | throwErrorAt arg "{parameter} must be a string literal"
@@ -174,13 +159,13 @@ private def waitOrder (arg : TSyntax `tritonExpr) : TermElabM (TSyntax `term) :=
   | "acq_rel" => `(MemOrder.acqRel)
   | order => throwErrorAt arg "dl.wait: unsupported semantic '{order}'"
 
-private def quoteWait (ptr count scope order : TSyntax `tritonExpr)
+private def quoteWait (operand : QuoteOperand) (ptr count scope order : TSyntax `tritonExpr)
     (threshold : TSyntax `tritonExpr) : TermElabM (TSyntax `term) := do
   let scope ← waitScope scope
   let order ← waitOrder order
-  let ptr ← quoteSource ptr
-  let count ← quoteSource count
-  let threshold ← quoteSource threshold
+  let ptr ← operand .address ptr
+  let count ← operand .nat count
+  let threshold ← operand .nat threshold
   `(Call.wait $ptr $count $threshold $scope $order)
 
 private def notifyScope (arg : TSyntax `tritonExpr) : TermElabM (TSyntax `term) := do
@@ -195,74 +180,47 @@ private def signalOp (arg : TSyntax `tritonExpr) : TermElabM (TSyntax `term) := 
   | "add" => `(SignalOp.add)
   | op => throwErrorAt arg "dl.notify: unsupported sig_op '{op}'"
 
-private def quoteNotify (ptr rank signal scope : TSyntax `tritonExpr)
+private def quoteNotify (operand : QuoteOperand) (ptr rank signal scope : TSyntax `tritonExpr)
     (op : TSyntax `term) : TermElabM (TSyntax `term) := do
   let scope ← notifyScope scope
-  let ptr ← quoteSource ptr
-  let rank ← quoteSource rank
-  let signal ← quoteSource signal
+  let ptr ← operand .address ptr
+  let rank ← operand .nat rank
+  let signal ← operand .nat signal
   `(Call.notify $ptr $rank $signal $scope $op)
 
-private def quoteCall (raw : Syntax) : TermElabM (Option (TSyntax `term)) := do
+def quoteCall (raw : Syntax) (operand : QuoteOperand := quoteSourceOperand) : TermElabM (Option (TSyntax `term)) := do
   if raw.isOfKind ``dlExpr then
     let expr : TSyntax `distributedCallExpr := ⟨raw[0]⟩
     return some (← match expr with
       | `(distributedCallExpr| dl.rank()) => `(Call.rank)
       | `(distributedCallExpr| dl.num_ranks()) => `(Call.numRanks)
       | `(distributedCallExpr| dl.symm_at($ptr:tritonExpr, $rank:tritonExpr)) => do
-        let ptr ← quoteSource ptr
-        let rank ← quoteSource rank
+        let ptr ← operand .address ptr
+        let rank ← operand .nat rank
         `(Call.symmAt $ptr $rank)
       | `(distributedCallExpr| dl.consume_token($value:tritonExpr, $token:tritonExpr)) => do
-        let value ← quoteSource value
-        let token ← quoteSource token
+        let value ← operand .value value
+        let token ← operand .token token
         `(Call.consumeToken $value $token)
       | `(distributedCallExpr| dl.wait($ptr:tritonExpr, $count:tritonExpr, $scope:tritonExpr, $order:tritonExpr)) => do
-        quoteWait ptr count scope order (← `(tritonExpr| 1))
+        quoteWait operand ptr count scope order (← `(tritonExpr| 1))
       | `(distributedCallExpr| dl.wait($ptr:tritonExpr, $count:tritonExpr, $scope:tritonExpr, $order:tritonExpr, waitValue=$value:tritonExpr))
       | `(distributedCallExpr| dl.wait($ptr:tritonExpr, $count:tritonExpr, scope=$scope:tritonExpr, semantic=$order:tritonExpr, waitValue=$value:tritonExpr)) =>
-        quoteWait ptr count scope order value
+        quoteWait operand ptr count scope order value
       | _ => throwErrorAt raw "unsupported dl expression")
   if raw.isOfKind ``dlStmt then
     let stmt : TSyntax `distributedCallStmt := ⟨raw[0]⟩
     return some (← match stmt with
       | `(distributedCallStmt| dl.notify($ptr:tritonExpr, $rank:tritonExpr, signal=$signal:tritonExpr, comm_scope=$scope:tritonExpr)) => do
-        quoteNotify ptr rank signal scope (← `(SignalOp.set))
+        quoteNotify operand ptr rank signal scope (← `(SignalOp.set))
       | `(distributedCallStmt| dl.notify($ptr:tritonExpr, $rank:tritonExpr, signal=$signal:tritonExpr, sig_op=$op:tritonExpr, comm_scope=$scope:tritonExpr)) => do
-        quoteNotify ptr rank signal scope (← signalOp op)
+        quoteNotify operand ptr rank signal scope (← signalOp op)
       | `(distributedCallStmt| with dl.simt_exec_region() as ($index:ident, $size:ident) { $_:tritonStmt* }) => do
         let index := quote index.getId.eraseMacroScopes
         let size := quote size.getId.eraseMacroScopes
         `(Call.simtRegion $index $size)
       | _ => throwErrorAt raw "unsupported dl statement")
   return none
-
--- Volatile loads are explicitly outside the signed A2.1 source subset.
-private def checkVolatileLoads (stx : Syntax) : TermElabM Unit := do
-  let hasVolatile (raw : Syntax) := match (⟨raw⟩ : TSyntax `tritonMemKwarg) with
-    | `(tritonMemKwarg| $name:ident = $_:tritonExpr)
-    | `(tritonMemKwarg| $name:ident = $_:tritonDType) => name.getId.eraseMacroScopes == `volatile
-    | _ => Bool.false
-  if let some load := stx.find? (fun raw =>
-      raw.getArgs.any (fun arg => arg.isAtom && arg.getAtomVal == "tl.load(") &&
-        (raw.find? hasVolatile).isSome) then
-    let message := "tl.load: unknown kwarg `volatile`. Only `mask`, `other`, `dtype`, " ++
-      "`boundary_check`, `padding_option`, and `eviction_policy` are recognized."
-    throwErrorAt load message
-
--- These are the same source-helper passes used by the ordinary Triton block.
--- Run them for validation only and retain the original syntax and tree paths.
-private def checkSourceCalls (stx : Syntax) : TermElabM Unit := do
-  let `(triton { $stmts:tritonStmt* }) := stx | throwUnsupportedSyntax
-  let checked ← liftMacroM do
-    let normalized ← stmts.toList.mapM fun stmt =>
-      return (⟨← Inference.normalizeControlFlow stmt.raw⟩ : TSyntax `tritonStmt)
-    RandomProfile.prepare (← FiniteHelperSource.prepare normalized)
-  -- The dotted zero-argument parser also admits excluded names. The finite
-  -- helper pass consumes the supported dtype predicate in its declaration.
-  if checked.any fun stmt =>
-      (stmt.raw.find? (·.isOfKind ``tritonSourceIsFP64Dotted)).isSome then
-    throwErrorAt stx "unexpected syntax{indentD stx}"
 
 private partial def quoteSites (stx : Syntax) (path : List Nat)
     (sites : Array (TSyntax `term)) : TermElabM (Array (TSyntax `term)) := do
@@ -281,12 +239,10 @@ open Lean Elab Term
 
 @[scoped term_elab VeriTile.Triton.DSL.tritonBlock]
 def elaborateDL : TermElab := fun stx expected => do
+  checkFamilySource stx expected ``DL.Source .dl
   let sites ← DL.quoteSites stx [] #[]
-  if sites.isEmpty then throwUnsupportedSyntax
-  checkPendingCalls stx
-  DL.checkSourceCalls stx
-  DL.checkVolatileLoads stx
-  let block ← DL.quoteSource stx
+  checkDistSourceCalls stx
+  let block ← quoteDistSyntax stx
   elabTerm (← `(DL.Source.mk $block [$sites,*])) expected
 
 end VeriTile.Dist.Frontend.TritonDist

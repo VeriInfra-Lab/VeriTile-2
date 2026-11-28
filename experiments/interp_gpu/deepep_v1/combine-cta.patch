@@ -1,0 +1,54 @@
+# Source: tile-ai/tilescale@9ba8a605d347f600a95d0275e2639cb00122c084 examples/distributed/deepseek_deepep/intranode/combine.py:228-234,245-249,259-264,341-352
+# Licence: MIT
+# Changes: patched against the pinned source; widen the retirement flag and explicitly order shared accesses within one block
+--- a/intranode/combine.py
++++ b/intranode/combine.py
+@@ -228,7 +228,7 @@
+                 warp_channel_head_idx = T.alloc_shared([warps, num_ranks], "int32", scope="shared")
+                 shared_channel_tail_idx = T.alloc_shared([32], "int32", scope="shared")  #! workaround for illegal address
+-                warp_retired = T.alloc_shared([warps], "bool", scope="shared")
++                warp_retired = T.alloc_shared([warps], "int32", scope="shared")
+                 if tx < warps:
+-                    warp_retired[tx] = False
++                    warp_retired[tx] = 0
+                 if lane_id < num_ranks:
+                     warp_channel_head_idx[warp_id, lane_id] = 0
+@@ -245,5 +245,7 @@
+                         retired = True
+                         for i in T.serial(1, warps):
+-                            retired = retired and warp_retired[i]
++                            retired_i = T.alloc_var("int32")
++                            T.ld(warp_retired[i], retired_i, sem="acquire", scope="cta")
++                            retired = retired and retired_i != 0
+                         if retired:
+                             break
+@@ -259,6 +261,10 @@
+                         min_head = 2**31 - 1  # int32 max
+                         for i in T.serial(1, warps):
+-                            if not warp_retired[i]:
+-                                min_head = T.min(min_head, warp_channel_head_idx[i, lane_id])
++                            retired_i = T.alloc_var("int32")
++                            T.ld(warp_retired[i], retired_i, sem="acquire", scope="cta")
++                            if retired_i == 0:
++                                head_i = T.alloc_var("int32")
++                                T.ld(warp_channel_head_idx[i, lane_id], head_i, sem="acquire", scope="cta")
++                                min_head = T.min(min_head, head_i)
+                         if min_head != 2**31 - 1 and min_head > last_head:
+                             last_head = min_head
+@@ -341,12 +347,12 @@
+                         # Update head
+                         if lane_id < num_ranks:
+-                            warp_channel_head_idx[warp_id, lane_id] = T.if_then_else(
+-                                expected_head < 0, -expected_head - 1, expected_head + 1
+-                            )
++                            T.st(warp_channel_head_idx[warp_id, lane_id],
++                                 T.if_then_else(expected_head < 0, -expected_head - 1, expected_head + 1),
++                                 sem="release", scope="cta")
+
+                     # Retired
+                     T.sync_warp()
+                     if T.shuffle_elect(32):
+-                        warp_retired[warp_id] = True
++                        T.st(warp_retired[warp_id], 1, sem="release", scope="cta")
+
+     return combine_main

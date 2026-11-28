@@ -1,4 +1,13 @@
 /-
+VeriTile.Dist.ScopeCheck
+
+The scope-consistency check of the Dist line (C4) and its soundness (ticket
+S5.2, #57). Moved to the main target by S5.2 (#57) from
+`VeriTile/Staging/Dist/ScopeSpec.lean`, which it deleted; the signed
+declarations keep their names, types and bodies.
+
+The provenance paragraph of the staging header, moved here verbatim:
+
 S5.1 (#56). Signed on 2026-11-25 (user decision S1–S7 of 2026-11-24, recorded
 on #56; the agent recorded the signature on the user's delegation): the scope
 checker `scopeConsistent` with `ScopeReliance`, through its soundness statement
@@ -7,11 +16,13 @@ checker `scopeConsistent` with `ScopeReliance`, through its soundness statement
 `TrustAssumption` and `TrustAssumptionClass` was signed on 2026-11-26 under the
 same decision, after the checker freezes constructors, fields and defaults of
 signed types (#594, #621), and moved to `VeriTile.Dist.Assumptions` for #58.
-The checker uses the signed event interface in EventSpec. A reliance names the
-release and acquire that a proof needs and the cell whose visibility it needs. S4.1 supplies the trace conditions,
-including the read-from condition that connects such a pair to happens-before.
+The checker uses the signed event interface in `VeriTile/Dist/Event/` (moved
+out of staging by S2.3–S2.5). A reliance names the release and acquire that a
+proof needs and the cell whose visibility it needs. S4.1 supplies the trace
+conditions, including the read-from condition that connects such a pair to
+happens-before.
 -/
-import VeriTile.Staging.Dist.EventSpec
+import VeriTile.Dist.Event.Access
 
 namespace VeriTile.Dist
 
@@ -65,5 +76,18 @@ theorem scopeConsistent_crossRankSys :
       [⟨flag, (.rank 0, .bump ⟨.word flag, .set, 1, .atomic .sys .release⟩),
         (.rank 1, .wait (.word flag) .eq 1 (.atomic .sys .acquire))⟩] = true := by
   decide
+
+/-- UNSIGNED. S5.2 (#57). Completeness: the checker admits a list exactly when
+every pair in it satisfies `SyncEdge`. The negative example is
+`scopeConsistent_crossRankGpu`, read through this equivalence. -/
+theorem scopeConsistent_iff (reach : ShmemReach) (reliances : List ScopeReliance) :
+    scopeConsistent reach reliances = true ↔
+      ∀ r ∈ reliances, SyncEdge reach r.cell r.writer r.reader := by
+  refine ⟨scopeConsistent_sound reach reliances, fun h => ?_⟩
+  unfold scopeConsistent
+  refine List.all_eq_true.mpr fun r hr => ?_
+  obtain ⟨c, m, m', hrel, hacq, hp⟩ := h r hr
+  simp only [hrel, hacq, decide_eq_true_eq, true_and]
+  exact hp
 
 end VeriTile.Dist
