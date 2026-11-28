@@ -1,25 +1,16 @@
 /-
 VeriTile.Dist.Footprint.Op
 
-The cells that upstream statements access, computed from the state they start
-in (S3.3, #45). `opReads e s` is the set of cells that `evalOp e s` reads: the
-active lanes of every load, with addresses and masks evaluated in `s`.
-`stmtsFoot code s` is the pair of cells that `stepStmts code s` reads and
-writes, following the actual execution: the branch taken, the loop iterations
-run, and the state each statement runs in. Only active lanes count; a step
-that fails contributes nothing after it.
+The cells that an upstream expression reads, computed from the state it is
+evaluated in (S3.3, #45). `opReads e s` is the set of cells that `evalOp e s`
+reads: the active lanes of every load in `e`, with addresses, masks and
+`other` operands evaluated in `s`. `accessCells` is the set of cells a memory
+operand addresses at given lanes; statements use it for their stores and
+atomics (`VeriTile/Dist/Footprint/Stmt.lean`).
 
-The two facts that make these footprints sound are proved here, on
-`BlockState`:
-
-- `stmtsFoot_congr`: two states that agree on the read set (and on registers,
-  program ids, the undefined-value oracle and the grid) have the same read and
-  write sets, both runs fail or both succeed, and the results agree on the
-  read and write sets.
-- the same lemma gives the frame: a run changes no cell outside the write set.
-
-`Segment.ofStmts` (`VeriTile/Staging/Dist/SegmentSpec.lean`) lifts them to
-the cells of the distributed state through `ViewName.address`.
+`opReads_congr`: on two states that agree on a set containing `opReads e s₁`
+and on every field that is not memory, `e` evaluates the same and reads the
+same cells.
 -/
 import VeriTile.Triton.Memory.Locality
 
