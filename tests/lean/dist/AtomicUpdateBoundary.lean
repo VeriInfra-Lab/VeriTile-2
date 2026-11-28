@@ -173,6 +173,48 @@ private def isSeparateRmw (k : ComputeKernel) : Bool :=
 theorem ordinaryLoadComputeStore : isSeparateRmw (ordinaryRmw "p") = Bool.true := rfl
 theorem ordinaryAtomicNotSeparate : isSeparateRmw (ordinaryAtomicAdd "p") = Bool.false := rfl
 
+theorem ordinaryAtomicAddMarker (p : RegionName) :
+    (match (ordinaryAtomicAdd p).surfaceBody with
+      | [.atomicAdd ..] => Bool.true
+      | _ => Bool.false) = Bool.true := rfl
+
+-- These five documented base atomics elaborate to effect markers, not to
+-- an executable algorithm. Pin the precise projection error for each.
+theorem atomicMaxRejected (p : RegionName) :
+    (triton {
+      x := 1
+      tl.atomic_max($(p), x)
+    } : ComputeKernel).toAlgorithm? =
+      Except.error (.requiresEffectProjection "tl.atomic_max") := rfl
+
+theorem atomicMinRejected (p : RegionName) :
+    (triton {
+      x := 1
+      tl.atomic_min($(p), x)
+    } : ComputeKernel).toAlgorithm? =
+      Except.error (.requiresEffectProjection "tl.atomic_min") := rfl
+
+theorem atomicAndRejected (p : RegionName) :
+    (triton {
+      x := 1
+      tl.atomic_and($(p), x)
+    } : ComputeKernel).toAlgorithm? =
+      Except.error (.requiresEffectProjection "tl.atomic_and") := rfl
+
+theorem atomicOrRejected (p : RegionName) :
+    (triton {
+      x := 1
+      tl.atomic_or($(p), x)
+    } : ComputeKernel).toAlgorithm? =
+      Except.error (.requiresEffectProjection "tl.atomic_or") := rfl
+
+theorem atomicXorRejected (p : RegionName) :
+    (triton {
+      x := 1
+      tl.atomic_xor($(p), x)
+    } : ComputeKernel).toAlgorithm? =
+      Except.error (.requiresEffectProjection "tl.atomic_xor") := rfl
+
 -- Signals use the distinct S2 counter pattern, not a general MemCell function.
 private def flag0 : Addr := ⟨.global 0, ⟨"flag"⟩, 3⟩
 private def flag2 : Addr := ⟨.global 2, ⟨"flag"⟩, 3⟩
@@ -295,6 +337,12 @@ theorem nonblockingSignalSet (old amount : Nat) :
 #axiomsClean separateReadComputeWrite
 #axiomsClean ordinaryLoadComputeStore
 #axiomsClean ordinaryAtomicNotSeparate
+#axiomsClean ordinaryAtomicAddMarker
+#axiomsClean atomicMaxRejected
+#axiomsClean atomicMinRejected
+#axiomsClean atomicAndRejected
+#axiomsClean atomicOrRejected
+#axiomsClean atomicXorRejected
 #axiomsClean notifyAddAndSet
 #axiomsClean signalAdd
 #axiomsClean signalSet

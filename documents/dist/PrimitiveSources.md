@@ -46,8 +46,9 @@ below PTX gives the row nothing.
 `7908e4ea9010bb2238f9f05b28c904fd4b71c60a`); TileScale `71e7145` (full hash
 `71e71457d40ed6e6a2dad297936bfdbff21d104b`); Triton `v3.5.1` (commit
 `0add68262ab0a2e33b84524346cb27cbb2787356`). Triton-distributed at its pin
-bundles Triton at another commit, `f797708`; the one Triton passage that is
-cited here has the same text at both (E-TR1). The DeepEP version 1 port is
+bundles Triton at another commit, `f797708`; the `atomic_add` passage has
+the same text at both (E-TR1). The additional base-atomic inventory in
+section 7 uses the `v3.5.1` pin only. The DeepEP version 1 port is
 read at TileScale `9ba8a605` (full hash
 `9ba8a605d347f600a95d0275e2639cb00122c084`, branch `wt/deepep-internode`),
 directory `examples/distributed/deepseek_deepep/intranode/`. A3 to A8, A10 and A11 of
@@ -170,7 +171,7 @@ and from new clones at the two TileScale commits.
 | TD-SHC | `TD:python/triton_dist/language/extra/cuda/libnvshmem_device.py` (names and bound routine names only) |
 | TD-LEC | `TD:python/triton_dist/language/extra/cuda/language_extra.py` (names; two docstrings) |
 | TD-KCO | `TD:python/triton_dist/kernels/common_ops.py`, `TD:python/triton_dist/kernels/nvidia/common_ops.py` (names, bound routines and the atomic-support docstring at lines 155–157) |
-| TR-CORE | `TR:python/triton/language/core.py` (docstring of `atomic_add`) |
+| TR-CORE | `TR:python/triton/language/core.py` (atomic docstrings, including `atomic_add`) |
 | TR-API | `TR:docs/python-api/triton.language.rst`, which lists `atomic_add`; its page is generated from the docstring. Rendered for `main`: <https://triton-lang.org/main/python-api/generated/triton.language.atomic_add.html> |
 | TS-API | `TS:docs/distributed_api_reference.md` |
 | TS-COMM | `TS:tilelang/language/distributed/comm.py` (docstrings) |
@@ -1181,7 +1182,8 @@ were open in the first form of this block; the user decided each on
 
 These entries and the separate translation-correctness entry N5′
 (`documented_atomic_update_lowering`, #43 and #608) are registered in
-`VeriTile/Dist/Assumptions.lean`. Import
+`VeriTile/Dist/Assumptions.lean`. N5′ remains open.
+Discharged only by #82, the source-to-S3 bridge. Import
 `VeriTile.Dist.Meta.PrintTrustAssumptions` and run `#print_trust_assumptions T`
 to see the names and classes of the registered assumptions reached from
 the type and proof of theorem `T` through their Lean dependencies. An
@@ -1423,18 +1425,21 @@ race freedom on the same inputs. [Copy-wait schedule](../../tests/lean/dist/Tuto
 The translation-correctness entry `documented_atomic_update_lowering` (#43,
 #608) separates the source operation from the function-valued payload of an
 S3 emission. The inventory below is of the actual front ends at main
-`14a1f4d33` (the merge of #81). `LanguageExtra.Call.lower` retains the
+`c2c38502e` (after the merge of #81). `LanguageExtra.Call.lower` retains the
 evaluated operands in an `AccessPlan`; `AccessPlan.observe` projects the
 access kind, the optional new value and the optional observed return. The
 only direct constructors of `Event.access .update` under
 `VeriTile/Dist/Frontend/` are the add branch and the successful
-compare-exchange branch in `LanguageExtra.lean:69–78`.
+compare-exchange branch in `LanguageExtra.lean:89–98`.
 
-| Accepted source operation | Current lowering and value/return behaviour | Pinned source and admitted reading |
+| Source operation | Current lowering and value/return behaviour | Pinned source and admitted reading |
 | --- | --- | --- |
-| `atomic_add` (`language_extra`) | [`LanguageExtra.quoteAdd` (204–208) and `AccessPlan.observe` (69–78)](../../VeriTile/Dist/Frontend/TritonDist/LanguageExtra.lean): per evaluated lane, RMW of the old cell with the evaluated operand using addition at the source dtype; return the observed old value, whether bound or discarded. | TD-API, TD-LEC at `7908e4e` (E-TD8, E-TD14); D5 and A1(a,b). The documentation does not state the returned value; that reading is A1(b). |
+| Base `tl.atomic_add` | [`expandAtomicAdd`](../../VeriTile/Triton/DSL/Expansion/Memory.lean#L495) lowers a statement to `Stmt.atomicAdd` (via `ComputeStmt.atomicAdd` in typed source). No base-frontend distributed `AccessPlan` producer; projection to S3 is #82. | TR-CORE, Triton `v3.5.1`, [atomic_add, lines 2344–2352](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/core.py#L2344-L2352) and the [shared docstring](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/core.py#L2292-L2318) (E-TR1); atomic add returning the old value is documented. |
+| Base `tl.atomic_xchg` | [`expandAtomicRMWCore`](../../VeriTile/Triton/DSL/Expansion/Main.lean#L2771) with `RMWOp.xchg`: lowered to `Stmt.atomicRMW`, in the discarded-return statement and `old := ...` / `old = ...` binding forms. No base-frontend distributed `AccessPlan` producer; projection to S3 is #82. | TR-CORE, Triton `v3.5.1`, [atomic_xchg, lines 2333–2341](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/core.py#L2333-L2341) and the shared docstring above: atomic exchange returning the old value. |
+| Base `tl.atomic_cas` | `expandAtomicRMWCore` with `RMWOp.cas`: lowered to `Stmt.atomicRMW` with expected and replacement operands, in the discarded-return statement and `old := ...` / `old = ...` binding forms. No base-frontend distributed `AccessPlan` producer; projection to S3 is #82. | TR-CORE, Triton `v3.5.1`, [atomic_cas, lines 2322–2330](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/core.py#L2322-L2330) and the shared docstring above: atomic compare-and-swap returning the old value. |
+| `atomic_add` (`language_extra`) | [`LanguageExtra.quoteAdd` (225–230) and `AccessPlan.observe` (89–98)](../../VeriTile/Dist/Frontend/TritonDist/LanguageExtra.lean): per evaluated lane, RMW of the old cell with the evaluated operand using addition at the source dtype; return the observed old value, whether bound or discarded. | TD-API, TD-LEC at `7908e4e` (E-TD8, E-TD14); D5 and A1(a,b). The documentation does not state the returned value; that reading is A1(b). |
 | Scoped `tl.atomic_add`, with or without mask | The same add-plan constructor, with the accepted source scope/order and only mask-true lanes. The return for each active lane is its own old value. Inactive lanes evaluate neither address nor operand. | TR-CORE at Triton `v3.5.1` (E-TR1), TD-T08 (E-TD18); A1(d) for the scope/order vocabulary. |
-| `atomic_cas` (`language_extra`) | [`LanguageExtra.quoteExpr` (230–260), `Call.lower` (114–151), `AccessPlan.observe` (69–78)](../../VeriTile/Dist/Frontend/TritonDist/LanguageExtra.lean): if old equals expected, one update writes the replacement and returns old; otherwise one load returns old and does not write. The empty CAS spin is separately a grouped wait and successful set, not a function-valued RMW plan. | TD-API at `7908e4e` (E-TD8), D5 and A1(b); A3 for the accepted empty spin. The strong compare-exchange and return interpretation is an admitted reading, not a documented return guarantee. |
+| `atomic_cas` (`language_extra`) | [`LanguageExtra.quoteExpr` (253–284), `Call.lower` (134–168), `AccessPlan.observe` (89–98)](../../VeriTile/Dist/Frontend/TritonDist/LanguageExtra.lean): if old equals expected, one update writes the replacement and returns old; otherwise one load returns old and does not write. The empty CAS spin is separately a grouped wait and successful set, not a function-valued RMW plan. | TD-API at `7908e4e` (E-TD8), D5 and A1(b); A3 for the accepted empty spin. The strong compare-exchange and return interpretation is an admitted reading, not a documented return guarantee. |
 | `dl.notify`, `sig_op="add"` or `"set"` | [`DL.notify` (59–64), `DL.Call.lower` (106–126)](../../VeriTile/Dist/Frontend/TritonDist/DL.lean): pattern-b `Event.bump` on the remote word, with `SignalOp.add` or `SignalOp.set` and the release mode selected by the accepted scope. ADD computes `old + amount`; SET writes `amount`. Neither is an `AccessPlan` nor a function-valued S3 payload. | TD-PRIM and TD-API at `7908e4e` (E-TD2, E-TD3); A2 is the named atomicity, scope, ordering and value assumption, not a documented guarantee. |
 | `libshmem_device.signal_op`, `NVSHMEM_SIGNAL_ADD` or `NVSHMEM_SIGNAL_SET` | [`Shmem.signalOpTerm` (167–172), `Shmem.Call.lower` (134–154)](../../VeriTile/Dist/Frontend/TritonDist/Shmem.lean): pattern-b signal bump with shmem release mode. ADD computes `old + amount`; SET replaces the word. | NVSHMEM 3.6.5 NV-SIG (E-NV10, E-NV12), TD-SH and TD-SHC at `7908e4e`. |
 | `libshmem_device.putmem_signal_block`, `putmem_signal_nbi_block`, `putmem_signal_nbi_warp` | [`Shmem.lowerCopy` (103–130)](../../VeriTile/Dist/Frontend/TritonDist/Shmem.lean) retains the signal bump in the transfer completion. ADD/SET use the same counter operations. The transfer payload accesses remain plain reads/stores; the signal is not an RMW of the payload. | NVSHMEM 3.6.5 NV-SIG (E-NV8, E-NV9, E-NV12, E-NV16), TD-API/TD-PRIM at `7908e4e`. |
@@ -1446,9 +1451,18 @@ phase and rendezvous counter increments in `Shmem.lean` and
 `LanguageExtra.lean` have no memory-word access. They are not additional
 source atomic primitives. Base Triton `tl.load`, arithmetic and `tl.store`
 lower to distinct core statements, and a scoped load, independent compute
-and scoped store lower to separate access plans, not one RMW. The other
-base Triton atomics (exchange, max/min, and/or/xor, etc.) do not have a
-distributed access-plan producer in this inventory. The TileLang DSL's
+and scoped store lower to separate access plans, not one RMW. The base
+frontend lowers add, exchange and CAS as listed above. Only the five other
+documented base atomics (`tl.atomic_max`, `tl.atomic_min`, `tl.atomic_and`,
+`tl.atomic_or`, `tl.atomic_xor`; TR-CORE at `v3.5.1`,
+[lines 2355–2407](https://github.com/triton-lang/triton/blob/0add68262ab0a2e33b84524346cb27cbb2787356/python/triton/language/core.py#L2355-L2407))
+are rejected at algorithm projection: `unsupportedAtomic2` emits an effect
+marker and `ComputeKernel.toAlgorithm?` reports `requiresEffectProjection`
+with the offending name. The five named rejections are gated in
+`AtomicUpdateBoundary.lean`; exchange and CAS are not in that rejected set.
+Their distributed-composition-path restriction is separate (#696). Both
+base and distributed source-to-S3 projection obligations belong to #82.
+The TileLang DSL's
 `Statement.update` denotes an augmented assignment in its syntax, not an
 S2 atomic event or S3 memory payload; its current core lowerer does not
 provide an atomic event bridge.
@@ -1463,8 +1477,9 @@ on #608 (2026-11-27), there are still **zero** producers of
 `AccessValue.update` or `Emission` in the public front ends. The signed type
 remains in [`SegmentSpec.lean`](../../VeriTile/Staging/Dist/SegmentSpec.lean);
 the source-to-S3 bridge and its corresponding regression belong to #82.
-N5′ remains an open translation-correctness assumption until that bridge
-is discharged. No S3 payload is constructed by these tests.
+N5′ remains an open translation-correctness assumption.
+Discharged only by #82, the source-to-S3 bridge. No S3 payload is
+constructed by these tests.
 
 ## 8. Counts
 
@@ -1699,8 +1714,9 @@ report and one as a point to revisit.
    universal.
 5. **Triton version in the `triton-dist` environment.** Triton-distributed
    bundles Triton at commit `f797708`, not `v3.5.1`. The passage cited for
-   `tl.atomic_add` is the same at both (E-TR1). If further base Triton rows
-   are added, the commit to cite has to be chosen.
+   `tl.atomic_add` is the same at both (E-TR1). The additional base-atomic
+   inventory of section 7 uses `v3.5.1`; the other docstrings were not
+   compared against `f797708`.
 
 6. **`dl.wait` on a word that an NVSHMEM signal writes (decided 2026-11-23).** The kernel of
    tutorial 07 waits with `dl.wait(..., "gpu", "acquire")` on words that

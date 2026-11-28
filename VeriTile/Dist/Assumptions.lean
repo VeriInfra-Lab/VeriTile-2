@@ -153,8 +153,9 @@ def documented_atomic_update_lowering : TrustAssumption where
     "only at the boundary that lowers " ++
     "a documented source-level atomic to a distributed emission. A producer identifies its " ++
     "primitive, pinned contract, operand function and return behaviour; a plain load, " ++
-    "computation and store never becomes one atomic event. At main `90f8e34ed` no front end " ++
-    "produces this payload."
+    "computation and store never becomes one atomic event. Source-to-S2 producers exist " ++
+    "(#608), but no front end produces an `AccessValue.update` payload. " ++
+    "Discharged only by #82, the source-to-S3 bridge."
   affectedKernels := []
   assumptionClass := .translationCorrectness
 
