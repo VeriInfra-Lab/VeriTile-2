@@ -102,6 +102,8 @@ Decisions that the tickets left open:
 16. Negative examples are concrete instances; S7.2–S7.5 choose them.
 -/
 import VeriTile.Dist.Spec.AllToAll
+import Mathlib.Analysis.Complex.Exponential
+import Mathlib.Tactic.FinCases
 
 namespace VeriTile.Dist
 
@@ -197,6 +199,24 @@ theorem moeCombine_of_moeDispatch {numRanks numTokens : Nat} {ι : Type}
   obtain ⟨p, row, _⟩ := hdispatch.1.existsUnique_row s t d (horder s t d hd)
   rw [hback d p s t row j, hexpert d p s t row j, hdispatch.2 d p s t row j]
 
+/-- With full coverage of the routed ranks and normalized gates, identity
+experts reconstruct the original token, including all of its features. -/
+theorem moeCombine_identity_of_normalized {n t : Nat} {ι : Type} (R : MoERouting n t)
+    (rows : MoERows n t) (order : Fin n → Fin t → ReduceOrder (Fin n))
+    (tokens : RankTensor n (Fin t × ι)) (recv results : RankTensor n (Nat × ι))
+    (back : Fin n → RankTensor n (Fin t × ι)) (dispatch : MoEDispatch R rows tokens recv)
+    (expert : ∀ d p s tok, rows d p = some (s,tok) → ∀ j,
+      results d (p,j) = R.weight s tok d * recv d (p,j))
+    (store : MoEStoreBack rows results back)
+    (covers : ∀ s tok, (order s tok).CoversOn (R.dest s tok))
+    (normalized : ∀ s tok, ∑ d ∈ R.dest s tok, R.weight s tok d = 1) :
+    moeCombine order back = tokens := by
+  rw [moeCombine_of_moeDispatch R rows order tokens recv results back dispatch expert store
+    (fun s tok d hd => ((covers s tok).2 d).mp hd)]
+  funext s i
+  change (order s i.1).eval (fun d => R.weight s i.1 d * tokens s i) = tokens s i
+  rw [ReduceOrder.eval_eq_sum_of_coversOn _ (covers s i.1), ← Finset.sum_mul, normalized, one_mul]
+
 /-- UNSIGNED. Owner: S7.5. The attention result of one query row over one
 chunk of keys: `weight` is the softmax denominator, the sum of the
 exponentiated scores of the chunk; `out` is the output row, the average of the
@@ -207,7 +227,9 @@ structure AttentionPartial (ι : Type) where
 
 /-- UNSIGNED. Owner: S7.5. The merge of the partial results of
 `numChunks` chunks: the denominators are added, and the outputs are averaged
-with the denominators as weights. Both sums use the order `order`. -/
+with the denominators as weights. Both sums use the tree `order`. Claims about
+all chunks use `order.Covers`. A zero total denominator gives zero coordinates
+under the total division on exact reals. -/
 noncomputable def attentionMerge {numChunks : Nat} {ι : Type}
     (order : ReduceOrder (Fin numChunks)) (parts : Fin numChunks → AttentionPartial ι) :
     AttentionPartial ι where
@@ -215,5 +237,111 @@ noncomputable def attentionMerge {numChunks : Nat} {ι : Type}
   out := fun d =>
     (order.eval fun c => (parts c).weight * (parts c).out d) /
       order.eval fun c => (parts c).weight
+
+/-- UNSIGNED. Compute one chunk from the query row's unnormalized scores and
+value rows. The same tree selects and orders keys in both reductions. The empty
+tree has zero mass and returns zero in every coordinate by exact-real division. -/
+noncomputable def AttentionPartial.ofScores {key ι : Type} (keys : ReduceOrder key)
+    (score : key → ℝ) (value : key → ι → ℝ) : AttentionPartial ι :=
+  let mass := keys.eval (fun k => Real.exp (score k))
+  ⟨mass,fun j => keys.eval (fun k => Real.exp (score k) * value k j) / mass⟩
+
+private theorem expMass {key : Type} (keys : ReduceOrder key) (score : key → ℝ) :
+    0 ≤ keys.eval (fun k => Real.exp (score k)) ∧
+      (keys.eval (fun k => Real.exp (score k)) = 0 → keys.leaves = []) := by
+  induction keys with
+  | zero => exact ⟨le_rfl,fun _ => rfl⟩
+  | input k => exact ⟨(Real.exp_pos _).le,fun h => False.elim ((Real.exp_pos _).ne' h)⟩
+  | add l r hl hr =>
+    refine ⟨add_nonneg hl.1 hr.1,?_⟩
+    intro zero
+    change l.eval _ + r.eval _ = 0 at zero
+    obtain ⟨a,b⟩ := (add_eq_zero_iff_of_nonneg hl.1 hr.1).mp zero
+    simp [ReduceOrder.leaves,hl.2 a,hr.2 b]
+
+/-- UNSIGNED. Recover the unnormalized numerator even for an empty chunk. -/
+theorem AttentionPartial.ofScores_mass_out {key ι : Type} (keys : ReduceOrder key)
+    (score : key → ℝ) (value : key → ι → ℝ) (j : ι) :
+    (ofScores keys score value).weight * (ofScores keys score value).out j =
+      keys.eval (fun k => Real.exp (score k) * value k j) := by
+  unfold ofScores
+  dsimp only
+  by_cases h : keys.eval (fun k => Real.exp (score k)) = 0
+  · rw [h,zero_mul,ReduceOrder.eval_eq_sum_leaves,(expMass keys score).2 h]
+    simp
+  · exact mul_div_cancel₀ _ h
+
+/-- UNSIGNED. A merge of actual query chunks recovers the exact numerator and
+denominator across all selected keys, with both levels of reduction explicit. -/
+theorem attentionMerge_ofScores {n : Nat} {key ι : Type} (order : ReduceOrder (Fin n))
+    (keys : Fin n → ReduceOrder key) (scores : Fin n → key → ℝ) (values : Fin n → key → ι → ℝ) :
+    let parts := fun c => AttentionPartial.ofScores (keys c) (scores c) (values c)
+    (attentionMerge order parts).weight = order.eval (fun c => (keys c).eval (fun k => Real.exp (scores c k))) ∧
+    ∀ j, (attentionMerge order parts).out j =
+      order.eval (fun c => (keys c).eval (fun k => Real.exp (scores c k) * values c k j)) /
+      order.eval (fun c => (keys c).eval (fun k => Real.exp (scores c k))) := by
+  refine ⟨rfl,?_⟩
+  intro j
+  simp only [attentionMerge,AttentionPartial.ofScores_mass_out]
+  rfl
+
+/-- UNSIGNED. An all-chunk claim must cover every chunk exactly once. Under
+that condition the observable denominator and output have the finite-sum form. -/
+theorem attentionMerge_of_covers {n : Nat} {ι : Type} (order : ReduceOrder (Fin n))
+    (parts : Fin n → AttentionPartial ι) (covers : order.Covers) :
+    (attentionMerge order parts).weight = ∑ c, (parts c).weight ∧
+    ∀ j, (attentionMerge order parts).out j = (∑ c, (parts c).weight * (parts c).out j) / ∑ c, (parts c).weight := by
+  refine ⟨ReduceOrder.eval_eq_sum_of_covers _ covers,fun j => ?_⟩
+  simp only [attentionMerge,ReduceOrder.eval_eq_sum_of_covers _ covers]
+
+namespace S75Examples
+
+private def oneRoute : MoERouting 1 1 := ⟨fun _ _ => {0},fun _ _ _ => 1⟩
+private def rows (duplicate : Bool) : MoERows 1 1 := fun _ p =>
+  if p = 0 ∨ (duplicate = true ∧ p = 1) then some (0,0) else none
+
+/-- Two rows of the same destination contain the same token. Even correct
+payloads in both rows cannot make this a valid dispatch. -/
+theorem duplicate_dispatch (tokens : RankTensor 1 (Fin 1 × Unit)) (recv : RankTensor 1 (Nat × Unit)) :
+    ¬ MoEDispatch oneRoute (rows true) tokens recv := by
+  intro h
+  obtain ⟨p,_,unique⟩ := h.1.existsUnique_row 0 0 0 (by simp [oneRoute])
+  have h0 := unique 0 (by decide)
+  have h1 := unique 1 (by decide)
+  omega
+
+theorem single_route_readback :
+    let tokens : RankTensor 1 (Fin 1 × Unit) := fun _ _ => 9
+    let recv : RankTensor 1 (Nat × Unit) := fun _ _ => 9
+    let back : Fin 1 → RankTensor 1 (Fin 1 × Unit) := fun _ _ _ => 9
+    MoEDispatch oneRoute (rows false) tokens recv ∧
+      MoEStoreBack (rows false) recv back ∧
+      moeCombine (fun _ _ => .input 0) back (0 : Fin 1) (0,()) = 9 := by
+  refine ⟨⟨⟨?_,?_⟩,by intros; rfl⟩,by intro d p s t row j; rfl,rfl⟩
+  · intro s t d _
+    fin_cases s; fin_cases t; fin_cases d
+    refine ⟨0,rfl,?_⟩
+    intro p h
+    simpa [rows] using h
+  · intro d p s t _
+    fin_cases d; simp [oneRoute]
+
+/-- One chunk contributes two zero-score keys valued 3 and 9; the other
+contributes one key valued 18. The three keys have equal mass. -/
+theorem chunk_readback :
+    let ks : Fin 2 → ReduceOrder (Fin 2) := fun c =>
+      if c = 0 then .add (.input 0) (.input 1) else .input 0
+    let values : Fin 2 → Fin 2 → Unit → ℝ := fun c k _ =>
+      if c = 0 then (if k = 0 then 3 else 9) else 18
+    let merged := attentionMerge (.add (.input 1) (.input 0))
+      (fun c => AttentionPartial.ofScores (ks c) (fun _ => 0) (values c))
+    merged.weight = 3 ∧ merged.out () = 10 := by
+  norm_num [attentionMerge,AttentionPartial.ofScores,ReduceOrder.eval]
+
+theorem empty_merge : (attentionMerge (.zero : ReduceOrder (Fin 0))
+    (fun c => Fin.elim0 c : Fin 0 → AttentionPartial Unit)).out () = 0 := by
+  simp [attentionMerge,ReduceOrder.eval]
+
+end S75Examples
 
 end VeriTile.Dist
