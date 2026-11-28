@@ -39,9 +39,9 @@ CUTE_CALL = re.compile(r'\bcute\s*::\s*(?:warpgroup_(?:arrive|commit_batch|wait)
 IMPL_FMA = re.compile(r'\bImpl::fma\s*\(')
 SM90_FMA = re.compile(r"\bcute\s*::\s*SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma\s*\(")
 # These call spellings need a reviewed disposition before a future pin can use them.
-UNREVIEWED_CALL = re.compile(
-    r'\b(?:warpgroup_\w+(?:\s*<[^;{}()]*>)?|SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma|'
-    r'(?:cutlass|cute)\s*::\s*(?:\w+\s*::\s*)*fence_\w+(?:\s*<[^;{}()]*>)?)\s*\(')
+INSTRUCTION_CALL = re.compile(
+    r'\b(?P<scope>(?:\w+(?:\s*<[^;{}()]*?>)?\s*::\s*)*)(?P<callee>(?:warpgroup_\w+|fence_\w+|tma_store_fence)'
+    r'(?:\s*<[^;{}()]*>)?|SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma)\s*\(')
 IF = re.compile(r'#[ \t]*if(?:def|ndef)?\b[^\n]*\n')
 ELSE = re.compile(r'#[ \t]*else[ \t]*\n')
 ENDIF = re.compile(r'#[ \t]*endif[ \t]*\n')
@@ -132,14 +132,17 @@ def emitters(path, source):
         line = bisect.bisect_right(line_starts, asm.start())
         for template in asm_templates(cleaned, asm.end(), f"{path}:{line}"):
             hits.extend((asm.start(), op[0]) for op in OPCODE.finditer(template))
-    for call in UNREVIEWED_CALL.finditer(code):
-        spelling = compact(call[0])[:-1]
-        if call.start() in declarations:
+    for call in INSTRUCTION_CALL.finditer(code):
+        if call.start("callee") in declarations:
             continue
-        if not spelling.startswith(("cutlass::", "cute::")) and code[:call.start()].rstrip().endswith("::"):
+        # TileLang wrappers are themselves scanned. Only explicitly mapped CuTe calls
+        # count as reviewed external leaves; an alias or another namespace needs review.
+        if compact(call["scope"]) == "tl::":
+            continue
+        if CUTE_CALL.match(code, call.start()) or SM90_FMA.match(code, call.start()):
             continue
         line = bisect.bisect_right(line_starts, call.start())
-        raise ValueError(f"{path}:{line}: unsupported call: {spelling}")
+        raise ValueError(f"{path}:{line}: unsupported call: {compact(call[0])[:-1]}")
     for call in CUTE_CALL.finditer(code):
         hits.append((call.start(), re.split(r"[<(]", compact(call[0]))[0]))
     for call in SM90_FMA.finditer(code):

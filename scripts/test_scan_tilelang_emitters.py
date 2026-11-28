@@ -54,6 +54,33 @@ class ReverseInstructions(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'sample.h:1: unsupported call: SM90_Example'):
             reverse.emitters('sample.h', 'TL_DEVICE void x() { SM90_Example<int>::fma(a); }')
 
+    def test_unreviewed_qualifications_at_call_sites(self):
+        cases = (
+            ('', 'cutlass::SM90_Example<>::fma(a)'),
+            ('namespace cu = cute;', 'cu::warpgroup_wait<0>()'),
+            ('using namespace cutlass::arch;', 'fence_view_async_shared()'),
+            ('', 'cute::tma_store_fence()'),
+            ('', 'vendor::tl::fence_new()'),
+            ('', 'vendor::cute::warpgroup_wait<0>()'),
+            ('', 'vendor<int>::tl::fence_new()'),
+        )
+        for declaration, expression in cases:
+            with self.subTest(expression=expression):
+                source = declaration + '\nTL_DEVICE void x() { ' + expression + '; }'
+                with self.assertRaisesRegex(ValueError, 'sample.h:2: unsupported call:'):
+                    reverse.emitters('sample.h', source)
+
+    def test_tilelang_wrappers_and_known_cute_calls(self):
+        source = """TL_DEVICE void f() {
+            tl :: fence_view_async_tmem_load();
+            ::tl::warpgroup_wait<0>();
+            ::cute::warpgroup_wait<1>();
+            cute :: SM90_Example<>::fma(a);
+        }"""
+        self.assertEqual(reverse.emitters('sample.h', source), {
+            reverse.Function('sample.h', 1, 'f'): {'cute::warpgroup_wait', 'cute::SM90::GMMA::fma'},
+        })
+
     def test_conditional_assembly_literals_scan_both_paths(self):
         source = 'TL_DEVICE void x() { asm("wg"\n#if USE_FENCE\n"mma.fence"\n#else\n"mma.wait_group"\n#endif\n";"); }'
         self.assertEqual(reverse.emitters('sample.h', source), {
