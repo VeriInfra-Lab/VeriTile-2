@@ -33,11 +33,18 @@ CLASS = re.compile(r"\b(?:class|struct)\s+(\w+(?:\s*<[^;{}()]*?>)?)\s*(?:final\s
 ASM = re.compile(r'\b(?:asm|__asm__)\s*(?:(?:volatile|__volatile__|inline)\s*)?\(')
 SPACE = re.compile(r'\s*')
 OPCODE = re.compile(r'\b(?:wgmma|tcgen05|fence\.proxy)\.[a-z][a-z0-9_]*(?:(?:\.|::)[a-z0-9_]+)*')
-CUTE_CALL = re.compile(r'\bcute::(?:warpgroup_(?:arrive|commit_batch|wait)|SM90::GMMA::(?:[\w:]+))'
-                       r'(?:\s*<[^;{}()]+>)?(?:::fma)?\s*\(')
+CUTE_CALL = re.compile(r'\bcute\s*::\s*(?:warpgroup_(?:arrive|commit_batch|wait)|SM90::GMMA::(?:[\w:]+))'
+                       r'(?:\s*<[^;{}()]*>)?(?:::fma)?\s*\(')
 # The same spelling in mma.h and mma_sm70.h calls other architectures.
 IMPL_FMA = re.compile(r'\bImpl::fma\s*\(')
-SM90_FMA = re.compile(r"\bcute::SM90_\w+(?:\s*<[^;{}()]+>)?::fma\s*\(")
+SM90_FMA = re.compile(r"\bcute\s*::\s*SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma\s*\(")
+# These call spellings need a reviewed disposition before a future pin can use them.
+UNREVIEWED_CALL = re.compile(
+    r'\b(?:warpgroup_\w+(?:\s*<[^;{}()]*>)?|SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma|'
+    r'(?:cutlass|cute)\s*::\s*(?:\w+\s*::\s*)*fence_\w+(?:\s*<[^;{}()]*>)?)\s*\(')
+IF = re.compile(r'#[ \t]*if(?:def|ndef)?\b[^\n]*\n')
+ELSE = re.compile(r'#[ \t]*else[ \t]*\n')
+ENDIF = re.compile(r'#[ \t]*endif[ \t]*\n')
 WGMMA_HEADERS = {"instruction/wgmma.h", "instruction/wgmma_sp.h"}
 
 
@@ -56,6 +63,39 @@ def compact(text):
     return re.sub(r"\s+", "", text)
 
 
+def literal_run(source, pos):
+    """Join adjacent string literals before looking for a PTX mnemonic."""
+    pos = SPACE.match(source, pos).end()
+    fragments = []
+    while literal := LITERAL.match(source, pos):
+        if literal["delim"] is None:
+            fragments.append(re.sub(r"\\[ntr]", " ", literal[0][1:-1]))
+        else:
+            width = len(literal["delim"])
+            fragments.append(literal[0][3+width:-(2+width)])
+        pos = SPACE.match(source, literal.end()).end()
+    return fragments, pos
+
+
+def asm_templates(source, pos, location):
+    """Accept literal templates, including both literal arms of the pinned #if."""
+    prefix, pos = literal_run(source, pos)
+    variants = [prefix]
+    error = f"{location}: unsupported asm template (expected literal PTX)"
+    if directive := IF.match(source, pos):
+        left, pos = literal_run(source, directive.end())
+        if not (other := ELSE.match(source, pos)):
+            raise ValueError(error)
+        right, pos = literal_run(source, other.end())
+        if not (end := ENDIF.match(source, pos)):
+            raise ValueError(error)
+        suffix, pos = literal_run(source, end.end())
+        variants = [prefix + arm + suffix for arm in (left, right)]
+    if source[pos:pos+1] not in (":", ")") or not all(variants):
+        raise ValueError(error)
+    return ["".join(parts) for parts in variants]
+
+
 def emitters(path, source):
     """Work from every actual emission site back to its enclosing function."""
     cleaned = LEX.sub(lambda m: masked(m[0]) if m[0].startswith("/") else m[0], source)
@@ -71,10 +111,12 @@ def emitters(path, source):
     classes = [(m.start(), spans[m.end()-1], compact(m[1])) for m in CLASS.finditer(code)
                if m.end()-1 in spans]
     functions = []
+    declarations = set()
     for decl in DEVICE.finditer(code):
         name = FUNCTION.search(code, decl.end())
         if not name or re.search(r"[;{}]", code[decl.end():name.start()]):
             continue
+        declarations.add(name.start(1))
         body = re.search(r"[;{]", code[name.end():])
         if not body or body[0] == ";":
             continue
@@ -87,18 +129,17 @@ def emitters(path, source):
 
     hits = []
     for asm in ASM.finditer(code):
-        pos = SPACE.match(cleaned, asm.end()).end()
-        fragments = []
-        while literal := LITERAL.match(cleaned, pos):
-            if literal["delim"] is None:
-                fragments.append(re.sub(r"\\[ntr]", " ", literal[0][1:-1]))
-            else:
-                width = len(literal["delim"])
-                fragments.append(literal[0][3+width:-(2+width)])
-            pos = SPACE.match(cleaned, literal.end()).end()
-        # A PTX mnemonic can straddle adjacent C++ string literals.
-        for opcode in OPCODE.finditer("".join(fragments)):
-            hits.append((asm.start(), opcode[0]))
+        line = bisect.bisect_right(line_starts, asm.start())
+        for template in asm_templates(cleaned, asm.end(), f"{path}:{line}"):
+            hits.extend((asm.start(), op[0]) for op in OPCODE.finditer(template))
+    for call in UNREVIEWED_CALL.finditer(code):
+        spelling = compact(call[0])[:-1]
+        if call.start() in declarations:
+            continue
+        if not spelling.startswith(("cutlass::", "cute::")) and code[:call.start()].rstrip().endswith("::"):
+            continue
+        line = bisect.bisect_right(line_starts, call.start())
+        raise ValueError(f"{path}:{line}: unsupported call: {spelling}")
     for call in CUTE_CALL.finditer(code):
         hits.append((call.start(), re.split(r"[<(]", compact(call[0]))[0]))
     for call in SM90_FMA.finditer(code):
