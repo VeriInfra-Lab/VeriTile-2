@@ -30,6 +30,7 @@ done
 profile_python=python3
 python3 -c 'import tomllib' 2>/dev/null || profile_python="uv run --no-project --python 3.11 python"
 commands=("python3 scripts/check_docs.py"
+          "python3 -B -m unittest discover -s site/scripts -p test_record_home_demo.py"
           "python3 scripts/transcribe_tilelang_roots.py --check"
           "python3 -B -m unittest scripts.test_transcribe_tilelang_roots"
           "python3 scripts/generate_tilelang_surface.py --check"
