@@ -9,8 +9,7 @@
     2
   ],
   "launch": {
-    "carrier": "source-rounded",
-    "enable_fp_fusion": false
+    "carrier": "source-rounded"
   },
   "constexpr": {
     "ncols": 5,

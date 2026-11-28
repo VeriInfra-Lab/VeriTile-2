@@ -66,10 +66,11 @@ private def resultTensor (s : State Float) (port : Port) : Except String Tensor 
     for j in [:port.dtype.width] do bytes := bytes.push (bits >>> (8*j)).toUInt8
   return ⟨port.dtype, port.shape, bytes⟩
 
-def runFloatFiles (algebra : CAlgebra Float) (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
+private def runFiles (execute : QKernel → List Nat → State Float → Except String (State Float))
+    (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
     (outputs : List Port) : Except String (List Tensor) := do
   unless inputs.all (fun (_,t) => t.dtype == .fp32 || t.dtype == .fp64) do
-    throw "binary64 input storage must be FP32 or FP64"
+    throw "floating file input storage must be FP32 or FP64"
   let initial : State Float := {
     init := fun region i => .mk .real <| Id.run do
       let some t := inputs.lookup region | return Float.nan
@@ -77,14 +78,34 @@ def runFloatFiles (algebra : CAlgebra Float) (dims : List Nat) (k : QKernel) (in
       return decode t i
     pids := fun _ => 0, numPids := fun _ => 1
     undef := fun d _ _ => FP.Structural.defaultValue d }
-  let some s := runGrid algebra k dims initial | throw "kernel execution failed"
+  let s ← execute k dims initial
   for ((region,i),_) in s.cells.toList do
     let some port := outputs.find? (·.name == region) | throw s!"write to undeclared output {region.name}"
     unless port.contains i do throw s!"write outside {region.name} at {i}"
   outputs.mapM (resultTensor s)
 
+def runFloatFiles (algebra : CAlgebra Float) (dims : List Nat) (k : QKernel)
+    (inputs : List (RegionName × Tensor)) (outputs : List Port) : Except String (List Tensor) :=
+  runFiles (fun kernel grid initial =>
+    do
+      let some s := runGrid algebra kernel grid initial | throw "kernel execution failed"
+      return s) dims k inputs outputs
+
+def runSourceRoundedFiles (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
+    (outputs : List Port) : Except String (List Tensor) :=
+  runFiles Binary64.runSourceRoundedGrid dims k inputs outputs
+
 def runBinary64Files (dims : List Nat) (k : QKernel) (inputs : List (RegionName × Tensor))
     (outputs : List Port) : Except String (List Tensor) :=
   runFloatFiles Binary64.algebra dims k inputs outputs
+
+-- The checked file entry rejects even an unsupported operation that a false
+-- branch would otherwise hide; without admission this launch would succeed.
+private def unsupportedDeadBranch : QKernel := .mk [] ["out"] [
+  .ifThen (.constBool false) [.assign .real [] "unused" (.alg (.add .real .nil (.const 1) (.const 2)))],
+  .store .real [] (.region "out" (.constNat 0)) (.compute (.alg .fp32 (.const 1))) .none]
+
+#guard (runSourceRoundedFiles [1] unsupportedDeadBranch [] [⟨"out", .fp32, [1], none⟩]) ==
+  .error "kernel outside source-rounded precision/operation fragment"
 
 end VeriTile.Interp.Run

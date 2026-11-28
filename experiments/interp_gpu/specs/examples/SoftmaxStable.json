@@ -6,11 +6,10 @@
     "source": "bench/examples/SoftmaxStable/SoftmaxStable.py::stable_softmax"
   },
   "grid": [
-    2
+    3
   ],
   "launch": {
-    "carrier": "source-rounded",
-    "enable_fp_fusion": false
+    "carrier": "source-rounded"
   },
   "constexpr": {
     "B": 4
@@ -32,7 +31,7 @@
         "xReg": {
           "dtype": "fp32",
           "shape": [
-            2,
+            3,
             4
           ],
           "file": "tests/interp/fixtures/tensor_examples/SoftmaxStable-input.tensor"
@@ -48,7 +47,7 @@
       "name": "yReg",
       "dtype": "bf16",
       "shape": [
-        2,
+        3,
         4
       ]
     }

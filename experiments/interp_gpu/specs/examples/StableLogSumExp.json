@@ -6,11 +6,10 @@
     "source": "bench/examples/StableLogSumExp/StableLogSumExp.py::guarded_log_sum_exp"
   },
   "grid": [
-    4
+    5
   ],
   "launch": {
-    "carrier": "source-rounded",
-    "enable_fp_fusion": false
+    "carrier": "source-rounded"
   },
   "constexpr": {
     "blockSize": 4
@@ -32,7 +31,7 @@
         "xReg": {
           "dtype": "fp32",
           "shape": [
-            4,
+            5,
             4
           ],
           "file": "tests/interp/fixtures/tensor_examples/StableLogSumExp-input.tensor"
@@ -48,7 +47,7 @@
       "name": "yReg",
       "dtype": "bf16",
       "shape": [
-        4
+        5
       ]
     }
   ]
