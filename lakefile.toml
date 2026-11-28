@@ -553,6 +553,7 @@ globs = [
   "tests.lean.dist.TritonDistFrontend",
   "tests.lean.dist.SegmentSlicing",
   "tests.lean.dist.SegmentFootprint",
+  "tests.lean.dist.OfStmtsIndependent",
   "tests.lean.dist.TrustAssumptions",
   "tests.lean.dist.TrustAssumptionCollision",
   "tests.lean.dist.TrustAssumptionDuplicateImports",

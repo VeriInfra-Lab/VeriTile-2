@@ -159,6 +159,7 @@ on 2026-11-13; it is no longer a parameter.
 import VeriTile.Triton.Semantics.Step
 import VeriTile.Dist.State
 import VeriTile.Dist.Segment
+import VeriTile.Dist.Footprint.Stmt
 import VeriTile.Staging.Dist.LocationSpec
 import VeriTile.Dist.Event.Transfer
 
@@ -172,13 +173,17 @@ open VeriTile.Triton (BlockState MemCell Stmt Kernel stepStmts exec)
 
 /-- Under signed statements (S3.3). Part 1. The segment that runs the upstream
 statements `code` as agent `a`: upstream `stepStmts` on the view of `a`,
-written back. Both footprints are every cell visible to `a`, and empty when
-`code` is empty. They do not look at what the statements access. -/
+written back. The footprints are the cells the run accesses from the state it
+starts in (`stmtsFoot`, `VeriTile/Dist/Footprint/Stmt.lean`): the active lanes
+of its loads and atomics are read, the active lanes of its stores and atomics
+are written, along the branches and loop iterations the run takes. Each cell
+of the view of `a` is named by `ViewName.address`. Empty code has empty
+footprints. -/
 noncomputable def Segment.ofStmts (a : Agent) (code : List Stmt) : Segment where
   agent := a
   run σ := (stepStmts code (σ.view a)).map (σ.setView a)
-  reads _ := {p | code ≠ [] ∧ ViewName.Visible a p}
-  writes _ := {p | code ≠ [] ∧ ViewName.Visible a p}
+  reads σ := {p | ∃ q ∈ (stmtsFoot code (σ.view a)).1, ViewName.address a q.1 q.2 = p}
+  writes σ := {p | ∃ q ∈ (stmtsFoot code (σ.view a)).2, ViewName.address a q.1 q.2 = p}
 
 /-- Signed. Part 1. Proved by S3.3. A segment made from statements is run by
 the agent it was made for. -/
@@ -223,16 +228,32 @@ statements of a CTA are sound. Nothing is claimed here for a group or a
 thread: it needs the laws that S1.6 gives the projection. -/
 theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
     (Segment.ofStmts (.cta c) code).FootprintSound := by
+  have hcell : ∀ (σ : DistState) (q : BlockCell),
+      (σ.block c.rank c.pid).mem q.1 q.2 = σ.cell (ViewName.address (.cta c) q.1 q.2) :=
+    fun _ _ => rfl
+  have hset : ∀ (σ : DistState) (b : BlockState) (q : BlockCell),
+      (σ.setBlock c.rank c.pid b).cell (ViewName.address (.cta c) q.1 q.2) = b.mem q.1 q.2 := by
+    intro σ b q
+    rw [DistState.cell_setBlock_of_visible _ _ _ _ (ViewName.visible_address _ _ _),
+      ViewName.name_address]
+    rfl
   constructor
   · intro σ σ' hrun p hp
     rw [Segment.ofStmts_run, Option.map_eq_some_iff] at hrun
     obtain ⟨b, hb, rfl⟩ := hrun
-    by_cases hcode : code = []
-    · subst hcode
-      rw [stepStmts.nil, Option.some.injEq] at hb
-      rw [← hb, DistState.setBlock_block]
+    by_cases hv : ViewName.Visible (.cta c) p
+    · have hsim := (stmtsFoot_congr code _ (σ.block c.rank c.pid) (σ.block c.rank c.pid)
+        (BlockState.AgreeOn.refl _ _) le_rfl).2
+      rw [hb] at hsim
+      cases hsim with
+      | some hrel =>
+          have hq : (ViewName.name (.cta c) p hv, p.offset) ∉
+              (stmtsFoot code (σ.block c.rank c.pid)).2 :=
+            fun hq => hp ⟨_, hq, ViewName.address_name _ _ hv⟩
+          rw [DistState.cell_setBlock_of_visible _ _ _ _ hv, hrel.2.1 _ hq, hcell,
+            ViewName.address_name]
     · rw [DistState.setBlock_eq_setSubView]
-      exact DistState.cell_setSubView_of_not_visible _ _ _ _ fun hv => hp ⟨hcode, hv⟩
+      exact DistState.cell_setSubView_of_not_visible _ _ _ _ hv
   · intro σ σ' hrun
     rw [Segment.ofStmts_run, Option.map_eq_some_iff] at hrun
     obtain ⟨b, -, rfl⟩ := hrun
@@ -242,38 +263,53 @@ theorem Segment.ofStmts_footprintSound (c : Cta) (code : List Stmt) :
       exact ht rfl
     exact (DistState.context_setSubView_ne σ hne b).symm
   · intro σ₁ σ₂ hagree hlocal
-    refine ⟨rfl, rfl, fun σ₁' hrun => ?_⟩
+    -- The two block states agree on the read set and on everything that is not memory.
+    have hl : { σ₁.block c.rank c.pid with mem := (σ₂.block c.rank c.pid).mem } =
+        σ₂.block c.rank c.pid := hlocal
+    have hag : BlockAgree (stmtsFoot code (σ₁.block c.rank c.pid)).1
+        (σ₁.block c.rank c.pid) (σ₂.block c.rank c.pid) := by
+      refine ⟨fun n i hq => ?_, ?_, ?_, ?_, ?_⟩
+      · exact hagree _ ⟨(n, i), hq, rfl⟩
+      · have h := congrArg BlockState.regs hl
+        exact h
+      · have h := congrArg BlockState.pids hl
+        exact h
+      · have h := congrArg BlockState.undef hl
+        exact h
+      · have h := congrArg BlockState.numPids hl
+        exact h
+    obtain ⟨hfoot, hsim⟩ := stmtsFoot_congr code _ _ _ hag le_rfl
+    change stmtsFoot code (σ₂.block c.rank c.pid) = stmtsFoot code (σ₁.block c.rank c.pid)
+      at hfoot
+    refine ⟨?_, ?_, fun σ₁' hrun => ?_⟩
+    · show {p | ∃ q ∈ (stmtsFoot code (σ₂.block c.rank c.pid)).1, _} = _
+      rw [hfoot]; rfl
+    · show {p | ∃ q ∈ (stmtsFoot code (σ₂.block c.rank c.pid)).2, _} = _
+      rw [hfoot]; rfl
     rw [Segment.ofStmts_run, Option.map_eq_some_iff] at hrun
-    obtain ⟨b, hb, rfl⟩ := hrun
-    by_cases hcode : code = []
-    · subst hcode
-      rw [stepStmts.nil, Option.some.injEq] at hb
-      refine ⟨σ₂, ?_, fun p hp => (hp.1 rfl).elim, ?_⟩
-      · rw [Segment.ofStmts_run, stepStmts.nil, Option.map_some, DistState.setBlock_block]
-      · rw [← hb, DistState.setBlock_block]
-        exact hlocal
-    · -- The block state of the CTA is its visible cells and its local state.
-      have hblock : σ₁.block c.rank c.pid = σ₂.block c.rank c.pid := by
-        have hmem : (σ₁.block c.rank c.pid).mem = (σ₂.block c.rank c.pid).mem := by
-          funext n i
-          exact hagree _ ⟨hcode, ViewName.visible_address (.cta c) n i⟩
-        have hl : { σ₁.block c.rank c.pid with mem := (σ₂.block c.rank c.pid).mem } =
-            σ₂.block c.rank c.pid := hlocal
-        rw [← hl]
-        exact congrArg (fun m => { σ₁.block c.rank c.pid with mem := m }) hmem
-      refine ⟨σ₂.setBlock c.rank c.pid b, ?_, ?_, ?_⟩
-      · rw [Segment.ofStmts_run, ← hblock, hb, Option.map_some]
-      · intro p hp
-        rw [DistState.cell_setBlock_of_visible _ _ _ _ hp.2,
-          DistState.cell_setBlock_of_visible _ _ _ _ hp.2]
-      · have hu : (σ₁.context (.cta ⟨c.rank, c.pid⟩)).undef =
-            (σ₂.context (.cta ⟨c.rank, c.pid⟩)).undef := congrArg BlockState.undef hblock
-        have hn : (σ₁.context (.cta ⟨c.rank, c.pid⟩)).numPids =
-            (σ₂.context (.cta ⟨c.rank, c.pid⟩)).numPids := congrArg BlockState.numPids hblock
-        show { (σ₁.setBlock c.rank c.pid b).block c.rank c.pid with
-            mem := ((σ₂.setBlock c.rank c.pid b).block c.rank c.pid).mem } =
-          (σ₂.setBlock c.rank c.pid b).block c.rank c.pid
-        rw [DistState.block_setBlock, DistState.block_setBlock, hu, hn]
+    obtain ⟨b₁, hb₁, rfl⟩ := hrun
+    rw [hb₁] at hsim
+    cases h₂ : stepStmts code (σ₂.block c.rank c.pid) with
+    | none => rw [h₂] at hsim; cases hsim
+    | some b₂ =>
+        rw [h₂] at hsim
+        cases hsim with
+        | some hrel =>
+            refine ⟨σ₂.setBlock c.rank c.pid b₂, ?_, ?_, ?_⟩
+            · rw [Segment.ofStmts_run, h₂, Option.map_some]
+            · rintro p ⟨q, hq, rfl⟩
+              rw [hset, hset]
+              exact hrel.1.mem (Or.inr hq)
+            · have hu : (σ₁.context (.cta ⟨c.rank, c.pid⟩)).undef =
+                  (σ₂.context (.cta ⟨c.rank, c.pid⟩)).undef := hag.undef
+              have hn : (σ₁.context (.cta ⟨c.rank, c.pid⟩)).numPids =
+                  (σ₂.context (.cta ⟨c.rank, c.pid⟩)).numPids := hag.numPids
+              have hr : b₁.regs = b₂.regs := hrel.1.regs
+              show { (σ₁.setBlock c.rank c.pid b₁).block c.rank c.pid with
+                  mem := ((σ₂.setBlock c.rank c.pid b₂).block c.rank c.pid).mem } =
+                (σ₂.setBlock c.rank c.pid b₂).block c.rank c.pid
+              rw [DistState.block_setBlock, DistState.block_setBlock, hu, hn]
+              cases b₁; cases b₂; cases hr; rfl
 
 /-! # Part 2: the continuation of an agent -/
 
