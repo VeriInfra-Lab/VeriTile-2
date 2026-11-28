@@ -98,3 +98,6 @@ reject --carrier source-rounded --grid 2 --constexpr blockSize=4 \
 reject --carrier source-rounded --grid 2 --constexpr blockSize=4 \
   StableLogSumExp "$mixed/StableLogSumExp-input.tensor" "$work/invalid-rounded.tensor"
 test ! -e "$work/invalid-rounded.tensor"
+
+# Exercise spec declarations against the registry in this binary.
+python3 tests/interp/check_example_bindings.py
