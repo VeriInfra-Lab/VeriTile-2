@@ -227,4 +227,13 @@ inductive Prefix : Nat → History → Prop where
   | advance : Prefix n h → n < 11 → Prefix (n + 1) (h ++ [milestone n])
 
 end Dispatch
+
+/-- A prefix of an ordered event sequence with arbitrary intervening quiet steps. -/
+inductive MilestonePrefix (quiet : Occurrence → Prop) (event : Nat → Occurrence) (limit : Nat) :
+    Nat → History → Prop where
+  | start : MilestonePrefix quiet event limit 0 []
+  | noise : MilestonePrefix quiet event limit n h → quiet x → MilestonePrefix quiet event limit n (h ++ [x])
+  | advance : MilestonePrefix quiet event limit n h → n < limit →
+      MilestonePrefix quiet event limit (n + 1) (h ++ [event n])
+
 end VeriTile.Tests.G1QueueRefinement
