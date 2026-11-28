@@ -52,6 +52,17 @@ class ForkTargetGates(unittest.TestCase):
         self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
         self.assertIn('STAGING\tVeriTile.Staging.GateProbe', rejected.stderr)
 
+    def test_main_target_cannot_import_the_bench_staging_bridge(self):
+        # check_bench_staging_imports.py allows this module in bench/ only (#704).
+        allowed = 'VeriTile.Staging.Dist.TritonDistProgram'
+        stub = allowed.replace('.', '/') + '.lean'
+        if not (ROOT / stub).exists():  # absent until #82 lands
+            self.probe(stub, 'def veritileGateBridgeProbe := 0\n')
+        self.probe('VeriTile/Dist/GateProbe.lean', f'import {allowed}\n')
+        rejected = run('check_fork_target.py', 'VeriTileDist')
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn(f'STAGING\t{allowed}', rejected.stderr)
+
     def test_main_target_cannot_declare_an_axiom(self):
         self.probe('VeriTile/Dist/GateProbe.lean', 'axiom veritileGateProbe : 0 = 0\n')
         rejected = run('check_fork_target.py', 'VeriTileDist')

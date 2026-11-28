@@ -6,7 +6,7 @@
     "source": "bench/examples/OnlineSoftmax/OnlineSoftmax.py::onlineSoftmaxKernel"
   },
   "grid": [3, 1, 1],
-  "launch": {"carrier": "fp32-basic", "enable_fp_fusion": false},
+  "launch": {"carrier": "fp32-basic"},
   "constexpr": {"N": 2},
   "arguments": [
     {"parameter": "xReg", "buffer": "x"},

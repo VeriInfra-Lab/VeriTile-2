@@ -9,10 +9,10 @@ open VeriTile.Tests.DeepEPChannel (sender receiver slot tail head rel acq segOcc
   notInFlight appendRuns reachable)
 
 def metadata : Addr := ⟨.global 1, "channel_src_idx_buffers", 0⟩
-private def written (a : Agent) (p : Addr) (v : Nat) (m : Mode := .plain) : Emission :=
+def written (a : Agent) (p : Addr) (v : Nat) (m : Mode := .plain) : Emission :=
   ⟨a, .access .store p m, .store (.of .nat v)⟩
-private def loadData (p : Addr) : Emission := ⟨receiver, .access .load p .plain, .noValue⟩
-private def awaitTail : Emission := ⟨receiver, .wait (.word tail) .ge 1 acq, .noValue⟩
+def loadData (p : Addr) : Emission := ⟨receiver, .access .load p .plain, .noValue⟩
+def awaitTail : Emission := ⟨receiver, .wait (.word tail) .ge 1 acq, .noValue⟩
 private def second (wrongCell : Bool) := if wrongCell then slot else metadata
 
 /-- This client sends one token per round, so the tail publication and the head
@@ -28,7 +28,7 @@ def view : View where
   putEnd x := x.event? == some (sender, .access .store tail rel)
   takeEnd x := x.event? == some (receiver, .access .store head rel)
 
-private def emissions (wrongCell : Bool) (a : Agent) : List Emission :=
+def emissions (wrongCell : Bool) (a : Agent) : List Emission :=
   if a = sender then [written sender slot 11, written sender metadata 29, written sender tail 1 rel]
   else if a = receiver then [awaitTail, loadData slot, loadData (second wrongCell), written receiver head 1 rel]
   else []
@@ -36,7 +36,7 @@ private def emissions (wrongCell : Bool) (a : Agent) : List Emission :=
 /-- The continuation records the actual values returned by Fire, in read order. -/
 abbrev PC := Nat × List MemCell
 
-private def next (ops : List Emission) (pc : PC) : Next PC :=
+def next (ops : List Emission) (pc : PC) : Next PC :=
   match ops[pc.1]? with
   | none => .finish
   | some e => .emitGroup e [] (fun returned => (pc.1 + 1, pc.2 ++ returned.reduceOption))

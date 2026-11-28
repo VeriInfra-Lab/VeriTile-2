@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "kernel": {
+    "name": "FloatDTypeSoftmax",
+    "lean": "VeriTile.Bench.Examples.FloatDTypeSoftmax.Kernels.floatStableSoftmaxKernel",
+    "source": "bench/examples/FloatDTypeSoftmax/FloatDTypeSoftmax.py::stable_softmax_fp64"
+  },
+  "grid": [
+    2
+  ],
+  "launch": {
+    "carrier": "source-rounded"
+  },
+  "constexpr": {
+    "blockSize": 4
+  },
+  "arguments": [
+    {
+      "parameter": "xReg",
+      "buffer": "xReg"
+    },
+    {
+      "parameter": "yReg",
+      "buffer": "yReg"
+    }
+  ],
+  "input_classes": [
+    {
+      "class": "boundary",
+      "inputs": {
+        "xReg": {
+          "dtype": "fp32",
+          "shape": [
+            2,
+            4
+          ],
+          "file": "tests/interp/fixtures/tensor_examples/FloatDTypeSoftmax-input.tensor"
+        }
+      },
+      "expected": {
+        "yReg": "tests/interp/fixtures/tensor_examples/FloatDTypeSoftmax-output.tensor"
+      }
+    }
+  ],
+  "output_buffers": [
+    {
+      "name": "yReg",
+      "dtype": "fp32",
+      "shape": [
+        2,
+        4
+      ]
+    }
+  ]
+}

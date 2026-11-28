@@ -41,10 +41,10 @@ declaration of part 2 or an `Event`.
   flat body as one program (`AgentProgram.ofBody`, `slice`) and the statements
   about them.
 
-Each theorem is a statement with `sorry`, except `slice_noSync` and
-`slice_sync`, which are proved from the definition of `slice`. The ticket named
-in a docstring moves that declaration to `VeriTile/Dist/` under the same name
-and type, proves it and deletes it here in the same change. `EventControlFlow.md` below is
+Part 2 proves the flat slice equations, step determinism and the sequence of
+segments and events. Its no-sync step equation uses the part-1 run-view bridge,
+which still awaits the implementation of `Segment.ofStmts`. #48 owns the later
+move of the signed program declarations. `EventControlFlow.md` below is
 `documents/dist/EventControlFlow.md`; K1 to K28 are its kernel rows.
 
 Decisions (user decision, 2026-11-13, recorded on #43):
@@ -364,7 +364,8 @@ deterministic: a program state and a state fix the state reached, the event
 and the continuation. -/
 theorem AgentProgram.Step.deterministic {P : Type} {prog : AgentProgram P} {p : P}
     {σ σ₁ σ₂ : DistState} {n₁ n₂ : Next P} (h₁ : prog.Step p σ σ₁ n₁)
-    (h₂ : prog.Step p σ σ₂ n₂) : σ₁ = σ₂ ∧ n₁ = n₂ := sorry
+    (h₂ : prog.Step p σ σ₂ n₂) : σ₁ = σ₂ ∧ n₁ = n₂ :=
+  ⟨Option.some.inj (h₁.1.symm.trans h₂.1), h₁.2.symm.trans h₂.2⟩
 
 /-- A singleton event can branch on its result just like a member of a CAS group. -/
 example (seg : Segment) (e : Emission) (σ : DistState) (v : MemCell) :
@@ -398,13 +399,24 @@ noncomputable def AgentProgram.ofBody (a : Agent) : AgentProgram (List (Stmt ⊕
     | Sum.inr e :: rest => .emitGroup e [] fun _ => rest
     | _ => .finish
 
+private theorem body_prefix (code : List Stmt) (tail : List (Stmt ⊕ Emission)) :
+    ((code.map Sum.inl ++ tail).takeWhile Sum.isLeft).filterMap Sum.getLeft? =
+        code ++ (tail.takeWhile Sum.isLeft).filterMap Sum.getLeft? ∧
+      (code.map Sum.inl ++ tail).dropWhile Sum.isLeft = tail.dropWhile Sum.isLeft := by
+  induction code with
+  | nil => simp
+  | cons s code ih => simp [ih.2]
+
 /-- Signed (#43, part 2). Proved by S3.3. A step with no event left is the
 upstream execution of the rest on the projection of the agent, written back;
 then the agent has finished. -/
 theorem AgentProgram.ofBody_step_noSync (a : Agent) (code : List Stmt) (σ σ' : DistState)
     (n : Next (List (Stmt ⊕ Emission))) :
     (AgentProgram.ofBody a).Step (code.map Sum.inl) σ σ' n ↔
-      (stepStmts code (σ.view a)).map (σ.setView a) = some σ' ∧ n = .finish := sorry
+      (stepStmts code (σ.view a)).map (σ.setView a) = some σ' ∧ n = .finish := by
+  obtain ⟨head,tail⟩ := body_prefix code []
+  simp at head tail
+  simp [Step,ofBody,head,tail,Segment.ofStmts_run_view,eq_comm (a := n)]
 
 /-- Signed (#43, part 2). Owner: S3.3. Slicing of a flat body of agent `a`. The
 result lists, in program order, the segments between the events and the
@@ -437,13 +449,59 @@ theorem slice_sync (a : Agent) (code : List Stmt) (e : Emission) (rest : List (S
       Sum.inl (Segment.ofStmts a code) :: Sum.inr e.event :: slice a rest := by
   simpa [slice.go] using slice.go_stmts a [] code (Sum.inr e :: rest)
 
+private theorem first_event (body : List (Stmt ⊕ Emission)) :
+    (∃ code : List Stmt, body = code.map Sum.inl) ∨
+      ∃ (code : List Stmt) (e : Emission) (rest : List (Stmt ⊕ Emission)),
+        body = code.map Sum.inl ++ .inr e :: rest := by
+  induction body with
+  | nil => exact .inl ⟨[],rfl⟩
+  | cons head tail ih =>
+    cases head with
+    | inr e => exact .inr ⟨[],e,tail,rfl⟩
+    | inl s =>
+      obtain ⟨code,rfl⟩|⟨code,e,rest,rfl⟩ := ih
+      · exact .inl ⟨s :: code,rfl⟩
+      · exact .inr ⟨s :: code,e,rest,rfl⟩
+
 /-- Signed (#43, part 2). Proved by S3.3. The derived lemma: for a flat body, a
 program with no loop around an event, the steps the agent takes are exactly
 the segments and events of the flat list, whatever the states are. The proof
 needs one state to exist; `DistState` (S1.5) has one. -/
 theorem AgentProgram.ofBody_steps (a : Agent) (body : List (Stmt ⊕ Emission))
     (l : List (Segment ⊕ Event)) :
-    (AgentProgram.ofBody a).Steps body l ↔ l = slice a body := sorry
+    (AgentProgram.ofBody a).Steps body l ↔ l = slice a body := by
+  obtain ⟨code,rfl⟩|⟨code,e,rest,rfl⟩ := first_event body
+  · obtain ⟨head,tail⟩ := body_prefix code []
+    simp at head tail
+    rw [slice_noSync]
+    constructor
+    · intro steps
+      cases steps with
+      | finish => simp [ofBody,head]
+      | emitGroup h _ _ => simp [ofBody,tail] at h
+    · rintro rfl
+      have done_ := Steps.finish (prog := ofBody a) (p := code.map Sum.inl)
+        (σ := DistState.single default) (by simp [ofBody,tail])
+      simpa [ofBody,head] using done_
+  · obtain ⟨head,tail⟩ := body_prefix code (.inr e :: rest)
+    simp at head tail
+    rw [slice_sync]
+    constructor
+    · intro steps
+      cases steps with
+      | finish h => simp [ofBody] at h
+      | emitGroup h _ next =>
+        simp [ofBody] at h
+        obtain ⟨rfl,rfl,rfl⟩ := h
+        simp [ofBody,(ofBody_steps a rest _).mp next]
+    · rintro rfl
+      have next := (ofBody_steps a rest _).mpr rfl
+      have more := Steps.emitGroup (prog := ofBody a) (p := code.map Sum.inl ++ .inr e :: rest)
+        (σ := DistState.single default) (e := e) (es := []) (k := fun _ => rest) (vs := [none])
+        (by simp [ofBody]) rfl next
+      simpa [ofBody,head] using more
+termination_by body.length
+decreasing_by all_goals subst body; simp; omega
 
 /-! ## Bridge to the upstream execution (S3.4) -/
 

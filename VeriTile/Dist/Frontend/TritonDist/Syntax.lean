@@ -93,25 +93,51 @@ scoped syntax (name := pendingProfilerStmt) (priority := high) profilerCallStmt 
 
 -- `lookahead(ident)` dispatches non-reserved primitive names in a Pratt category
 -- without registering them as global tokens. The existing `tl.atomic_add(` token is reused.
-private def owner? (k : Name) : Option String :=
-  match k with
-  | ``pendingShmemStmt => some "#80"
-  | ``pendingExtraExpr | ``pendingExtraStmt => some "#81"
-  | ``pendingCommonStmt => some "#82"
-  | ``pendingProfilerExpr | ``pendingProfilerStmt => some "#452"
+inductive Family where
+  | dl | shmem | extra
+  deriving DecidableEq
+
+def family? (kind : Name) : Option Family :=
+  match kind with
+  | ``dlExpr | ``dlStmt => some .dl
+  | ``pendingShmemStmt => some .shmem
+  | ``pendingExtraExpr | ``pendingExtraStmt | ``extraSpinStmt => some .extra
   | _ => none
 
-/-- Preserve pending-family diagnostics when another frontend handles the block. -/
-def checkPendingCalls (stx : Syntax) (currentFamily : Option String := none) : TermElabM Unit := do
+def checkPendingCalls (stx : Syntax) : TermElabM Unit := do
   if let some call := stx.find? (fun s =>
-      match owner? s.getKind with
-      | some ticket => currentFamily != some ticket
+      [``pendingCommonStmt, ``pendingProfilerExpr, ``pendingProfilerStmt].contains s.getKind) then
+    let ticket := if call.isOfKind ``pendingCommonStmt then "#82" else "#452"
+    throwErrorAt call "not implemented: {ticket}"
+
+/-- An explicit family-specific result still requests that family's source view.
+An inferred result uses that view when only the family module is imported. -/
+def checkFamilySource (stx : Syntax) (expected : Option Expr)
+    (sourceType : Name) (family : Family) : TermElabM Unit := do
+  if let some type := expected then
+    unless (← Meta.whnf type).isConstOf sourceType do throwUnsupportedSyntax
+  else if (← getEnv).contains `VeriTile.Dist.Frontend.TritonDist.Body then
+    throwUnsupportedSyntax
+  unless (stx.find? (fun s => family? s.getKind == some family)).isSome do
+    throwUnsupportedSyntax
+  checkPendingCalls stx
+  if let some call := stx.find? (fun s =>
+      match family? s.getKind with
+      | some other => other != family
       | none => Bool.false) then
-    throwErrorAt call "not implemented: {(owner? call.getKind).get!}"
+    throwErrorAt call "use TritonDist.Body for a block with several distributed call families"
 
 @[scoped term_elab VeriTile.Triton.DSL.tritonBlock]
 def pending : TermElab := fun stx _ => do
   checkPendingCalls stx
+  if (← getEnv).contains `VeriTile.Dist.Frontend.TritonDist.Body then throwUnsupportedSyntax
+  let env ← getEnv
+  if let some call := stx.find? (fun s =>
+      match family? s.getKind with
+      | some .shmem => !env.contains `VeriTile.Dist.Frontend.TritonDist.Shmem.Source
+      | some .extra => !env.contains `VeriTile.Dist.Frontend.TritonDist.LanguageExtra.Source
+      | _ => Bool.false) then
+    throwErrorAt call "import TritonDist.Segments or the corresponding family frontend"
   throwUnsupportedSyntax
 
 partial def quoteDistSyntax (stx : Syntax) : TermElabM (TSyntax `term) := do
@@ -128,6 +154,16 @@ partial def quoteDistSyntax (stx : Syntax) : TermElabM (TSyntax `term) := do
     let args ← args.mapM quoteDistSyntax
     let kind := quote kind
     `(Syntax.node SourceInfo.none $kind #[$args,*])
+
+inductive OperandKind where
+  | value | nat | address | token
+  deriving DecidableEq
+
+/-- The composed frontend can bind operands to registers at the same points
+where the family source views quote them. -/
+abbrev QuoteOperand := OperandKind → Syntax → TermElabM (TSyntax `term)
+
+def quoteSourceOperand : QuoteOperand := fun _ => quoteDistSyntax
 
 -- Volatile loads are explicitly outside the signed A2.1 source subset.
 private def checkDistVolatileLoads (stx : Syntax) : TermElabM Unit := do
