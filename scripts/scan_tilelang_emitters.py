@@ -34,14 +34,14 @@ ASM = re.compile(r'\b(?:asm|__asm__)\s*(?:(?:volatile|__volatile__|inline)\s*)?\
 SPACE = re.compile(r'\s*')
 OPCODE = re.compile(r'\b(?:wgmma|tcgen05|fence\.proxy)\.[a-z][a-z0-9_]*(?:(?:\.|::)[a-z0-9_]+)*')
 CUTE_CALL = re.compile(r'\bcute\s*::\s*(?:warpgroup_(?:arrive|commit_batch|wait)|SM90::GMMA::(?:[\w:]+))'
-                       r'(?:\s*<[^;{}()]+>)?(?:::fma)?\s*\(')
+                       r'(?:\s*<[^;{}()]*>)?(?:::fma)?\s*\(')
 # The same spelling in mma.h and mma_sm70.h calls other architectures.
 IMPL_FMA = re.compile(r'\bImpl::fma\s*\(')
-SM90_FMA = re.compile(r"\bcute\s*::\s*SM90_\w+(?:\s*<[^;{}()]+>)?\s*::\s*fma\s*\(")
+SM90_FMA = re.compile(r"\bcute\s*::\s*SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma\s*\(")
 # These call spellings need a reviewed disposition before a future pin can use them.
 UNREVIEWED_CALL = re.compile(
-    r'\b(?:warpgroup_\w+(?:\s*<[^;{}()]+>)?|SM90_\w+(?:\s*<[^;{}()]+>)?\s*::\s*fma|'
-    r'(?:cutlass|cute)\s*::\s*(?:\w+\s*::\s*)*fence_\w+(?:\s*<[^;{}()]+>)?)\s*\(')
+    r'\b(?:warpgroup_\w+(?:\s*<[^;{}()]*>)?|SM90_\w+(?:\s*<[^;{}()]*>)?\s*::\s*fma|'
+    r'(?:cutlass|cute)\s*::\s*(?:\w+\s*::\s*)*fence_\w+(?:\s*<[^;{}()]*>)?)\s*\(')
 IF = re.compile(r'#[ \t]*if(?:def|ndef)?\b[^\n]*\n')
 ELSE = re.compile(r'#[ \t]*else[ \t]*\n')
 ENDIF = re.compile(r'#[ \t]*endif[ \t]*\n')

@@ -60,6 +60,25 @@ class ReverseInstructions(unittest.TestCase):
             reverse.Function('sample.h', 1, 'x'): {'wgmma.fence', 'wgmma.wait_group'},
         })
 
+    def test_empty_template_calls(self):
+        for name in ('warpgroup_wait<>', 'SM90_Example<>::fma'):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'unsupported call:'):
+                reverse.emitters('sample.h', f'TL_DEVICE void x() {{ {name}(); }}')
+        source = 'TL_DEVICE void x() { cute::SM90_Example<>::fma(a); cute::warpgroup_wait<>(); }'
+        self.assertEqual(reverse.emitters('sample.h', source), {
+            reverse.Function('sample.h', 1, 'x'): {'cute::SM90::GMMA::fma', 'cute::warpgroup_wait'},
+        })
+
+    def test_unsupported_conditional_templates(self):
+        cases = {
+            'missing else': '#if A\n"wgmma.fence"\n#endif\n',
+            'elif arm': '#if A\n"wgmma.fence"\n#elif B\n"wgmma.wait_group"\n#else\n""\n#endif\n',
+            'missing endif': '#if A\n"wgmma.fence"\n#else\n"wgmma.wait_group"\n',
+        }
+        for case, template in cases.items():
+            with self.subTest(case=case), self.assertRaisesRegex(ValueError, 'sample.h:1: unsupported asm template'):
+                reverse.emitters('sample.h', 'TL_DEVICE void x() { asm(\n' + template + '); }')
+
     def test_internal_route_requires_a_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
